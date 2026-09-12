@@ -11,6 +11,7 @@ export default function IncludedPhotoGrid({
   onUpdatePhoto,
   onToggleFeatured,
   onDraftCaption,
+  onSplitHere,
   busy,
 }) {
   const { t } = useI18n();
@@ -34,11 +35,21 @@ export default function IncludedPhotoGrid({
 
   return (
     <div className="photo-grid" ref={gridRef}>
-      {photos.map((photo) => (
+      {photos.map((photo, i) => (
         <div className={`photo-card ${photo.featured ? "featured" : ""}`} key={photo.id}>
           <span className="drag-handle" title={t("dragHandleTitle")}>
             &#10021;
           </span>
+          {onSplitHere && i > 0 && (
+            <button
+              type="button"
+              className="split-here-btn"
+              title={t("splitSectionHere")}
+              onClick={() => onSplitHere(photo.id)}
+            >
+              ✂
+            </button>
+          )}
           {photo.thumbUrl && <img src={photo.thumbUrl} alt="" />}
           <div className="photo-card-row">
             <label className="photo-include">

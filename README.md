@@ -156,6 +156,17 @@ useful for a second person to use the editor from their own device.
       auto-generated "moment" albums (country+year), and an arbitrary
       custom date range across the whole library for trips that cross
       New Year's or span several countries/moments
+- [x] Manual control over the automatic itinerary clustering — split a
+      stop into two at any photo, add a blank section anywhere, or remove
+      one entirely, for when the time/distance clustering didn't group
+      things the way the trip actually happened
+- [x] A stop with everything removed from it (no photos, no narrative,
+      no pull quote, no research, no embeds, no info cards) no longer
+      renders as a dead heading on the finished page/deck
+- [x] 10 themes (was 4) — added Ocean Blue, Midnight, Sunset, Sunrise,
+      Adventure, and Nordic Mist; also re-differentiated Vintage Postcard
+      from Coastal, which had ended up sharing a heading font and a very
+      similar palette
 - [ ] Containerize (Dockerfiles + docker-compose) to run alongside PhotoPrism
       — deferred until this has been used for real and the deployment shape
       (same host as PhotoPrism? synced elsewhere?) is clearer
@@ -169,6 +180,30 @@ useful for a second person to use the editor from their own device.
 
 ## Notes
 
+- **Splitting/adding sections needed `stops` to become upsertable, which
+  they never were.** `updateStopStmt` was a plain `UPDATE ... WHERE id =
+  @id`, silently affecting 0 rows for a client-generated stop id that
+  doesn't exist in the database yet - fine as long as the editor could only
+  ever edit stops that already existed, which stopped being true once it
+  could create new ones (splitting a stop, adding a blank section).
+  Replaced with `INSERT ... ON CONFLICT(id) DO UPDATE`, and added pruning
+  (delete any stop for the story not present in the incoming array, guarded
+  on a non-empty array so a bad payload can't wipe every stop) to support
+  removing a section too. The same problem existed one level down:
+  `updatePhotoStmt` matched `WHERE id = @id AND stop_id = @stopId`, so
+  moving a photo to a different stop (exactly what a split does) would
+  silently fail to move it, since the row's *current* stop_id never
+  matched the *new* one being requested - fixed by matching on `id` alone
+  (a photo's id is already globally unique) and moving `stop_id` into the
+  `SET` clause.
+- **A split can't recompute an accurate date range or map position for the
+  new stop** - per-photo timestamp/GPS data is only used transiently while
+  clustering the itinerary in `itinerary.js` and isn't persisted to
+  `stop_photos` afterward, so there's nothing to recompute *from* once a
+  story exists. The split half just inherits the original stop's dates/
+  location as an approximation; the user can correct it, same as any other
+  field. Worth persisting per-photo taken-at/lat/lng if this ever needs to
+  be exact (e.g. an "auto re-split by time gap" feature).
 - **Found a real data-loss bug making info cards editable: `getStory()`
   never sent `heroPhotoHash` back to the client, only the `heroPhotoUrl`
   derived from it.** `updateStory`'s save path reads `heroPhotoHash`
@@ -331,12 +366,40 @@ useful for a second person to use the editor from their own device.
   `forceFallback: true` for consistent mouse/touch behavior) only reorders
   *included* photos; excluded ones keep their relative order, appended
   after. The new order is written back as each photo's `position` on save.
-- Adding a 5th theme is a single new entry in `THEMES` in `themes.js` —
-  render.js, deck.js, the editor's theme picker, and the `/api/themes`
-  endpoint all read from that one object, nothing else to touch. Each
-  theme picks its own map mood via a CSS filter applied to Leaflet's tile
-  pane (grayscale, sepia, inverted-for-dark, or none) rather than a
-  different tile provider per theme — see the next note for why.
+- Adding a theme (10 now, up from 4) is a single new entry in `THEMES` in
+  `themes.js` — render.js, deck.js, the editor's theme picker, and the
+  `/api/themes` endpoint all read from that one object, nothing else to
+  touch. Each theme picks its own map mood via a CSS filter applied to
+  Leaflet's tile pane (grayscale, sepia, inverted-for-dark, or none)
+  rather than a different tile provider per theme — see the next note for
+  why. Deliberately conservative about the filters on the 6 newest themes
+  (each reuses one of the same handful of filter patterns already proven
+  to look right, rather than inventing a new hue-rotate value per theme)
+  since a filter's actual effect on real OSM tiles isn't obvious from the
+  numbers alone — verified all 6 with real screenshots rather than trusting
+  the color math.
+- **Notes-import could misattribute content to the wrong stop when a
+  stop's heading doesn't mention the specific place the notes describe** —
+  found via a real case where a paragraph about "Särö Västerskog" (only
+  ever visible as an info-card place name, since the stop itself is headed
+  "Lerkil") got matched to a different stop entirely. The AI only ever saw
+  each stop's heading/narrative/captions, none of which necessarily
+  contain the specific named place a note's paragraph is about. Fixed by
+  also passing each stop's already-known place names (suggested places +
+  info card place names — both ultimately from PhotoPrism's own photo
+  place labels) and telling the model to prefer that list over the heading
+  for this kind of matching. An improvement to the odds, not a guarantee —
+  matching free text to the right stop is still a judgment call the model
+  makes, just with better signal now.
+- **A second, unrelated bug in the same feature: two suggestions for the
+  same stop would "use" together.** `NotesImportPanel.jsx` tracked which
+  suggestion had been applied, and its list `key`, both by `stopId` — fine
+  when the AI never suggested two different drafts for one stop, which
+  turned out not to be a safe assumption. Since two suggestions can share
+  a `stopId`, keying either by it meant clicking "Use this" on one silently
+  marked both as used. Switched both to the suggestion's array index,
+  which is always unique regardless of how many suggestions target the
+  same stop.
 - **CARTO's free basemap tiles now require an API key we don't have**:
   `basemaps.cartocdn.com` (used for the Voyager/Positron/Dark Matter
   basemaps on 3 of the 4 themes) still returns `200 image/png` for

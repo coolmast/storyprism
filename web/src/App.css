@@ -443,8 +443,43 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem 1.25rem;
+  gap: 0.5rem;
   margin-left: auto;
+}
+
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--teal);
+  border-radius: 999px;
+  background: white;
+  color: var(--teal);
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.toolbar-btn:hover {
+  background: var(--teal);
+  color: white;
+}
+
+/* Below this width the toolbar's 5 buttons don't all fit with labels -
+   collapse to icon-only (each button keeps a title attribute for the
+   label that's no longer visible). */
+@media (max-width: 640px) {
+  .toolbar-btn-label {
+    display: none;
+  }
+
+  .toolbar-btn {
+    padding: 0.4rem 0.55rem;
+    font-size: 1rem;
+  }
 }
 
 .story-title-input {
@@ -1289,6 +1324,39 @@ textarea {
   cursor: grab;
   font-size: 0.85rem;
   z-index: 1;
+}
+
+.split-here-btn {
+  position: absolute;
+  top: 0.4rem;
+  left: 0.4rem;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--terracotta);
+  cursor: pointer;
+  font-size: 0.8rem;
+  z-index: 1;
+}
+
+.split-here-btn:hover {
+  background: var(--terracotta);
+  color: white;
+}
+
+.add-section-btn {
+  align-self: flex-start;
+  font-size: 0.85rem;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 0.5rem 0.9rem;
+  width: 100%;
+  text-align: center;
 }
 
 .drag-handle:active {

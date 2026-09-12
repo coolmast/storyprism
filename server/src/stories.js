@@ -232,11 +232,35 @@ export function getStory(id) {
 const updateStoryStmt = db.prepare(
   "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, content_language = @contentLanguage, updated_at = @now WHERE id = @id"
 );
-const updateStopStmt = db.prepare(
-  "UPDATE stops SET heading = @heading, narrative = @narrative, research = @research, pull_quote = @pullQuote WHERE id = @id AND story_id = @storyId"
-);
+// Upsert, not a plain UPDATE: the editor can now create brand-new stops
+// client-side (splitting one stop into two, or adding a blank section) and
+// send them back with a client-generated id that doesn't exist in the
+// database yet - a plain UPDATE would silently affect 0 rows for those.
+// Position is included so inserting a stop in the middle (or reordering)
+// is reflected, same as photos already work.
+const upsertStopStmt = db.prepare(`
+  INSERT INTO stops (id, story_id, position, lat, lng, place_label, started_at, ended_at, heading, narrative, research, pull_quote)
+  VALUES (@id, @storyId, @position, @lat, @lng, @placeLabel, @startedAt, @endedAt, @heading, @narrative, @research, @pullQuote)
+  ON CONFLICT(id) DO UPDATE SET
+    position = excluded.position,
+    lat = excluded.lat,
+    lng = excluded.lng,
+    place_label = excluded.place_label,
+    started_at = excluded.started_at,
+    ended_at = excluded.ended_at,
+    heading = excluded.heading,
+    narrative = excluded.narrative,
+    research = excluded.research,
+    pull_quote = excluded.pull_quote
+`);
+// Matched by id alone (a photo's id is globally unique, not just within its
+// stop) and stop_id is now part of the SET clause, not the WHERE - splitting
+// a stop moves some of its photos to a newly-created stop, which means the
+// row's stop_id itself needs to change. Matching by "id AND stop_id" (the
+// old query) would silently no-op for exactly that move, since the row's
+// *current* stop_id in the database is the old one.
 const updatePhotoStmt = db.prepare(
-  "UPDATE stop_photos SET caption = @caption, included = @included, featured = @featured, position = @position WHERE id = @id AND stop_id = @stopId"
+  "UPDATE stop_photos SET stop_id = @stopId, caption = @caption, included = @included, featured = @featured, position = @position WHERE id = @id"
 );
 const clearFeaturedStmt = db.prepare(
   "UPDATE stop_photos SET featured = 0 WHERE stop_id = @stopId"
@@ -269,10 +293,17 @@ export function updateStory(id, data) {
       now,
     });
 
-    for (const stop of data.stops ?? []) {
-      updateStopStmt.run({
+    const stopsData = data.stops ?? [];
+    stopsData.forEach((stop, stopIndex) => {
+      upsertStopStmt.run({
         id: stop.id,
         storyId: id,
+        position: stopIndex,
+        lat: stop.lat ?? null,
+        lng: stop.lng ?? null,
+        placeLabel: stop.placeLabel ?? null,
+        startedAt: stop.startedAt ?? null,
+        endedAt: stop.endedAt ?? null,
         heading: stop.heading ?? "",
         narrative: stop.narrative ?? "",
         research: stop.research ?? "",
@@ -328,7 +359,19 @@ export function updateStory(id, data) {
           websiteUrl: normalizeWebsiteUrl(card.websiteUrl),
         });
       });
+    });
+
+    // Prune stops no longer present (e.g. a "remove section" the user
+    // triggered client-side) - guarded on a non-empty array so a client
+    // bug or bad payload that sends no stops at all can't wipe every stop
+    // in the story.
+    if (stopsData.length > 0) {
+      const keepIds = stopsData.map((s) => s.id);
+      db.prepare(
+        `DELETE FROM stops WHERE story_id = ? AND id NOT IN (${keepIds.map(() => "?").join(",")})`
+      ).run(id, ...keepIds);
     }
+
     touchStoryStmt.run({ id, now });
   });
   tx();

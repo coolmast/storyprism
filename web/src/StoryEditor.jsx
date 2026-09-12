@@ -6,12 +6,19 @@ import RouteEmbeds from "./RouteEmbeds.jsx";
 import NotesImportPanel from "./NotesImportPanel.jsx";
 import InfoCards from "./InfoCards.jsx";
 import { useI18n } from "./i18n.jsx";
+import { uid } from "./uid.js";
 
 const THEME_LABEL_KEY = {
   coastal: "themeCoastal",
   monochrome: "themeMonochrome",
   vintage: "themeVintage",
   bold: "themeBold",
+  ocean: "themeOcean",
+  midnight: "themeMidnight",
+  sunset: "themeSunset",
+  sunrise: "themeSunrise",
+  adventure: "themeAdventure",
+  nordic: "themeNordic",
 };
 
 function formatRange(start, end, locale) {
@@ -127,6 +134,87 @@ export default function StoryEditor({ story, onBack, onSaved }) {
     }));
   }
 
+  // A blank stop the user inserts by hand, for a moment the automatic
+  // time/distance clustering didn't split out on its own - a rest stop,
+  // a detour, a chapter break with no photos at all. Inherits the
+  // neighboring stop's dates/location as a reasonable default rather than
+  // leaving them blank; the user can rename/rewrite everything anyway, and
+  // an empty stop with nothing added to it is hidden from the final page.
+  function addSection(afterStopId) {
+    markDirty((d) => {
+      const idx = d.stops.findIndex((s) => s.id === afterStopId);
+      const neighbor = d.stops[idx];
+      const newStop = {
+        id: uid(),
+        heading: t("newSectionHeading"),
+        narrative: "",
+        pullQuote: "",
+        research: "",
+        startedAt: neighbor?.endedAt ?? neighbor?.startedAt ?? null,
+        endedAt: neighbor?.endedAt ?? null,
+        lat: neighbor?.lat ?? null,
+        lng: neighbor?.lng ?? null,
+        placeLabel: null,
+        photos: [],
+        embeds: [],
+        infoCards: [],
+        suggestedPlaces: [],
+      };
+      const stops = [...d.stops];
+      stops.splice(idx + 1, 0, newStop);
+      return { ...d, stops };
+    });
+  }
+
+  // Splits a stop's included photos into two stops at the clicked photo
+  // (that photo and everything after it moves to a new stop right after
+  // this one). Excluded photos stay with the original stop - they aren't
+  // part of the visible ordering being split, and moving them too would be
+  // guessing at an order the user never actually set. Can't recompute a
+  // precise date range or map position for the new stop from photo data
+  // alone (per-photo timestamps/GPS aren't kept once a story exists, only
+  // the stop-level ones are), so the split half just inherits the
+  // original stop's - an approximation, but a harmless one the user can
+  // freely edit afterward.
+  function splitStopAtPhoto(stopId, photoId) {
+    markDirty((d) => {
+      const idx = d.stops.findIndex((s) => s.id === stopId);
+      const stop = d.stops[idx];
+      const included = stop.photos.filter((p) => p.included);
+      const excluded = stop.photos.filter((p) => !p.included);
+      const splitAt = included.findIndex((p) => p.id === photoId);
+      if (splitAt <= 0) return d;
+
+      const keepIncluded = included.slice(0, splitAt);
+      const movedIncluded = included.slice(splitAt);
+      const newStop = {
+        id: uid(),
+        heading: `${stop.heading} (2)`,
+        narrative: "",
+        pullQuote: "",
+        research: "",
+        startedAt: stop.startedAt,
+        endedAt: stop.endedAt,
+        lat: stop.lat,
+        lng: stop.lng,
+        placeLabel: stop.placeLabel,
+        photos: movedIncluded,
+        embeds: [],
+        infoCards: [],
+        suggestedPlaces: [],
+      };
+      const stops = [...d.stops];
+      stops[idx] = { ...stop, photos: [...keepIncluded, ...excluded] };
+      stops.splice(idx + 1, 0, newStop);
+      return { ...d, stops };
+    });
+  }
+
+  function removeSection(stopId) {
+    if (!confirm(t("removeSectionConfirm"))) return;
+    markDirty((d) => ({ ...d, stops: d.stops.filter((s) => s.id !== stopId) }));
+  }
+
   async function handleSave() {
     setSaving(true);
     try {
@@ -172,20 +260,41 @@ export default function StoryEditor({ story, onBack, onSaved }) {
       <div className="editor-toolbar">
         <button className="link-btn" onClick={onBack}>{t("backToStories")}</button>
         <div className="toolbar-actions">
-          <a className="link-btn" href={`/story/${draft.id}?preview=1`} target="_blank" rel="noreferrer">
-            {t("viewStory")}
+          <a
+            className="toolbar-btn"
+            href={`/story/${draft.id}?preview=1`}
+            target="_blank"
+            rel="noreferrer"
+            title={t("viewStory")}
+          >
+            <span aria-hidden="true">👁️</span>
+            <span className="toolbar-btn-label">{t("viewStory")}</span>
           </a>
-          <button className="link-btn" onClick={handleCopyShareLink}>
-            {copied ? t("linkCopied") : t("copyShareLink")}
+          <button className="toolbar-btn" onClick={handleCopyShareLink} title={t("copyShareLink")}>
+            <span aria-hidden="true">{copied ? "✓" : "🔗"}</span>
+            <span className="toolbar-btn-label">{copied ? t("linkCopied") : t("copyShareLink")}</span>
           </button>
-          <a className="link-btn" href={`/story/${draft.id}/present`} target="_blank" rel="noreferrer">
-            {t("present")}
+          <a
+            className="toolbar-btn"
+            href={`/story/${draft.id}/present`}
+            target="_blank"
+            rel="noreferrer"
+            title={t("present")}
+          >
+            <span aria-hidden="true">🎬</span>
+            <span className="toolbar-btn-label">{t("present")}</span>
           </a>
-          <a className="link-btn" href={`/api/stories/${draft.id}/export/pdf`}>
-            {t("downloadPdf")}
+          <a className="toolbar-btn" href={`/api/stories/${draft.id}/export/pdf`} title={t("downloadPdf")}>
+            <span aria-hidden="true">📄</span>
+            <span className="toolbar-btn-label">{t("downloadPdf")}</span>
           </a>
-          <a className="link-btn" href={`/api/stories/${draft.id}/export/deck-pdf`}>
-            {t("downloadSlides")}
+          <a
+            className="toolbar-btn"
+            href={`/api/stories/${draft.id}/export/deck-pdf`}
+            title={t("downloadSlides")}
+          >
+            <span aria-hidden="true">🖼️</span>
+            <span className="toolbar-btn-label">{t("downloadSlides")}</span>
           </a>
           <button className="save-btn" onClick={handleSave} disabled={saving || !dirty}>
             {saving ? t("saving") : dirty ? t("saveChanges") : t("saved")}
@@ -290,6 +399,15 @@ export default function StoryEditor({ story, onBack, onSaved }) {
                     onChange={(e) => updateStop(stop.id, { heading: e.target.value })}
                   />
                   <span className="stop-dates">{formatRange(stop.startedAt, stop.endedAt, locale)}</span>
+                  {draft.stops.length > 1 && (
+                    <button
+                      type="button"
+                      className="link-btn danger small"
+                      onClick={() => removeSection(stop.id)}
+                    >
+                      {t("removeSection")}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -371,6 +489,7 @@ export default function StoryEditor({ story, onBack, onSaved }) {
                     onUpdatePhoto={updatePhoto}
                     onToggleFeatured={toggleFeatured}
                     onDraftCaption={handleDraftCaption}
+                    onSplitHere={(photoId) => splitStopAtPhoto(stop.id, photoId)}
                     busy={busy}
                   />
 
@@ -398,6 +517,10 @@ export default function StoryEditor({ story, onBack, onSaved }) {
                     </details>
                   )}
                 </div>
+
+                <button type="button" className="link-btn add-section-btn" onClick={() => addSection(stop.id)}>
+                  {t("addSectionAfter")}
+                </button>
               </>
             )}
           </section>
