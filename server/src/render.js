@@ -66,6 +66,28 @@ function embedBlock(embed) {
     </a>`;
 }
 
+function infoCardBlock(card) {
+  return `
+    <div class="info-card">
+      <div class="info-card-header">
+        <h3>${escapeHtml(card.placeName)}</h3>
+        ${card.subtitle ? `<p class="info-card-subtitle">${escapeHtml(card.subtitle)}</p>` : ""}
+      </div>
+      ${card.summary ? `<p class="info-card-summary">${escapeHtml(card.summary)}</p>` : ""}
+      ${
+        card.facts?.length
+          ? `<dl class="info-card-facts">
+        ${card.facts
+          .map(
+            (f) => `<div><dt>${escapeHtml(f.label)}</dt><dd>${escapeHtml(f.value)}</dd></div>`
+          )
+          .join("\n")}
+      </dl>`
+          : ""
+      }
+    </div>`;
+}
+
 // More than this on one printed page and photos get too small to be worth
 // looking at (this only forces a page break in print/PDF - on screen the
 // gallery still scrolls as one continuous masonry). The featured photo, if
@@ -113,6 +135,7 @@ export function renderStoryHtml(story) {
           : ""
       }
       ${stop.research ? `<aside class="research"><p>${escapeHtml(stop.research)}</p></aside>` : ""}
+      ${(stop.infoCards || []).map(infoCardBlock).join("\n")}
       ${(stop.embeds || []).map(embedBlock).join("\n")}
       ${
         gridPhotos.length
@@ -216,6 +239,21 @@ export function renderStoryHtml(story) {
     background: var(--sand); border-left: 4px solid var(--accent2);
     padding: 0.9rem 1.1rem; margin: 1rem 0; border-radius: 0 6px 6px 0; font-size: 0.95rem;
   }
+  .info-card {
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 1.1rem 1.3rem; margin: 1.2rem 0; background: var(--sand);
+  }
+  .info-card-header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+  .info-card-header h3 { margin: 0; font-family: var(--heading-font); }
+  .info-card-subtitle { margin: 0; font-style: italic; color: var(--accent2); font-size: 0.9rem; }
+  .info-card-summary { margin: 0.6rem 0; }
+  .info-card-facts {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.7rem 1.2rem; margin: 0.8rem 0 0;
+  }
+  .info-card-facts div { border-top: 1px solid var(--line); padding-top: 0.35rem; }
+  .info-card-facts dt { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; opacity: 0.7; }
+  .info-card-facts dd { margin: 0.15rem 0 0; font-weight: bold; }
   .route-embed { margin: 1.2rem 0; }
   .route-embed-title { font-weight: bold; margin: 0 0 0.4rem 0; }
   .route-embed-frame {

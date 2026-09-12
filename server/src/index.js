@@ -214,6 +214,26 @@ app.post("/api/stories/:id/import-notes", async (req, res) => {
   }
 });
 
+app.post("/api/stories/:id/stops/:stopId/info-cards", async (req, res) => {
+  const story = getStory(req.params.id);
+  const stop = story?.stops.find((s) => s.id === req.params.stopId);
+  if (!stop) return res.status(404).json({ error: "Not found" });
+
+  const placeName = (req.body.placeName || "").trim();
+  if (!placeName) return res.status(400).json({ error: "placeName is required" });
+
+  try {
+    const card = await getProvider().generateInfoCard({
+      placeName,
+      context: stop.heading !== placeName ? `near ${stop.heading}` : "",
+    });
+    res.json({ placeName, ...card });
+  } catch (err) {
+    console.error(err);
+    res.status(502).json({ error: err.message });
+  }
+});
+
 app.get("/story/:id", (req, res) => {
   const story = getStory(req.params.id);
   if (!story) return res.status(404).send("Story not found");

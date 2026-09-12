@@ -62,3 +62,10 @@ export const importNotes = (storyId, { text, url }) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, url }),
   }).then(json);
+
+export const generateInfoCard = (storyId, stopId, placeName) =>
+  fetch(`/api/stories/${storyId}/stops/${stopId}/info-cards`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ placeName }),
+  }).then(json);

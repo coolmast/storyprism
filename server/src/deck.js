@@ -58,6 +58,28 @@ export function renderStoryDeck(story) {
         ${stop.pullQuote ? `<blockquote class="deck-quote">${escapeHtml(stop.pullQuote)}</blockquote>` : ""}
       </section>`;
 
+      const infoCardSlides = (stop.infoCards || [])
+        .map(
+          (card) => `
+      <section>
+        <h2>${escapeHtml(card.placeName)}</h2>
+        ${card.subtitle ? `<p class="deck-dates">${escapeHtml(card.subtitle)}</p>` : ""}
+        ${card.summary ? `<p class="deck-narrative">${escapeHtml(card.summary)}</p>` : ""}
+        ${
+          card.facts?.length
+            ? `<div class="deck-facts">
+          ${card.facts
+            .map(
+              (f) => `<div><dt>${escapeHtml(f.label)}</dt><dd>${escapeHtml(f.value)}</dd></div>`
+            )
+            .join("\n")}
+        </div>`
+            : ""
+        }
+      </section>`
+        )
+        .join("\n");
+
       // Only embeddable (allowlisted + a real /embed link) routes get their
       // own slide; a plain activity-page link wouldn't render inside an
       // iframe anyway, so it's skipped here rather than shown as a dead frame.
@@ -103,7 +125,7 @@ export function renderStoryDeck(story) {
         )
         .join("\n");
 
-      return `<section>${textSlide}${embedSlides}${featuredSlide}${gridSlides}</section>`;
+      return `<section>${textSlide}${infoCardSlides}${embedSlides}${featuredSlide}${gridSlides}</section>`;
     })
     .join("\n");
 
@@ -180,6 +202,13 @@ export function renderStoryDeck(story) {
     background: linear-gradient(to top, rgba(0,0,0,0.75), rgba(0,0,0,0.25) 70%);
   }
   .deck-embed-title { margin: 0 0 0.4em 0; }
+  .deck-facts {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.5em 1em; margin-top: 0.8em; font-size: 0.6em;
+  }
+  .deck-facts div { border-top: 1px solid var(--accent2); padding-top: 0.3em; }
+  .deck-facts dt { text-transform: uppercase; letter-spacing: 0.03em; opacity: 0.75; font-size: 0.85em; }
+  .deck-facts dd { margin: 0.1em 0 0; font-weight: bold; }
   .deck-embed-frame { width: 100%; height: 80vh; border: none; border-radius: 8px; }
   .img-slide { position: relative; height: 100%; }
   .deck-featured-img {

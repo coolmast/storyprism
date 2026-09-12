@@ -4,6 +4,7 @@ import IncludedPhotoGrid from "./IncludedPhotoGrid.jsx";
 import InterviewPanel from "./InterviewPanel.jsx";
 import RouteEmbeds from "./RouteEmbeds.jsx";
 import NotesImportPanel from "./NotesImportPanel.jsx";
+import InfoCards from "./InfoCards.jsx";
 
 function formatRange(start, end) {
   const opts = { day: "numeric", month: "short", year: "numeric" };
@@ -240,6 +241,14 @@ export default function StoryEditor({ story, onBack, onSaved }) {
               />
             )}
           </div>
+
+          <InfoCards
+            storyId={draft.id}
+            stopId={stop.id}
+            suggestedPlaces={stop.suggestedPlaces || []}
+            infoCards={stop.infoCards || []}
+            onChange={(infoCards) => updateStop(stop.id, { infoCards })}
+          />
 
           <RouteEmbeds
             embeds={stop.embeds || []}

@@ -4,6 +4,7 @@ import { listAlbums, getAlbumPhotos, thumbUrl } from "./photoprism.js";
 import { buildItinerary } from "./itinerary.js";
 import { DEFAULT_THEME } from "./themes.js";
 import { isAllowedEmbedHost } from "./embeds.js";
+import { suggestPlacesForStop } from "./places.js";
 
 const insertStory = db.prepare(`
   INSERT INTO stories (id, album_uid, album_title, title, intro, outro, theme, created_at, updated_at)
@@ -14,8 +15,8 @@ const insertStop = db.prepare(`
   VALUES (@id, @storyId, @position, @lat, @lng, @placeLabel, @startedAt, @endedAt, @heading, '')
 `);
 const insertPhoto = db.prepare(`
-  INSERT INTO stop_photos (id, stop_id, photo_uid, hash, width, height, position, caption, included)
-  VALUES (@id, @stopId, @photoUid, @hash, @width, @height, @position, '', @included)
+  INSERT INTO stop_photos (id, stop_id, photo_uid, hash, width, height, position, caption, included, title, place_label)
+  VALUES (@id, @stopId, @photoUid, @hash, @width, @height, @position, '', @included, @title, @placeLabel)
 `);
 
 export async function createStoryFromAlbum(albumUid) {
@@ -69,6 +70,8 @@ export async function createStoryFromAlbum(albumUid) {
           height: p.height || null,
           position: j,
           included: j % step === 0 ? 1 : 0,
+          title: p.title || "",
+          placeLabel: p.placeLabel || "",
         });
       });
     });
@@ -103,6 +106,9 @@ export function getStory(id) {
   const embedStmt = db.prepare(
     "SELECT * FROM stop_embeds WHERE stop_id = ? ORDER BY position"
   );
+  const infoCardStmt = db.prepare(
+    "SELECT * FROM stop_info_cards WHERE stop_id = ? ORDER BY position"
+  );
 
   return {
     id: story.id,
@@ -114,37 +120,52 @@ export function getStory(id) {
     theme: story.theme,
     createdAt: story.created_at,
     updatedAt: story.updated_at,
-    stops: stops.map((s) => ({
-      id: s.id,
-      position: s.position,
-      lat: s.lat,
-      lng: s.lng,
-      placeLabel: s.place_label,
-      startedAt: s.started_at,
-      endedAt: s.ended_at,
-      heading: s.heading,
-      narrative: s.narrative,
-      research: s.research,
-      pullQuote: s.pull_quote,
-      photos: photoStmt.all(s.id).map((p) => ({
-        id: p.id,
-        photoUid: p.photo_uid,
-        thumbUrl: p.hash ? thumbUrl(p.hash, "fit_720") : null,
-        fullUrl: p.hash ? thumbUrl(p.hash, "fit_2048") : null,
-        width: p.width,
-        height: p.height,
-        position: p.position,
-        caption: p.caption,
-        included: !!p.included,
-        featured: !!p.featured,
-      })),
-      embeds: embedStmt.all(s.id).map((e) => ({
-        id: e.id,
-        provider: e.provider,
-        url: e.url,
-        title: e.title,
-      })),
-    })),
+    stops: stops.map((s) => {
+      const photoRows = photoStmt.all(s.id);
+      const includedRows = photoRows.filter((p) => p.included);
+
+      return {
+        id: s.id,
+        position: s.position,
+        lat: s.lat,
+        lng: s.lng,
+        placeLabel: s.place_label,
+        startedAt: s.started_at,
+        endedAt: s.ended_at,
+        heading: s.heading,
+        narrative: s.narrative,
+        research: s.research,
+        pullQuote: s.pull_quote,
+        suggestedPlaces: suggestPlacesForStop(
+          includedRows.map((p) => ({ title: p.title, placeLabel: p.place_label }))
+        ),
+        photos: photoRows.map((p) => ({
+          id: p.id,
+          photoUid: p.photo_uid,
+          thumbUrl: p.hash ? thumbUrl(p.hash, "fit_720") : null,
+          fullUrl: p.hash ? thumbUrl(p.hash, "fit_2048") : null,
+          width: p.width,
+          height: p.height,
+          position: p.position,
+          caption: p.caption,
+          included: !!p.included,
+          featured: !!p.featured,
+        })),
+        embeds: embedStmt.all(s.id).map((e) => ({
+          id: e.id,
+          provider: e.provider,
+          url: e.url,
+          title: e.title,
+        })),
+        infoCards: infoCardStmt.all(s.id).map((c) => ({
+          id: c.id,
+          placeName: c.place_name,
+          subtitle: c.subtitle,
+          summary: c.summary,
+          facts: JSON.parse(c.facts || "[]"),
+        })),
+      };
+    }),
   };
 }
 
@@ -164,6 +185,11 @@ const deleteEmbedsStmt = db.prepare("DELETE FROM stop_embeds WHERE stop_id = @st
 const insertEmbedStmt = db.prepare(`
   INSERT INTO stop_embeds (id, stop_id, provider, url, title, position)
   VALUES (@id, @stopId, @provider, @url, @title, @position)
+`);
+const deleteInfoCardsStmt = db.prepare("DELETE FROM stop_info_cards WHERE stop_id = @stopId");
+const insertInfoCardStmt = db.prepare(`
+  INSERT INTO stop_info_cards (id, stop_id, place_name, subtitle, summary, facts, position)
+  VALUES (@id, @stopId, @placeName, @subtitle, @summary, @facts, @position)
 `);
 const touchStoryStmt = db.prepare("UPDATE stories SET updated_at = @now WHERE id = @id");
 
@@ -223,6 +249,19 @@ export function updateStory(id, data) {
             position: index,
           });
         });
+
+      deleteInfoCardsStmt.run({ stopId: stop.id });
+      (stop.infoCards ?? []).forEach((card, index) => {
+        insertInfoCardStmt.run({
+          id: randomUUID(),
+          stopId: stop.id,
+          placeName: card.placeName || "",
+          subtitle: card.subtitle || "",
+          summary: card.summary || "",
+          facts: JSON.stringify(card.facts || []),
+          position: index,
+        });
+      });
     }
     touchStoryStmt.run({ id, now });
   });

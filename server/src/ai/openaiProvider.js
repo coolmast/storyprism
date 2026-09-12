@@ -83,6 +83,51 @@ export async function researchPlace({ place, storyTitle, dateRange }) {
   return extractResponseText(data).trim();
 }
 
+function extractJson(text) {
+  // The Responses API doesn't take a response_format like chat completions
+  // does, so we just ask for JSON in the prompt and parse leniently -
+  // stripping a markdown code fence if the model wraps it in one anyway.
+  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
+  return JSON.parse(cleaned);
+}
+
+export async function generateInfoCard({ placeName, context }) {
+  const res = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: RESEARCH_MODEL,
+      tools: [{ type: "web_search" }],
+      input:
+        `Research "${placeName}"${context ? ` (${context})` : ""} and produce a short info card for a ` +
+        "travel story reader. Figure out what kind of place this is (national park, city, museum, " +
+        "waterfall, historic site, neighborhood, whatever it actually is) and pick 3-5 facts that are " +
+        "actually relevant and interesting for THAT kind of place - e.g. a national park might get " +
+        "established year/area/notable wildlife, a museum might get founded year/collection focus/a " +
+        "standout piece, a waterfall might get height/water source. Don't force facts that don't fit. " +
+        "Use only facts you can verify from search; omit a fact rather than guess. Write a one-sentence " +
+        "subtitle (what kind of place, in a few words) and a short 2-3 sentence summary in plain, " +
+        "specific prose (no travel-brochure language).\n\n" +
+        'Respond with ONLY this JSON, no other text: {"subtitle": string, "summary": string, ' +
+        '"facts": [{"label": string, "value": string}]}',
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`OpenAI info card request failed: ${res.status} ${await res.text()}`);
+  }
+  const data = await res.json();
+  const parsed = extractJson(extractResponseText(data));
+  return {
+    subtitle: parsed.subtitle || "",
+    summary: parsed.summary || "",
+    facts: Array.isArray(parsed.facts) ? parsed.facts.slice(0, 6) : [],
+  };
+}
+
 function describeStopContext({ heading, dateRange, narrative, captions, research }) {
   return [
     `Stop: ${heading}${dateRange ? ` (visited ${dateRange})` : ""}.`,

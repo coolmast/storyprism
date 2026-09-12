@@ -2,10 +2,10 @@
 
 Turns a PhotoPrism album into an editable travel story: itinerary extraction
 from photo GPS/time metadata, a map view, manual + AI-assisted captions,
-embedded Strava/Komoot/Garmin routes, an AI ghostwriter that interviews you
-and can reorganize your own existing travel writing into the story, and
-export to a shareable single-page web view, a reveal.js presentation, or a
-printable PDF (either format).
+embedded Strava/Komoot/Garmin routes, AI-suggested enriched place info cards,
+an AI ghostwriter that interviews you and can reorganize your own existing
+travel writing into the story, and export to a shareable single-page web
+view, a reveal.js presentation, or a printable PDF (either format).
 
 ## Architecture
 
@@ -46,12 +46,21 @@ printable PDF (either format).
     the AI, which reads all the story's stops and segments/rewrites the
     notes across the right ones (`organizeNotesIntoStory` in
     `server/src/ai/openaiProvider.js`).
+  - Each stop can carry optional, AI-suggested "info cards" (place name,
+    subtitle, a short summary, and a handful of facts) — candidates come
+    from PhotoPrism's own `PlaceLabel`s and auto-generated photo titles
+    (`server/src/places.js`, zero extra API calls), or the user can name
+    any place manually. Generating one is a web-search-backed AI call
+    (`generateInfoCard`) that freely picks whatever facts actually fit the
+    place (a national park gets area/flora, a museum gets founded
+    year/collection) rather than a fixed schema per place type.
 - `web/` — React (Vite) frontend: album picker + map (M1), story list +
   editor (M2/M3) with theme picker, drag-to-reorder photo grid,
   featured-photo/pull-quote controls, a per-stop AI interview panel
   (`InterviewPanel.jsx`), a per-stop route-embed manager
-  (`RouteEmbeds.jsx`), and a story-level notes-import panel
-  (`NotesImportPanel.jsx`), links out to view/present/PDF export (M4).
+  (`RouteEmbeds.jsx`), a per-stop info-card manager (`InfoCards.jsx`), and
+  a story-level notes-import panel (`NotesImportPanel.jsx`), links out to
+  view/present/PDF export (M4).
 
 ## Running locally
 
@@ -89,6 +98,9 @@ useful for a second person to use the editor from their own device.
 - [x] Route/activity embeds (Strava, Komoot, Garmin Connect) per stop, and
       AI notes import that segments/rewrites your own long-form travel
       writing (pasted or a blog URL) across the right stops
+- [x] Enriched place info cards, suggested from PhotoPrism place labels and
+      photo titles (free, already-fetched data), generated on request via
+      web-search-backed AI with a flexible fact schema per place
 - [ ] Containerize (Dockerfiles + docker-compose) to run alongside PhotoPrism
       — deferred until this has been used for real and the deployment shape
       (same host as PhotoPrism? synced elsewhere?) is clearer
@@ -102,6 +114,33 @@ useful for a second person to use the editor from their own device.
 
 ## Notes
 
+- **Info card suggestions come from data already fetched, not extra
+  PhotoPrism calls**: PhotoPrism's per-photo `PlaceLabel` (bulk list
+  response) ranges from broad ("Mölle, Sweden") to specific ("Strandbaden,
+  Höganäs, Sweden"), and its auto-generated photo `Title` (also in the bulk
+  response) sometimes surfaces a genuinely specific named landmark PhotoPrism
+  recognized - confirmed against the real Kullaberg album, where several
+  photos are titled "Ladonien" (an actual art installation/micronation on
+  the peninsula), distinct from the broader place labels. `places.js`
+  merges both sources, dedupes "Höganäs" vs. "Höganäs, Sweden" by taking
+  each label's first comma-segment, filters a denylist of ~40 common
+  PhotoPrism content labels (Portrait, Outdoor, Landscape, ...), and drops
+  single-occurrence candidates when a stop has ≥5 photos. It does **not**
+  filter out person names (PhotoPrism sometimes titles a photo after a
+  recognized face) - building a reliable person-vs-place classifier wasn't
+  worth it for a suggestion the user just ignores if it's clearly a name.
+  Checked whether the photo folder Path added anything too (the user's own
+  suggestion) - for this library it's just `HandyPeter/2022/06`
+  (uploader/date), no place signal, so it wasn't used; worth revisiting for
+  a library organized into named folders per place.
+- **Info card facts are deliberately schema-free**: the AI is told to
+  figure out what kind of place it is and pick 3-5 facts that actually fit
+  (verified in testing: a nature reserve got Established/Area/Highest
+  Point/Flora/Visitor Center; a micronation/art site got
+  Established/Area/Notable Sculptures) rather than forcing every place
+  through the same fixed fields. Facts are stored as a JSON blob
+  (`stop_info_cards.facts`) rather than a normalized table, since they're
+  never queried independently of their card.
 - **Route embeds only iframe a URL that is both from an allowlisted host
   (strava.com, komoot.com/.de, garmin.com) and looks like the provider's
   actual embed link** (path or query contains "embed") — enforced
@@ -200,12 +239,24 @@ useful for a second person to use the editor from their own device.
   (confirmed working there) since it isn't nested.
 - Photo `alt` text uses the caption when set, falling back to the stop
   heading, in both the web view and the deck.
+- The deck's info-card slide renders correctly but visibly more compact
+  than the main per-stop text slide - confirmed the content and theme
+  colors are right, but couldn't get a clean apples-to-apples font-size
+  comparison via reveal.js's nested-slide DOM (its "present" class marks
+  both the horizontal stack wrapper and the active vertical slide at once,
+  which made programmatic measurement unreliable). Worth a follow-up
+  design pass if the deck's info-card slide bothers you visually; the web
+  view and PDF don't have this issue.
 - Known flakiness in this dev environment (not a code issue per se): the
   backend intermittently crashes with a native-module assertion in
   `better-sqlite3` on startup under this box's Node 24.20.0 build —
-  usually recovers after 1-2 restarts. Root-caused one instance of it this
-  session to a stray duplicate `server/node_modules/better-sqlite3`
-  (left over from before the npm workspace was unified) shadowing the
-  correct hoisted copy with a corrupted build; deleting it and reinstalling
-  fixed that occurrence. If it recurs, check for stray nested
-  `node_modules` before assuming it's the same underlying flakiness.
+  usually recovers after 1-2 restarts. Root-caused it *twice* this session
+  to a stray duplicate `server/node_modules/better-sqlite3` (apparently
+  recreated by some `npm install`/`npm rebuild` invocations even after
+  being deleted once) shadowing the correct hoisted copy with a corrupted
+  build; deleting `server/node_modules` entirely and restarting fixed it
+  both times, immediately. If this recurs: `find . -maxdepth 2 -iname
+  better-sqlite3 -type d` should show only the root copy — if it shows a
+  `server/node_modules` one too, delete `server/node_modules` (not just
+  the better-sqlite3 folder inside it) before assuming it's unrelated
+  flakiness.

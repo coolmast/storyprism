@@ -48,7 +48,19 @@ db.exec(`
     position INTEGER NOT NULL,
     caption TEXT NOT NULL DEFAULT '',
     included INTEGER NOT NULL DEFAULT 1,
-    featured INTEGER NOT NULL DEFAULT 0
+    featured INTEGER NOT NULL DEFAULT 0,
+    title TEXT NOT NULL DEFAULT '',
+    place_label TEXT NOT NULL DEFAULT ''
+  );
+
+  CREATE TABLE IF NOT EXISTS stop_info_cards (
+    id TEXT PRIMARY KEY,
+    stop_id TEXT NOT NULL REFERENCES stops(id) ON DELETE CASCADE,
+    place_name TEXT NOT NULL,
+    subtitle TEXT NOT NULL DEFAULT '',
+    summary TEXT NOT NULL DEFAULT '',
+    facts TEXT NOT NULL DEFAULT '[]',
+    position INTEGER NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS stop_embeds (
@@ -63,4 +75,5 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_stops_story ON stops(story_id);
   CREATE INDEX IF NOT EXISTS idx_stop_photos_stop ON stop_photos(stop_id);
   CREATE INDEX IF NOT EXISTS idx_stop_embeds_stop ON stop_embeds(stop_id);
+  CREATE INDEX IF NOT EXISTS idx_stop_info_cards_stop ON stop_info_cards(stop_id);
 `);
