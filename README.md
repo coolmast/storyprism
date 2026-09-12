@@ -290,7 +290,28 @@ useful for a second person to use the editor from their own device.
   grayscale for the light/minimal look, sepia for the vintage-postcard
   tint, `invert(1) hue-rotate(180deg)` for a dark-mode look (a standard
   trick for getting a dark basemap out of light OSM tiles). Verified by
-  screenshotting the map on all 4 themes after the fix.
+  screenshotting the map on all 4 themes after the fix - **but this
+  wasn't the bug the user was actually hitting** (see next note); it was
+  a real, separate problem found along the way, just not the reported one.
+- **The real cause of the "empty frame" report: `web/vite.config.js`'s
+  dev proxy never forwarded `/vendor`** (only `/api` and `/story`), so
+  Leaflet, PhotoSwipe, and reveal.js's static assets 404'd whenever a
+  story/deck was opened at the frontend dev server's own origin - exactly
+  what "View story ↗"/"Present ↗" do, and exactly how the user's phone
+  reached it. `L` and `PhotoSwipeLightbox` ended up `undefined`,
+  throwing early and silently killing map init *and* the photo lightbox,
+  with nothing in the rendered HTML to show for it - a totally empty
+  box, not even Leaflet's zoom controls or attribution line. The first
+  fix attempt (the CARTO note above) genuinely fixed a real bug, but
+  missed this one entirely because verification loaded the story page
+  directly from the backend (`:3001`), which has no proxy step to skip -
+  bypassing the exact failure the user's screenshot showed. Lesson: when
+  a report comes from a specific URL/origin, reproduce from that same
+  origin, not whichever one happens to be more convenient to hit
+  directly. Fixed by adding `'/vendor': 'http://localhost:3001'` to the
+  proxy config; confirmed by reproducing the failure first (0 `/vendor`
+  requests succeeding, `ReferenceError: L is not defined`) and then
+  re-running the identical check clean after the fix.
 - The PDF caps each printed page at 6 photos (`PHOTOS_PER_PRINTED_PAGE` in
   `render.js`) so they stay a legible size — more than that on an A4 page
   and they get too small to be worth printing. A stop's featured photo
