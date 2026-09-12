@@ -28,6 +28,17 @@ function tripDateRange(stops) {
   return dateRange(stops[0].startedAt, stops[stops.length - 1].endedAt);
 }
 
+function chunk(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+// More than this on one printed page and photos get too small to be worth
+// looking at (this only forces a page break in print/PDF - on screen the
+// gallery still scrolls as one continuous masonry).
+const PHOTOS_PER_PRINTED_PAGE = 6;
+
 export function renderStoryHtml(story) {
   const includedByStop = story.stops.map((s) => s.photos.filter((p) => p.included));
   const coverPhoto = includedByStop.flat()[0]?.thumbUrl;
@@ -52,22 +63,30 @@ export function renderStoryHtml(story) {
       ${stop.research ? `<aside class="research"><p>${escapeHtml(stop.research)}</p></aside>` : ""}
       ${
         photos.length
-          ? `<div class="photo-mosaic" id="mosaic-${i}">
-        ${photos
-          .map(
-            (p) => `
-          <figure>
-            <a class="pswp-item" href="${escapeHtml(p.fullUrl || p.thumbUrl)}"
-               data-pswp-width="${p.width || 1600}" data-pswp-height="${p.height || 1200}"
-               target="_blank" rel="noreferrer">
-              <img src="${escapeHtml(p.thumbUrl)}" alt="" width="${p.width || ""}" height="${p.height || ""}">
-            </a>
-            ${p.caption ? `<figcaption>${escapeHtml(p.caption)}</figcaption>` : ""}
-          </figure>`
-          )
-          .join("\n")}
-      </div>
-      <button class="shuffle-btn no-print" onclick="shuffleMosaic('mosaic-${i}')">&#128256; Shuffle layout</button>`
+          ? chunk(photos, PHOTOS_PER_PRINTED_PAGE)
+              .map((pagePhotos, ci) => {
+                const mosaicId = `mosaic-${i}-${ci}`;
+                return `
+      <div class="photo-mosaic-page">
+        <div class="photo-mosaic" id="${mosaicId}">
+          ${pagePhotos
+            .map(
+              (p) => `
+            <figure>
+              <a class="pswp-item" href="${escapeHtml(p.fullUrl || p.thumbUrl)}"
+                 data-pswp-width="${p.width || 1600}" data-pswp-height="${p.height || 1200}"
+                 target="_blank" rel="noreferrer">
+                <img src="${escapeHtml(p.thumbUrl)}" alt="" width="${p.width || ""}" height="${p.height || ""}">
+              </a>
+              ${p.caption ? `<figcaption>${escapeHtml(p.caption)}</figcaption>` : ""}
+            </figure>`
+            )
+            .join("\n")}
+        </div>
+        <button class="shuffle-btn no-print" onclick="shuffleMosaic('${mosaicId}')">&#128256; Shuffle layout</button>
+      </div>`;
+              })
+              .join("\n")
           : ""
       }
     </section>`;
@@ -161,6 +180,9 @@ export function renderStoryHtml(story) {
     #map { break-inside: avoid; }
     .stop { break-before: page; }
     .no-print { display: none; }
+    .photo-mosaic { column-count: 3; }
+    .photo-mosaic-page { break-after: page; }
+    .photo-mosaic-page:last-of-type { break-after: auto; }
   }
 </style>
 </head>

@@ -74,11 +74,10 @@ useful for a second person to use the editor from their own device.
   work on the same network as PhotoPrism (or via VPN). Sharing a story with
   someone off-network would need downloading/embedding the images instead —
   not built, since it wasn't needed yet.
-- The exported PDF paginates per-browser-print-engine, not per-story-design —
-  a stop's last photo can land alone on an otherwise blank page if it
-  doesn't fit the row above. Fine for a first cut; a real "book" layout
-  would need explicit page-flow logic instead of relying on CSS
-  `break-before`.
+- The PDF caps each printed page at 6 photos (`PHOTOS_PER_PRINTED_PAGE` in
+  `render.js`) so they stay a legible size — more than that on an A4 page
+  and they get too small to be worth printing. This only affects print/PDF;
+  the on-screen story view still scrolls as one continuous masonry.
 - Known flakiness in this dev environment (not a code issue per se): the
   backend intermittently crashes with a native-module assertion in
   `better-sqlite3` on startup under this box's Node 24.20.0 build — a
