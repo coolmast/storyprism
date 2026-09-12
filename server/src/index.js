@@ -140,6 +140,47 @@ app.post("/api/stories/:id/stops/:stopId/research", async (req, res) => {
   }
 });
 
+app.post("/api/stories/:id/stops/:stopId/interview", async (req, res) => {
+  const story = getStory(req.params.id);
+  const stop = story?.stops.find((s) => s.id === req.params.stopId);
+  if (!stop) return res.status(404).json({ error: "Not found" });
+
+  try {
+    const reply = await getProvider().interviewTurn({
+      heading: stop.heading || stop.placeLabel || "this stop",
+      dateRange: new Date(stop.startedAt).toLocaleDateString(),
+      narrative: stop.narrative,
+      captions: stop.photos.filter((p) => p.included && p.caption).map((p) => p.caption),
+      research: stop.research,
+      history: Array.isArray(req.body.history) ? req.body.history : [],
+    });
+    res.json({ reply });
+  } catch (err) {
+    console.error(err);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+app.post("/api/stories/:id/stops/:stopId/interview/draft", async (req, res) => {
+  const story = getStory(req.params.id);
+  const stop = story?.stops.find((s) => s.id === req.params.stopId);
+  if (!stop) return res.status(404).json({ error: "Not found" });
+
+  try {
+    const result = await getProvider().draftFromInterview({
+      heading: stop.heading || stop.placeLabel || "this stop",
+      narrative: stop.narrative,
+      captions: stop.photos.filter((p) => p.included && p.caption).map((p) => p.caption),
+      research: stop.research,
+      history: Array.isArray(req.body.history) ? req.body.history : [],
+    });
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(502).json({ error: err.message });
+  }
+});
+
 app.get("/story/:id", (req, res) => {
   const story = getStory(req.params.id);
   if (!story) return res.status(404).send("Story not found");

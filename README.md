@@ -16,7 +16,8 @@ printable PDF (either format).
     captions/order/include/feature flags) in SQLite — `server/src/db.js`,
     `server/src/stories.js`.
   - AI assist behind a provider interface (`server/src/ai/`); OpenAI is
-    wired up (vision captioning + web-search-backed place research).
+    wired up (vision captioning, web-search-backed place research, and a
+    ghostwriter interview - see below).
   - Visual identity is themeable (`server/src/themes.js`) — 4 presets
     (palette + font pairing + hero mood + a matching map basemap), selected
     per story and applied as CSS variables + a Google Fonts import at
@@ -36,9 +37,9 @@ printable PDF (either format).
     photos/page cap) and the deck at `/api/stories/:id/export/deck-pdf`
     (reveal.js's own built-in print-pdf mode, one slide per page).
 - `web/` — React (Vite) frontend: album picker + map (M1), story list +
-  editor (M2/M3) with theme picker, drag-to-reorder photo grid, and
-  featured-photo/pull-quote controls, links out to view/present/PDF export
-  (M4).
+  editor (M2/M3) with theme picker, drag-to-reorder photo grid,
+  featured-photo/pull-quote controls, and a per-stop AI interview panel
+  (`InterviewPanel.jsx`), links out to view/present/PDF export (M4).
 
 ## Running locally
 
@@ -68,6 +69,11 @@ useful for a second person to use the editor from their own device.
 - [x] reveal.js presentation export (`/story/:id/present`) + its own PDF
       export, drag-and-drop photo reordering in the editor, and
       theme-matched map basemaps
+- [x] AI ghostwriter interview — per-stop chat that asks follow-up
+      questions about sensory/emotional detail (how it looked, sounded,
+      smelled, felt, what it reminded them of), then drafts a rewritten
+      narrative + pull quote suggestion from the conversation on request,
+      iteratively (keep chatting, keep re-drafting)
 - [ ] Containerize (Dockerfiles + docker-compose) to run alongside PhotoPrism
       — deferred until this has been used for real and the deployment shape
       (same host as PhotoPrism? synced elsewhere?) is clearer
@@ -81,6 +87,26 @@ useful for a second person to use the editor from their own device.
 
 ## Notes
 
+- **The ghostwriter interview's conversation is not persisted to the
+  story** — it lives only in `InterviewPanel.jsx`'s component state, same
+  as the other one-shot AI actions (draft-caption, research). Collapsing
+  and reopening the panel within the same session continues where it left
+  off; reloading the page starts fresh. This was a deliberate scope call
+  to avoid a chat-history schema/migration for a first version — if you
+  want the conversation to survive reloads or show up for a second editor
+  (your wife), that needs a `stop_interviews` table and load/save wiring,
+  not a small change.
+- The interview is two separate AI calls by design, not one model deciding
+  when to switch modes: `interviewTurn` only ever asks questions,
+  `draftFromInterview` only ever synthesizes a rewrite, triggered by an
+  explicit "Draft rewrite" button. This keeps the UI deterministic (a chat
+  bubble vs. a proposed-rewrite card are rendered differently) instead of
+  needing to parse free-form model output to guess which mode it's in.
+- The draft prompt explicitly bans a few stock travel-writing phrases
+  ("heart swelled", "wrapped around us like an embrace") because the first
+  version leaned purple/brochure-y; asking for "plain, concrete detail...
+  name the actual thing... rather than reaching for a simile" measurably
+  improved it in testing. Worth revisiting if it drifts back that way.
 - **Found and fixed a real bug while testing drag-and-drop**: Express's
   default JSON body limit is 100kb, and a story with 100+ photos serializes
   to several hundred KB. Every save from the *actual editor* on a

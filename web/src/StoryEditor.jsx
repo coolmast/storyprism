@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { saveStory, draftCaption, researchPlace, fetchThemes } from "./api.js";
 import IncludedPhotoGrid from "./IncludedPhotoGrid.jsx";
+import InterviewPanel from "./InterviewPanel.jsx";
 
 function formatRange(start, end) {
   const opts = { day: "numeric", month: "short", year: "numeric" };
@@ -202,6 +203,17 @@ export default function StoryEditor({ story, onBack, onSaved }) {
             placeholder="Pull quote (optional) — one striking line, rendered large"
             value={stop.pullQuote || ""}
             onChange={(e) => updateStop(stop.id, { pullQuote: e.target.value })}
+          />
+
+          <InterviewPanel
+            storyId={draft.id}
+            stopId={stop.id}
+            onUseDraft={(result) =>
+              updateStop(stop.id, {
+                narrative: result.narrative,
+                ...(result.pullQuote ? { pullQuote: result.pullQuote } : {}),
+              })
+            }
           />
 
           <div className="stop-research">

@@ -41,3 +41,17 @@ export const researchPlace = (storyId, stopId) =>
   fetch(`/api/stories/${storyId}/stops/${stopId}/research`, {
     method: "POST",
   }).then(json);
+
+export const interviewTurn = (storyId, stopId, history) =>
+  fetch(`/api/stories/${storyId}/stops/${stopId}/interview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ history }),
+  }).then(json);
+
+export const draftFromInterview = (storyId, stopId, history) =>
+  fetch(`/api/stories/${storyId}/stops/${stopId}/interview/draft`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ history }),
+  }).then(json);

@@ -452,6 +452,93 @@ textarea {
   cursor: default;
 }
 
+.interview-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.8rem;
+  background: white;
+}
+
+.interview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: bold;
+  color: var(--teal);
+}
+
+.interview-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.interview-bubble {
+  max-width: 85%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.interview-bubble.assistant {
+  align-self: flex-start;
+  background: var(--sand);
+  color: var(--ink);
+  border-bottom-left-radius: 2px;
+}
+
+.interview-bubble.user {
+  align-self: flex-end;
+  background: var(--teal);
+  color: white;
+  border-bottom-right-radius: 2px;
+}
+
+.interview-bubble.busy {
+  opacity: 0.6;
+}
+
+.interview-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.interview-input-row textarea {
+  flex: 1;
+  min-height: 2.5rem;
+}
+
+.interview-draft {
+  border: 1px dashed var(--terracotta);
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: var(--sand);
+}
+
+.interview-draft h4 {
+  margin: 0 0 0.4rem 0;
+}
+
+.interview-draft-quote {
+  font-style: italic;
+  color: var(--terracotta);
+}
+
+.interview-draft-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+
 .stop-research {
   display: flex;
   flex-direction: column;
