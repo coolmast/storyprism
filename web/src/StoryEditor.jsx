@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { saveStory, draftCaption, researchPlace, fetchThemes } from "./api.js";
+import IncludedPhotoGrid from "./IncludedPhotoGrid.jsx";
 
 function formatRange(start, end) {
   const opts = { day: "numeric", month: "short", year: "numeric" };
@@ -65,6 +66,23 @@ export default function StoryEditor({ story, onBack, onSaved }) {
     }));
   }
 
+  function reorderPhotos(stopId, oldIndex, newIndex) {
+    markDirty((d) => ({
+      ...d,
+      stops: d.stops.map((s) => {
+        if (s.id !== stopId) return s;
+        const included = s.photos.filter((p) => p.included);
+        const excluded = s.photos.filter((p) => !p.included);
+        const reordered = [...included];
+        const [moved] = reordered.splice(oldIndex, 1);
+        reordered.splice(newIndex, 0, moved);
+        // Excluded photos don't have a visible order (they're a checkbox
+        // list), so just keep them after the ones that matter.
+        return { ...s, photos: [...reordered, ...excluded] };
+      }),
+    }));
+  }
+
   async function handleSave() {
     setSaving(true);
     try {
@@ -113,8 +131,14 @@ export default function StoryEditor({ story, onBack, onSaved }) {
           <a className="link-btn" href={`/story/${draft.id}`} target="_blank" rel="noreferrer">
             View story ↗
           </a>
+          <a className="link-btn" href={`/story/${draft.id}/present`} target="_blank" rel="noreferrer">
+            Present ↗
+          </a>
           <a className="link-btn" href={`/api/stories/${draft.id}/export/pdf`}>
             Download PDF ↓
+          </a>
+          <a className="link-btn" href={`/api/stories/${draft.id}/export/deck-pdf`}>
+            Download Slides ↓
           </a>
           <button className="save-btn" onClick={handleSave} disabled={saving || !dirty}>
             {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
@@ -199,47 +223,18 @@ export default function StoryEditor({ story, onBack, onSaved }) {
 
           <p className="photo-count-hint">
             {stop.photos.filter((p) => p.included).length} of {stop.photos.length} photos in the
-            story — check more below to add them.
+            story — drag &#10021; to reorder, check more below to add them.
           </p>
 
-          <div className="photo-grid">
-            {stop.photos
-              .filter((p) => p.included)
-              .map((photo) => (
-                <div className={`photo-card ${photo.featured ? "featured" : ""}`} key={photo.id}>
-                  {photo.thumbUrl && <img src={photo.thumbUrl} alt="" />}
-                  <div className="photo-card-row">
-                    <label className="photo-include">
-                      <input
-                        type="checkbox"
-                        checked={photo.included}
-                        onChange={(e) => updatePhoto(stop.id, photo.id, { included: e.target.checked })}
-                      />
-                      include
-                    </label>
-                    <button
-                      className="feature-btn"
-                      title={photo.featured ? "Featured photo for this stop" : "Make this the featured photo"}
-                      onClick={() => toggleFeatured(stop.id, photo.id)}
-                    >
-                      {photo.featured ? "★ Featured" : "☆ Feature"}
-                    </button>
-                  </div>
-                  <textarea
-                    placeholder="Caption…"
-                    value={photo.caption}
-                    onChange={(e) => updatePhoto(stop.id, photo.id, { caption: e.target.value })}
-                  />
-                  <button
-                    className="ai-btn small"
-                    onClick={() => handleDraftCaption(stop.id, photo.id)}
-                    disabled={busy === photo.id}
-                  >
-                    {busy === photo.id ? "…" : "✨ Draft caption"}
-                  </button>
-                </div>
-              ))}
-          </div>
+          <IncludedPhotoGrid
+            stopId={stop.id}
+            photos={stop.photos.filter((p) => p.included)}
+            onReorder={reorderPhotos}
+            onUpdatePhoto={updatePhoto}
+            onToggleFeatured={toggleFeatured}
+            onDraftCaption={handleDraftCaption}
+            busy={busy}
+          />
 
           {stop.photos.some((p) => !p.included) && (
             <details className="more-photos">

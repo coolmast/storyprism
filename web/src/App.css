@@ -468,6 +468,7 @@ textarea {
 }
 
 .photo-card {
+  position: relative;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 0.5rem;
@@ -477,6 +478,31 @@ textarea {
   background: white;
   break-inside: avoid;
   margin-bottom: 1rem;
+}
+
+.photo-card.sortable-ghost {
+  opacity: 0.4;
+}
+
+.drag-handle {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--ink);
+  cursor: grab;
+  font-size: 0.85rem;
+  z-index: 1;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
 }
 
 .photo-card.featured {

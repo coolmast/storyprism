@@ -145,7 +145,7 @@ const updateStopStmt = db.prepare(
   "UPDATE stops SET heading = @heading, narrative = @narrative, research = @research, pull_quote = @pullQuote WHERE id = @id AND story_id = @storyId"
 );
 const updatePhotoStmt = db.prepare(
-  "UPDATE stop_photos SET caption = @caption, included = @included, featured = @featured WHERE id = @id AND stop_id = @stopId"
+  "UPDATE stop_photos SET caption = @caption, included = @included, featured = @featured, position = @position WHERE id = @id AND stop_id = @stopId"
 );
 const clearFeaturedStmt = db.prepare(
   "UPDATE stop_photos SET featured = 0 WHERE stop_id = @stopId"
@@ -179,15 +179,18 @@ export function updateStory(id, data) {
       // Only one featured photo per stop: clear, then set the one the
       // client marked (if any), rather than trusting every row's flag.
       clearFeaturedStmt.run({ stopId: stop.id });
-      for (const photo of stop.photos ?? []) {
+      // Position comes from array order, not a client-sent field: the
+      // editor's drag-to-reorder just reorders this array client-side.
+      (stop.photos ?? []).forEach((photo, index) => {
         updatePhotoStmt.run({
           id: photo.id,
           stopId: stop.id,
           caption: photo.caption ?? "",
           included: photo.included === false ? 0 : 1,
           featured: photo.featured ? 1 : 0,
+          position: index,
         });
-      }
+      });
     }
     touchStoryStmt.run({ id, now });
   });

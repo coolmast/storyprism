@@ -1,6 +1,24 @@
+const OSM_STANDARD = {
+  url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  attribution: "&copy; OpenStreetMap contributors",
+};
+const CARTO_VOYAGER = {
+  url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+  attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+};
+const CARTO_POSITRON = {
+  url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+  attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+};
+const CARTO_DARK = {
+  url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+  attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+};
+
 // Each theme is a self-contained visual identity: palette + font pairing +
-// a couple of mood knobs (heading case/tracking, hero darkness). Adding a
-// theme means adding an entry here - render.js only ever reads from this.
+// a couple of mood knobs (heading case/tracking, hero darkness) + a map
+// basemap that fits the mood. Adding a theme means adding an entry here -
+// render.js/deck.js only ever read from this.
 export const THEMES = {
   coastal: {
     label: "Coastal",
@@ -18,6 +36,7 @@ export const THEMES = {
     headingCase: "none",
     headingTracking: "normal",
     heroScrim: "linear-gradient(to top, rgba(20,15,10,0.85), rgba(20,15,10,0.1) 60%)",
+    mapTiles: CARTO_VOYAGER,
   },
   monochrome: {
     label: "Monochrome Editorial",
@@ -34,6 +53,7 @@ export const THEMES = {
     headingCase: "uppercase",
     headingTracking: "0.02em",
     heroScrim: "linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.15) 55%)",
+    mapTiles: CARTO_POSITRON,
   },
   vintage: {
     label: "Vintage Postcard",
@@ -50,6 +70,7 @@ export const THEMES = {
     headingCase: "none",
     headingTracking: "0.03em",
     heroScrim: "linear-gradient(to top, rgba(40,25,10,0.88), rgba(40,25,10,0.2) 55%)",
+    mapTiles: OSM_STANDARD,
   },
   bold: {
     label: "Bold Modern",
@@ -66,6 +87,7 @@ export const THEMES = {
     headingCase: "uppercase",
     headingTracking: "0.04em",
     heroScrim: "linear-gradient(to top, rgba(0,0,0,0.92), rgba(0,0,0,0.1) 60%)",
+    mapTiles: CARTO_DARK,
   },
 };
 

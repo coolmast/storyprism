@@ -36,13 +36,13 @@ function chunk(arr, size) {
   return out;
 }
 
-function photoFigure(p) {
+function photoFigure(p, fallbackAlt) {
   return `
     <figure>
       <a class="pswp-item" href="${escapeHtml(p.fullUrl || p.thumbUrl)}"
          data-pswp-width="${p.width || 1600}" data-pswp-height="${p.height || 1200}"
          target="_blank" rel="noreferrer">
-        <img src="${escapeHtml(p.thumbUrl)}" alt="" width="${p.width || ""}" height="${p.height || ""}">
+        <img src="${escapeHtml(p.thumbUrl)}" alt="${escapeHtml(p.caption || fallbackAlt)}" width="${p.width || ""}" height="${p.height || ""}">
       </a>
       ${p.caption ? `<figcaption>${escapeHtml(p.caption)}</figcaption>` : ""}
     </figure>`;
@@ -88,7 +88,7 @@ export function renderStoryHtml(story) {
         <a class="pswp-item" href="${escapeHtml(featured.fullUrl || featured.thumbUrl)}"
            data-pswp-width="${featured.width || 1600}" data-pswp-height="${featured.height || 1200}"
            target="_blank" rel="noreferrer">
-          <img src="${escapeHtml(featured.thumbUrl)}" alt="">
+          <img src="${escapeHtml(featured.thumbUrl)}" alt="${escapeHtml(featured.caption || stop.heading)}">
         </a>
         ${featured.caption ? `<figcaption>${escapeHtml(featured.caption)}</figcaption>` : ""}
       </figure>`
@@ -103,7 +103,7 @@ export function renderStoryHtml(story) {
                 return `
       <div class="photo-mosaic-page">
         <div class="photo-mosaic" id="${mosaicId}">
-          ${pagePhotos.map(photoFigure).join("\n")}
+          ${pagePhotos.map((p) => photoFigure(p, stop.heading)).join("\n")}
         </div>
         <button class="shuffle-btn no-print" onclick="shuffleMosaic('${mosaicId}')">&#128256; Shuffle layout</button>
       </div>`;
@@ -267,8 +267,8 @@ export function renderStoryHtml(story) {
     const points = ${JSON.stringify(mapPoints)};
     if (points.length && document.getElementById('map')) {
       const map = L.map('map', { scrollWheelZoom: false });
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
+      L.tileLayer('${theme.mapTiles.url}', {
+        attribution: '${theme.mapTiles.attribution}'
       }).addTo(map);
       const latlngs = points.map(p => [p.lat, p.lng]);
       L.polyline(latlngs, { color: '${theme.accent}', weight: 3, dashArray: '6 8' }).addTo(map);
