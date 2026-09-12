@@ -49,6 +49,28 @@ export default function InfoCards({ storyId, stopId, suggestedPlaces, infoCards,
     onChange(infoCards.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   }
 
+  function updateFact(cardId, index, patch) {
+    onChange(
+      infoCards.map((c) =>
+        c.id === cardId ? { ...c, facts: c.facts.map((f, i) => (i === index ? { ...f, ...patch } : f)) } : c
+      )
+    );
+  }
+
+  function addFact(cardId) {
+    onChange(
+      infoCards.map((c) =>
+        c.id === cardId ? { ...c, facts: [...(c.facts || []), { label: "", value: "" }] } : c
+      )
+    );
+  }
+
+  function removeFact(cardId, index) {
+    onChange(
+      infoCards.map((c) => (c.id === cardId ? { ...c, facts: c.facts.filter((_, i) => i !== index) } : c))
+    );
+  }
+
   async function toggleHeroPicker(card) {
     if (heroPickerFor === card.id) {
       setHeroPickerFor(null);
@@ -74,9 +96,21 @@ export default function InfoCards({ storyId, stopId, suggestedPlaces, infoCards,
         <div className="info-card" key={card.id}>
           {card.heroPhotoUrl && <img className="info-card-hero-preview" src={card.heroPhotoUrl} alt="" />}
           <div className="info-card-header">
-            <div>
-              <h4>
-                {card.placeName}
+            <div className="info-card-header-fields">
+              <div className="info-card-name-row">
+                <input
+                  className="info-card-name-input"
+                  value={card.placeName}
+                  onChange={(e) => {
+                    updateCard(card.id, { placeName: e.target.value });
+                    setHeroCandidates((prev) => {
+                      if (!(card.id in prev)) return prev;
+                      const next = { ...prev };
+                      delete next[card.id];
+                      return next;
+                    });
+                  }}
+                />
                 {card.websiteUrl && (
                   <a
                     className="info-card-link"
@@ -89,24 +123,66 @@ export default function InfoCards({ storyId, stopId, suggestedPlaces, infoCards,
                     ↗
                   </a>
                 )}
-              </h4>
-              {card.subtitle && <p className="info-card-subtitle">{card.subtitle}</p>}
+              </div>
+              <input
+                className="info-card-subtitle-input"
+                placeholder={t("subtitlePlaceholder")}
+                value={card.subtitle || ""}
+                onChange={(e) => updateCard(card.id, { subtitle: e.target.value })}
+              />
             </div>
             <button className="link-btn danger" onClick={() => remove(card.id)}>
               {t("removeBtn")}
             </button>
           </div>
-          {card.summary && <p className="info-card-summary">{card.summary}</p>}
-          {card.facts?.length > 0 && (
-            <dl className="info-card-facts">
-              {card.facts.map((f, i) => (
-                <div key={i}>
-                  <dt>{f.label}</dt>
-                  <dd>{f.value}</dd>
-                </div>
-              ))}
-            </dl>
-          )}
+
+          <textarea
+            className="info-card-summary-input"
+            placeholder={t("summaryPlaceholder")}
+            value={card.summary || ""}
+            onChange={(e) => updateCard(card.id, { summary: e.target.value })}
+          />
+
+          <div className="info-card-website-row">
+            <span className="control-label">{t("websiteUrlLabel")}</span>
+            <input
+              type="url"
+              className="info-card-website-input"
+              placeholder={t("websiteUrlPlaceholder")}
+              value={card.websiteUrl || ""}
+              onChange={(e) => updateCard(card.id, { websiteUrl: e.target.value })}
+            />
+          </div>
+
+          <dl className="info-card-facts editable">
+            {(card.facts || []).map((f, i) => (
+              <div key={i} className="info-card-fact-row">
+                <input
+                  className="info-card-fact-label"
+                  placeholder={t("factLabelPlaceholder")}
+                  value={f.label}
+                  onChange={(e) => updateFact(card.id, i, { label: e.target.value })}
+                />
+                <input
+                  className="info-card-fact-value"
+                  placeholder={t("factValuePlaceholder")}
+                  value={f.value}
+                  onChange={(e) => updateFact(card.id, i, { value: e.target.value })}
+                />
+                <button
+                  type="button"
+                  className="link-btn danger small"
+                  title={t("removeBtn")}
+                  onClick={() => removeFact(card.id, i)}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            <button type="button" className="link-btn add-fact-btn" onClick={() => addFact(card.id)}>
+              + {t("addFact")}
+            </button>
+          </dl>
 
           <div className="info-card-controls">
             <label className="info-card-placement">

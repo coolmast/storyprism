@@ -73,6 +73,13 @@ view, a reveal.js presentation, or a printable PDF (either format).
     shown as a small icon-only external link next to the place name —
     validated as URL-shaped both when the AI returns it and again on
     save, since it's the one AI-generated field that becomes a clickable
+    link. Every field on a generated card — place name, subtitle,
+    summary, each fact's label/value, the website URL — is editable
+    afterward in `InfoCards.jsx`, not just placement/hero-photo/removal:
+    an AI card with one wrong detail should be a quick fix, not a reason
+    to regenerate or delete the whole thing. A website URL typed without
+    `https://` gets it added automatically on save rather than being
+    silently dropped by the same validation that protects against a bad
     link.
   - Internationalization is two independent settings
     (`server/src/i18n.js`): the story's `contentLanguage` (English/German/
@@ -162,6 +169,23 @@ useful for a second person to use the editor from their own device.
 
 ## Notes
 
+- **Found a real data-loss bug making info cards editable: `getStory()`
+  never sent `heroPhotoHash` back to the client, only the `heroPhotoUrl`
+  derived from it.** `updateStory`'s save path reads `heroPhotoHash`
+  back from whatever the client sends for each card - since the client
+  never had it (only the derived URL), saving *any* stop silently wiped
+  the hero photo off *every* info card in it, unless that exact photo
+  had just been picked in that same editing session. This was latent
+  since the hero-photo feature shipped (nothing before now exercised
+  "load a story that already has a hero photo, edit something unrelated,
+  save" in one sitting) and became likely to actually bite once cards
+  became more editable - more fields to tweak means more saves against
+  data loaded earlier. Fixed by returning `heroPhotoHash` alongside
+  `heroPhotoUrl`. Reproduced by accident while testing (a real card's
+  hero photo vanished after an unrelated save), confirmed the mechanism
+  by reading the code, then re-verified with a deliberate repro: edit an
+  unrelated field (the story intro), save, check the hero photo is still
+  there. It wasn't, before the fix; was, after.
 - **The database has no migration framework** (`db.js` is just
   `CREATE TABLE IF NOT EXISTS`, a no-op against an already-created
   table) — that was fine while every schema change happened before any

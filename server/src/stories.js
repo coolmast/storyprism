@@ -7,6 +7,19 @@ import { isAllowedEmbedHost } from "./embeds.js";
 import { suggestPlacesForStop, photosMatchingPlace } from "./places.js";
 import { DEFAULT_LANGUAGE } from "./i18n.js";
 
+// The AI always returns a full https:// URL when it includes one at all, but
+// a human editing/adding this field by hand will often just type
+// "example.com" - silently dropping that on save (a strict http(s):// check
+// would) defeats the entire point of letting them fix or add a link. Add
+// the protocol if it's missing rather than reject, but still refuse
+// anything that isn't at least domain-shaped.
+function normalizeWebsiteUrl(url) {
+  const trimmed = (url || "").trim();
+  if (!trimmed) return "";
+  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  return /^https?:\/\/[^\s/]+\.[^\s/]+/i.test(withProtocol) ? withProtocol : "";
+}
+
 const insertStory = db.prepare(`
   INSERT INTO stories (id, album_uid, album_title, title, intro, outro, theme, content_language, created_at, updated_at)
   VALUES (@id, @albumUid, @albumTitle, @title, '', '', @theme, @contentLanguage, @now, @now)
@@ -202,6 +215,12 @@ export function getStory(id) {
           summary: c.summary,
           facts: JSON.parse(c.facts || "[]"),
           placement: c.placement || "top",
+          // Both the raw hash and its derived thumb URL: updateStory's save
+          // path reads heroPhotoHash back from whatever the client sends, so
+          // omitting it here would silently wipe every existing hero photo
+          // on the next save of a stop the user never touched the hero
+          // picker for at all - found by reproducing exactly that.
+          heroPhotoHash: c.hero_photo_hash || null,
           heroPhotoUrl: c.hero_photo_hash ? thumbUrl(c.hero_photo_hash, "fit_1280") : null,
           websiteUrl: c.website_url || "",
         })),
@@ -306,7 +325,7 @@ export function updateStory(id, data) {
           heroPhotoHash: card.heroPhotoHash || null,
           // Re-validated here too, not just at generation time - never trust
           // a client-supplied string as a safe link target without a check.
-          websiteUrl: /^https?:\/\//i.test(card.websiteUrl || "") ? card.websiteUrl : "",
+          websiteUrl: normalizeWebsiteUrl(card.websiteUrl),
         });
       });
     }
