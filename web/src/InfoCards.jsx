@@ -77,7 +77,7 @@ export default function InfoCards({ storyId, stopId, suggestedPlaces, infoCards,
               <h4>{card.placeName}</h4>
               {card.subtitle && <p className="info-card-subtitle">{card.subtitle}</p>}
             </div>
-            <button className="link-btn" onClick={() => remove(card.id)}>
+            <button className="link-btn danger" onClick={() => remove(card.id)}>
               {t("removeBtn")}
             </button>
           </div>
@@ -95,7 +95,7 @@ export default function InfoCards({ storyId, stopId, suggestedPlaces, infoCards,
 
           <div className="info-card-controls">
             <label className="info-card-placement">
-              {t("placementLabel")}
+              <span className="control-label">{t("placementLabel")}</span>
               <select
                 value={card.placement || "top"}
                 onChange={(e) => updateCard(card.id, { placement: e.target.value })}
@@ -106,16 +106,25 @@ export default function InfoCards({ storyId, stopId, suggestedPlaces, infoCards,
               </select>
             </label>
 
-            <button className="link-btn" onClick={() => toggleHeroPicker(card)}>
-              {t("heroPhotoLabel")}: {card.heroPhotoUrl ? "✓" : t("heroPhotoNone")} — {t("chooseHeroBtn")}
+            <button
+              type="button"
+              className={`hero-picker-toggle ${heroPickerFor === card.id ? "open" : ""}`}
+              onClick={() => toggleHeroPicker(card)}
+            >
+              {card.heroPhotoUrl ? (
+                <img className="hero-picker-toggle-thumb" src={card.heroPhotoUrl} alt="" />
+              ) : (
+                <span className="hero-picker-toggle-placeholder" aria-hidden="true">🖼</span>
+              )}
+              <span>{card.heroPhotoUrl ? t("changeHeroPhoto") : t("addHeroPhoto")}</span>
             </button>
           </div>
 
           {heroPickerFor === card.id && (
             <div className="hero-picker">
-              {heroLoading && <p>{t("researching")}</p>}
+              {heroLoading && <p className="hint">{t("researching")}</p>}
               {!heroLoading && (heroCandidates[card.id] || []).length === 0 && (
-                <p className="hint">{t("heroPhotoNone")}</p>
+                <p className="hint">{t("noMatchingPhotos")}</p>
               )}
               <div className="hero-picker-grid">
                 {card.heroPhotoHash && (

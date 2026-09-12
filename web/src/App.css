@@ -9,8 +9,9 @@
   border-bottom: 2px solid var(--terracotta);
   background: var(--sand);
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.75rem;
+  gap: 0.6rem 0.75rem;
 }
 
 .app-header h1 {
@@ -315,8 +316,9 @@
 
 .editor-toolbar {
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 0.4rem 1.5rem;
   position: sticky;
   top: 0;
   background: var(--paper);
@@ -336,8 +338,10 @@
 
 .toolbar-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 1.25rem;
+  gap: 0.4rem 1.25rem;
+  margin-left: auto;
 }
 
 .story-title-input {
@@ -447,17 +451,129 @@ textarea {
   min-height: 3.5rem;
 }
 
+.stops-toolbar {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.85rem;
+  margin-top: -0.5rem;
+}
+
 .stop-editor {
   border-top: 2px solid var(--sand);
   padding-top: 1.25rem;
   display: flex;
   flex-direction: column;
+  gap: 1.1rem;
+}
+
+.stop-editor.collapsed {
+  gap: 0;
+  padding-bottom: 0.25rem;
+}
+
+.stop-summary-row {
+  display: flex;
+  align-items: center;
   gap: 0.75rem;
+}
+
+.stop-collapse-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  flex: none;
+}
+
+.stop-chevron {
+  display: inline-block;
+  color: #6b5d4d;
+  font-size: 0.75rem;
+  transition: transform 0.15s ease;
+  transform: rotate(-90deg);
+}
+
+.stop-chevron.open {
+  transform: rotate(0deg);
+}
+
+.stop-summary-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  border: none;
+  background: none;
+  padding: 0.3rem 0.4rem;
+  margin: -0.3rem -0.4rem;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  min-width: 0;
+}
+
+.stop-summary-info:hover {
+  background: var(--sand);
+}
+
+.stop-summary-thumb {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.stop-summary-heading {
+  flex: 1 1 auto;
+  min-width: 4rem;
+  font-weight: bold;
+  color: var(--teal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stop-summary-meta {
+  margin-left: auto;
+  flex: none;
+  color: #6b5d4d;
+  font-size: 0.85rem;
 }
 
 .stop-editor-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
+  gap: 0.3rem 0.75rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.stop-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.section-label {
+  font-size: 0.75rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b5d4d;
+}
+
+.stop-enrich {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.9rem;
+  background: rgba(255, 255, 255, 0.5);
   gap: 0.75rem;
 }
 
@@ -470,6 +586,7 @@ textarea {
   padding: 0;
   color: var(--teal);
   flex: 1;
+  min-width: 8rem;
 }
 
 .stop-heading-input:focus {
@@ -486,11 +603,15 @@ textarea {
   font: inherit;
   padding: 0.35rem 0.8rem;
   border: 1px solid var(--terracotta);
-  background: white;
+  background: rgba(200, 112, 61, 0.08);
   color: var(--terracotta);
   border-radius: 999px;
   cursor: pointer;
   align-self: flex-start;
+}
+
+.link-btn.danger {
+  color: #a13a2f;
 }
 
 .ai-btn.small {
@@ -828,6 +949,13 @@ textarea {
   color: #6b5d4d;
 }
 
+.control-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #6b5d4d;
+}
+
 .info-card-placement select {
   font: inherit;
   font-size: 0.85rem;
@@ -835,6 +963,44 @@ textarea {
   border-radius: 6px;
   border: 1px solid var(--line);
   background: white;
+}
+
+.hero-picker-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.7rem 0.25rem 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: white;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.hero-picker-toggle.open {
+  border-color: var(--terracotta);
+}
+
+.hero-picker-toggle-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+}
+
+.hero-picker-toggle-placeholder {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sand);
+  font-size: 0.9rem;
+  flex: none;
 }
 
 .hero-picker {

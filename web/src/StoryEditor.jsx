@@ -30,6 +30,20 @@ export default function StoryEditor({ story, onBack, onSaved }) {
   const [aiError, setAiError] = useState(null);
   const [themes, setThemes] = useState([]);
   const [languages, setLanguages] = useState([]);
+  const [collapsedStops, setCollapsedStops] = useState(() => new Set());
+
+  function toggleStopCollapsed(stopId) {
+    setCollapsedStops((prev) => {
+      const next = new Set(prev);
+      if (next.has(stopId)) next.delete(stopId);
+      else next.add(stopId);
+      return next;
+    });
+  }
+
+  function setAllStopsCollapsed(collapse) {
+    setCollapsedStops(collapse ? new Set(draft.stops.map((s) => s.id)) : new Set());
+  }
 
   useEffect(() => {
     setDraft(story);
@@ -213,109 +227,164 @@ export default function StoryEditor({ story, onBack, onSaved }) {
         onApplySuggestion={(stopId, patch) => updateStop(stopId, patch)}
       />
 
-      {draft.stops.map((stop) => (
-        <section key={stop.id} className="stop-editor">
-          <div className="stop-editor-header">
-            <input
-              className="stop-heading-input"
-              value={stop.heading}
-              onChange={(e) => updateStop(stop.id, { heading: e.target.value })}
-            />
-            <span className="stop-dates">{formatRange(stop.startedAt, stop.endedAt, locale)}</span>
-          </div>
+      <div className="stops-toolbar">
+        <button className="link-btn" onClick={() => setAllStopsCollapsed(false)}>
+          {t("expandAll")}
+        </button>
+        <button className="link-btn" onClick={() => setAllStopsCollapsed(true)}>
+          {t("collapseAll")}
+        </button>
+      </div>
 
-          <textarea
-            className="stop-narrative"
-            placeholder={t("narrativePlaceholder")}
-            value={stop.narrative}
-            onChange={(e) => updateStop(stop.id, { narrative: e.target.value })}
-          />
+      {draft.stops.map((stop, i) => {
+        const isCollapsed = collapsedStops.has(stop.id);
+        const includedPhotos = stop.photos.filter((p) => p.included);
+        const summaryThumb = includedPhotos.find((p) => p.thumbUrl) || stop.photos.find((p) => p.thumbUrl);
 
-          <input
-            className="stop-pull-quote-input"
-            placeholder={t("pullQuotePlaceholder")}
-            value={stop.pullQuote || ""}
-            onChange={(e) => updateStop(stop.id, { pullQuote: e.target.value })}
-          />
+        return (
+          <section key={stop.id} className={`stop-editor ${isCollapsed ? "collapsed" : ""}`}>
+            <div className="stop-summary-row">
+              <button
+                type="button"
+                className="stop-collapse-toggle"
+                onClick={() => toggleStopCollapsed(stop.id)}
+                aria-expanded={!isCollapsed}
+                title={isCollapsed ? t("expandStop") : t("collapseStop")}
+              >
+                <span className="stop-marker">{i + 1}</span>
+                <span className={`stop-chevron ${isCollapsed ? "" : "open"}`}>▾</span>
+              </button>
 
-          <InterviewPanel
-            storyId={draft.id}
-            stopId={stop.id}
-            onUseDraft={(result) =>
-              updateStop(stop.id, {
-                narrative: result.narrative,
-                ...(result.pullQuote ? { pullQuote: result.pullQuote } : {}),
-              })
-            }
-          />
+              {isCollapsed ? (
+                <button type="button" className="stop-summary-info" onClick={() => toggleStopCollapsed(stop.id)}>
+                  {summaryThumb?.thumbUrl && (
+                    <img className="stop-summary-thumb" src={summaryThumb.thumbUrl} alt="" />
+                  )}
+                  <span className="stop-summary-heading">{stop.heading}</span>
+                  <span className="stop-dates">{formatRange(stop.startedAt, stop.endedAt, locale)}</span>
+                  <span className="stop-summary-meta">{t("photosCount", includedPhotos.length)}</span>
+                </button>
+              ) : (
+                <div className="stop-editor-header">
+                  <input
+                    className="stop-heading-input"
+                    value={stop.heading}
+                    onChange={(e) => updateStop(stop.id, { heading: e.target.value })}
+                  />
+                  <span className="stop-dates">{formatRange(stop.startedAt, stop.endedAt, locale)}</span>
+                </div>
+              )}
+            </div>
 
-          <div className="stop-research">
-            <button
-              className="ai-btn"
-              onClick={() => handleResearch(stop.id)}
-              disabled={busy === stop.id}
-            >
-              {busy === stop.id ? t("researching") : t("researchThisPlace")}
-            </button>
-            {stop.research && (
-              <textarea
-                className="stop-research-text"
-                value={stop.research}
-                onChange={(e) => updateStop(stop.id, { research: e.target.value })}
-              />
-            )}
-          </div>
+            {!isCollapsed && (
+              <>
+                <div className="stop-section">
+                  <span className="section-label">{t("narrativeLabel")}</span>
+                  <textarea
+                    className="stop-narrative"
+                    placeholder={t("narrativePlaceholder")}
+                    value={stop.narrative}
+                    onChange={(e) => updateStop(stop.id, { narrative: e.target.value })}
+                  />
 
-          <InfoCards
-            storyId={draft.id}
-            stopId={stop.id}
-            suggestedPlaces={stop.suggestedPlaces || []}
-            infoCards={stop.infoCards || []}
-            onChange={(infoCards) => updateStop(stop.id, { infoCards })}
-          />
+                  <input
+                    className="stop-pull-quote-input"
+                    placeholder={t("pullQuotePlaceholder")}
+                    value={stop.pullQuote || ""}
+                    onChange={(e) => updateStop(stop.id, { pullQuote: e.target.value })}
+                  />
+                </div>
 
-          <RouteEmbeds
-            embeds={stop.embeds || []}
-            onChange={(embeds) => updateStop(stop.id, { embeds })}
-          />
+                <div className="stop-section stop-enrich">
+                  <span className="section-label">{t("enrichLabel")}</span>
 
-          <p className="photo-count-hint">
-            {t("photoCountHint", stop.photos.filter((p) => p.included).length, stop.photos.length)}
-          </p>
+                  <InterviewPanel
+                    storyId={draft.id}
+                    stopId={stop.id}
+                    onUseDraft={(result) =>
+                      updateStop(stop.id, {
+                        narrative: result.narrative,
+                        ...(result.pullQuote ? { pullQuote: result.pullQuote } : {}),
+                      })
+                    }
+                  />
 
-          <IncludedPhotoGrid
-            stopId={stop.id}
-            photos={stop.photos.filter((p) => p.included)}
-            onReorder={reorderPhotos}
-            onUpdatePhoto={updatePhoto}
-            onToggleFeatured={toggleFeatured}
-            onDraftCaption={handleDraftCaption}
-            busy={busy}
-          />
-
-          {stop.photos.some((p) => !p.included) && (
-            <details className="more-photos">
-              <summary>
-                {t("morePhotosSummary", stop.photos.filter((p) => !p.included).length)}
-              </summary>
-              <div className="thumb-grid">
-                {stop.photos
-                  .filter((p) => !p.included)
-                  .map((photo) => (
-                    <label className="thumb-toggle" key={photo.id}>
-                      <input
-                        type="checkbox"
-                        checked={photo.included}
-                        onChange={(e) => updatePhoto(stop.id, photo.id, { included: e.target.checked })}
+                  <div className="stop-research">
+                    <button
+                      className="ai-btn"
+                      onClick={() => handleResearch(stop.id)}
+                      disabled={busy === stop.id}
+                    >
+                      {busy === stop.id ? t("researching") : t("researchThisPlace")}
+                    </button>
+                    {stop.research && (
+                      <textarea
+                        className="stop-research-text"
+                        value={stop.research}
+                        onChange={(e) => updateStop(stop.id, { research: e.target.value })}
                       />
-                      {photo.thumbUrl && <img src={photo.thumbUrl} alt="" />}
-                    </label>
-                  ))}
-              </div>
-            </details>
-          )}
-        </section>
-      ))}
+                    )}
+                  </div>
+
+                  <InfoCards
+                    storyId={draft.id}
+                    stopId={stop.id}
+                    suggestedPlaces={stop.suggestedPlaces || []}
+                    infoCards={stop.infoCards || []}
+                    onChange={(infoCards) => updateStop(stop.id, { infoCards })}
+                  />
+
+                  <RouteEmbeds
+                    embeds={stop.embeds || []}
+                    onChange={(embeds) => updateStop(stop.id, { embeds })}
+                  />
+                </div>
+
+                <div className="stop-section">
+                  <span className="section-label">{t("photosLabel")}</span>
+                  <p className="photo-count-hint">
+                    {t("photoCountHint", includedPhotos.length, stop.photos.length)}
+                  </p>
+
+                  <IncludedPhotoGrid
+                    stopId={stop.id}
+                    photos={includedPhotos}
+                    onReorder={reorderPhotos}
+                    onUpdatePhoto={updatePhoto}
+                    onToggleFeatured={toggleFeatured}
+                    onDraftCaption={handleDraftCaption}
+                    busy={busy}
+                  />
+
+                  {stop.photos.some((p) => !p.included) && (
+                    <details className="more-photos">
+                      <summary>
+                        {t("morePhotosSummary", stop.photos.filter((p) => !p.included).length)}
+                      </summary>
+                      <div className="thumb-grid">
+                        {stop.photos
+                          .filter((p) => !p.included)
+                          .map((photo) => (
+                            <label className="thumb-toggle" key={photo.id}>
+                              <input
+                                type="checkbox"
+                                checked={photo.included}
+                                onChange={(e) =>
+                                  updatePhoto(stop.id, photo.id, { included: e.target.checked })
+                                }
+                              />
+                              {photo.thumbUrl && <img src={photo.thumbUrl} alt="" />}
+                            </label>
+                          ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              </>
+            )}
+          </section>
+        );
+      })}
 
       <textarea
         className="story-outro"

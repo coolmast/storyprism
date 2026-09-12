@@ -32,7 +32,7 @@ export default function RouteEmbeds({ embeds, onChange }) {
               <a href={e.url} target="_blank" rel="noreferrer">
                 {e.title || e.url}
               </a>
-              <button className="link-btn" onClick={() => remove(e.id)}>
+              <button className="link-btn danger" onClick={() => remove(e.id)}>
                 {t("removeBtn")}
               </button>
             </li>
