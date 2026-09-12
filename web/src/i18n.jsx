@@ -42,6 +42,8 @@ const DICT = {
 
     backToStories: "← My Stories",
     viewStory: "View story ↗",
+    copyShareLink: "📋 Copy share link",
+    linkCopied: "✓ Copied",
     present: "Present ↗",
     downloadPdf: "Download PDF ↓",
     downloadSlides: "Download Slides ↓",
@@ -167,6 +169,8 @@ const DICT = {
 
     backToStories: "← Meine Geschichten",
     viewStory: "Geschichte ansehen ↗",
+    copyShareLink: "📋 Freigabelink kopieren",
+    linkCopied: "✓ Kopiert",
     present: "Präsentieren ↗",
     downloadPdf: "PDF herunterladen ↓",
     downloadSlides: "Folien herunterladen ↓",
@@ -293,6 +297,8 @@ const DICT = {
 
     backToStories: "← Mine historier",
     viewStory: "Se historie ↗",
+    copyShareLink: "📋 Kopiér delingslink",
+    linkCopied: "✓ Kopieret",
     present: "Præsenter ↗",
     downloadPdf: "Download PDF ↓",
     downloadSlides: "Download slides ↓",

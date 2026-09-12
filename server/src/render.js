@@ -96,7 +96,7 @@ function infoCardBlock(card) {
 // any, doesn't count against this - it gets its own full-width treatment.
 const PHOTOS_PER_PRINTED_PAGE = 6;
 
-function photoGroup(photos, groupKey, stopHeading, strings) {
+function photoGroup(photos, groupKey, stopHeading, strings, editMode) {
   if (!photos.length) return "";
   return chunk(photos, PHOTOS_PER_PRINTED_PAGE)
     .map((pagePhotos, ci) => {
@@ -106,13 +106,23 @@ function photoGroup(photos, groupKey, stopHeading, strings) {
         <div class="photo-mosaic" id="${mosaicId}">
           ${pagePhotos.map((p) => photoFigure(p, stopHeading)).join("\n")}
         </div>
-        <button class="shuffle-btn no-print" onclick="shuffleMosaic('${mosaicId}')">${strings.shuffleLayout}</button>
+        ${
+          editMode
+            ? `<button class="shuffle-btn no-print" onclick="shuffleMosaic('${mosaicId}')">${strings.shuffleLayout}</button>`
+            : ""
+        }
       </div>`;
     })
     .join("\n");
 }
 
-export function renderStoryHtml(story) {
+// editMode gates the shuffle-layout button: useful while the creator is
+// still fine-tuning a story (reached via "View story" from the editor,
+// which links here with ?preview=1), but the whole point of the plain
+// /story/:id link you'd actually hand to family is that it's a finished,
+// static page - re-shuffling the mosaic there would be a pointless (and
+// confusing, since it's not saved) thing to expose.
+export function renderStoryHtml(story, { editMode = false } = {}) {
   const theme = getTheme(story.theme);
   const strings = getStrings(story.contentLanguage);
   const includedByStop = story.stops.map((s) => s.photos.filter((p) => p.included));
@@ -145,12 +155,12 @@ export function renderStoryHtml(story) {
         ? (() => {
             const mid = Math.ceil(gridPhotos.length / 2);
             return (
-              photoGroup(gridPhotos.slice(0, mid), `${i}a`, stop.heading, strings) +
+              photoGroup(gridPhotos.slice(0, mid), `${i}a`, stop.heading, strings, editMode) +
               middleCards.map(infoCardBlock).join("\n") +
-              photoGroup(gridPhotos.slice(mid), `${i}b`, stop.heading, strings)
+              photoGroup(gridPhotos.slice(mid), `${i}b`, stop.heading, strings, editMode)
             );
           })()
-        : photoGroup(gridPhotos, `${i}`, stop.heading, strings);
+        : photoGroup(gridPhotos, `${i}`, stop.heading, strings, editMode);
 
       return `
     <section class="stop" id="stop-${i}">

@@ -31,9 +31,14 @@ view, a reveal.js presentation, or a printable PDF (either format).
     render time. Both the web view and the deck read from this one place.
   - Renders a story to a standalone HTML page (`server/src/render.js`,
     served at `/story/:id`) — a CSS-columns masonry gallery (real aspect
-    ratios, not cropped squares) with a PhotoSwipe lightbox, a per-stop
-    shuffle button, an optional full-width "featured" photo per stop, and
-    an optional pull quote.
+    ratios, not cropped squares) with a PhotoSwipe lightbox, an optional
+    full-width "featured" photo per stop, and an optional pull quote. The
+    per-mosaic shuffle-layout button only appears with `?preview=1` on the
+    URL (what the editor's own "View story" link uses) - the plain
+    `/story/:id` link, which is what you'd actually hand to family, is a
+    finished, static page with no layout controls on it. The editor has
+    its own "Copy share link" button so that link is one click away
+    without needing to manually strip the query param off the preview URL.
   - Renders the same content as a reveal.js presentation
     (`server/src/deck.js`, served at `/story/:id/present`) — a title
     slide, then per-stop nested slides (text+quote → featured photo

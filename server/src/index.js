@@ -282,7 +282,7 @@ app.get("/api/stories/:id/stops/:stopId/places/:placeName/photos", (req, res) =>
 app.get("/story/:id", (req, res) => {
   const story = getStory(req.params.id);
   if (!story) return res.status(404).send("Story not found");
-  res.type("html").send(renderStoryHtml(story));
+  res.type("html").send(renderStoryHtml(story, { editMode: req.query.preview === "1" }));
 });
 
 app.get("/story/:id/present", (req, res) => {

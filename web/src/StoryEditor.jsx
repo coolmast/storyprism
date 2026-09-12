@@ -31,6 +31,21 @@ export default function StoryEditor({ story, onBack, onSaved }) {
   const [themes, setThemes] = useState([]);
   const [languages, setLanguages] = useState([]);
   const [collapsedStops, setCollapsedStops] = useState(() => new Set());
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopyShareLink() {
+    // No ?preview=1 here on purpose: that flag only exists to show the
+    // shuffle-layout button for the creator's own fine-tuning - the link
+    // you'd actually send to family should be the plain, static page.
+    const url = `${window.location.origin}/story/${draft.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      window.prompt(t("copyShareLink"), url);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   function toggleStopCollapsed(stopId) {
     setCollapsedStops((prev) => {
@@ -157,9 +172,12 @@ export default function StoryEditor({ story, onBack, onSaved }) {
       <div className="editor-toolbar">
         <button className="link-btn" onClick={onBack}>{t("backToStories")}</button>
         <div className="toolbar-actions">
-          <a className="link-btn" href={`/story/${draft.id}`} target="_blank" rel="noreferrer">
+          <a className="link-btn" href={`/story/${draft.id}?preview=1`} target="_blank" rel="noreferrer">
             {t("viewStory")}
           </a>
+          <button className="link-btn" onClick={handleCopyShareLink}>
+            {copied ? t("linkCopied") : t("copyShareLink")}
+          </button>
           <a className="link-btn" href={`/story/${draft.id}/present`} target="_blank" rel="noreferrer">
             {t("present")}
           </a>
