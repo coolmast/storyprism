@@ -15,6 +15,7 @@ import {
 import { getProvider } from "./ai/index.js";
 import { renderStoryHtml } from "./render.js";
 import { renderStoryPdf } from "./pdf.js";
+import { THEMES } from "./themes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -29,6 +30,12 @@ app.use(
   "/vendor/photoswipe",
   express.static(path.join(__dirname, "../../node_modules/photoswipe/dist"))
 );
+
+app.get("/api/themes", (req, res) => {
+  res.json(
+    Object.entries(THEMES).map(([id, t]) => ({ id, label: t.label, swatch: t.swatch }))
+  );
+});
 
 app.get("/api/albums", async (req, res) => {
   try {

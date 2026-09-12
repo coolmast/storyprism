@@ -2,10 +2,11 @@ import { randomUUID } from "node:crypto";
 import { db } from "./db.js";
 import { listAlbums, getAlbumPhotos, thumbUrl } from "./photoprism.js";
 import { buildItinerary } from "./itinerary.js";
+import { DEFAULT_THEME } from "./themes.js";
 
 const insertStory = db.prepare(`
-  INSERT INTO stories (id, album_uid, album_title, title, intro, outro, created_at, updated_at)
-  VALUES (@id, @albumUid, @albumTitle, @title, '', '', @now, @now)
+  INSERT INTO stories (id, album_uid, album_title, title, intro, outro, theme, created_at, updated_at)
+  VALUES (@id, @albumUid, @albumTitle, @title, '', '', @theme, @now, @now)
 `);
 const insertStop = db.prepare(`
   INSERT INTO stops (id, story_id, position, lat, lng, place_label, started_at, ended_at, heading, narrative)
@@ -28,7 +29,14 @@ export async function createStoryFromAlbum(albumUid) {
   const now = new Date().toISOString();
 
   const tx = db.transaction(() => {
-    insertStory.run({ id: storyId, albumUid, albumTitle: album.title, title: album.title, now });
+    insertStory.run({
+      id: storyId,
+      albumUid,
+      albumTitle: album.title,
+      title: album.title,
+      theme: DEFAULT_THEME,
+      now,
+    });
 
     stops.forEach((stop, i) => {
       const stopId = randomUUID();
@@ -99,6 +107,7 @@ export function getStory(id) {
     title: story.title,
     intro: story.intro,
     outro: story.outro,
+    theme: story.theme,
     createdAt: story.created_at,
     updatedAt: story.updated_at,
     stops: stops.map((s) => ({
@@ -112,6 +121,7 @@ export function getStory(id) {
       heading: s.heading,
       narrative: s.narrative,
       research: s.research,
+      pullQuote: s.pull_quote,
       photos: photoStmt.all(s.id).map((p) => ({
         id: p.id,
         photoUid: p.photo_uid,
@@ -122,19 +132,23 @@ export function getStory(id) {
         position: p.position,
         caption: p.caption,
         included: !!p.included,
+        featured: !!p.featured,
       })),
     })),
   };
 }
 
 const updateStoryStmt = db.prepare(
-  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, updated_at = @now WHERE id = @id"
+  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, updated_at = @now WHERE id = @id"
 );
 const updateStopStmt = db.prepare(
-  "UPDATE stops SET heading = @heading, narrative = @narrative, research = @research WHERE id = @id AND story_id = @storyId"
+  "UPDATE stops SET heading = @heading, narrative = @narrative, research = @research, pull_quote = @pullQuote WHERE id = @id AND story_id = @storyId"
 );
 const updatePhotoStmt = db.prepare(
-  "UPDATE stop_photos SET caption = @caption, included = @included WHERE id = @id AND stop_id = @stopId"
+  "UPDATE stop_photos SET caption = @caption, included = @included, featured = @featured WHERE id = @id AND stop_id = @stopId"
+);
+const clearFeaturedStmt = db.prepare(
+  "UPDATE stop_photos SET featured = 0 WHERE stop_id = @stopId"
 );
 const touchStoryStmt = db.prepare("UPDATE stories SET updated_at = @now WHERE id = @id");
 
@@ -149,6 +163,7 @@ export function updateStory(id, data) {
       title: data.title ?? existing.title,
       intro: data.intro ?? existing.intro,
       outro: data.outro ?? existing.outro,
+      theme: data.theme ?? existing.theme,
       now,
     });
 
@@ -159,13 +174,18 @@ export function updateStory(id, data) {
         heading: stop.heading ?? "",
         narrative: stop.narrative ?? "",
         research: stop.research ?? "",
+        pullQuote: stop.pullQuote ?? "",
       });
+      // Only one featured photo per stop: clear, then set the one the
+      // client marked (if any), rather than trusting every row's flag.
+      clearFeaturedStmt.run({ stopId: stop.id });
       for (const photo of stop.photos ?? []) {
         updatePhotoStmt.run({
           id: photo.id,
           stopId: stop.id,
           caption: photo.caption ?? "",
           included: photo.included === false ? 0 : 1,
+          featured: photo.featured ? 1 : 0,
         });
       }
     }

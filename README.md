@@ -21,8 +21,15 @@ export to a shareable single-page web view or a printable PDF.
     page is a CSS-columns masonry gallery (real aspect ratios, not
     cropped squares) with a PhotoSwipe lightbox and a per-stop shuffle
     button to try a different random layout.
+  - Visual identity is themeable (`server/src/themes.js`) — 4 presets
+    (palette + font pairing + hero mood), selected per story and applied
+    as CSS variables + a matching Google Fonts import at render time.
+  - Editorial variety per stop: one photo can be marked "featured" and
+    renders full-width above the masonry, and a stop can carry an optional
+    pull quote rendered in large themed type.
 - `web/` — React (Vite) frontend: album picker + map (M1), story list +
-  editor (M2/M3), links out to the view/PDF export (M4).
+  editor (M2/M3), links out to the view/PDF export (M4), theme picker and
+  featured-photo/pull-quote controls in the editor.
 
 ## Running locally
 
@@ -46,9 +53,16 @@ useful for a second person to use the editor from their own device.
       provider interface so Anthropic (or another provider) can be added
       as a second adapter later without touching the routes/UI
 - [x] M4 — single-page story view (`/story/:id`) + PDF export
+- [x] Design pass — 4 selectable themes, featured/hero photo per stop,
+      pull quotes, PDF cover page + page numbers, PDF pagination capped
+      at 6 photos/page
 - [ ] reveal.js deck export — not built; the content model (`getStory`)
       already has everything a slide renderer would need, so this is a
       new template in `server/src/render.js`-style, not a data-model change
+- [ ] Drag-and-drop manual photo reordering — currently chronological order
+      + per-page-load "shuffle" only; a deliberate manual order would need
+      a small drag library in the editor and a `position` write-back
+- [ ] Map tile style options (currently one OSM style regardless of theme)
 - [ ] Containerize (Dockerfiles + docker-compose) to run alongside PhotoPrism
       — deferred until this has been used for real and the deployment shape
       (same host as PhotoPrism? synced elsewhere?) is clearer
@@ -76,8 +90,18 @@ useful for a second person to use the editor from their own device.
   not built, since it wasn't needed yet.
 - The PDF caps each printed page at 6 photos (`PHOTOS_PER_PRINTED_PAGE` in
   `render.js`) so they stay a legible size — more than that on an A4 page
-  and they get too small to be worth printing. This only affects print/PDF;
-  the on-screen story view still scrolls as one continuous masonry.
+  and they get too small to be worth printing. A stop's featured photo
+  doesn't count against this cap; it gets its own full-width treatment.
+  This only affects print/PDF; the on-screen story view still scrolls as
+  one continuous masonry.
+- Adding a 5th theme is a single new entry in `THEMES` in `themes.js` —
+  render.js, the editor's theme picker, and the `/api/themes` endpoint all
+  read from that one object, nothing else to touch.
+- The PDF's cover page is just the hero section forced onto its own page
+  in print (`break-after: page`); page numbers come from Chromium's
+  print `footerTemplate`, which is why they appear on the cover too —
+  Chromium's header/footer templates apply uniformly to every page, there
+  is no per-page opt-out.
 - Known flakiness in this dev environment (not a code issue per se): the
   backend intermittently crashes with a native-module assertion in
   `better-sqlite3` on startup under this box's Node 24.20.0 build — a

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { saveStory, draftCaption, researchPlace } from "./api.js";
+import { saveStory, draftCaption, researchPlace, fetchThemes } from "./api.js";
 
 function formatRange(start, end) {
   const opts = { day: "numeric", month: "short", year: "numeric" };
@@ -14,11 +14,16 @@ export default function StoryEditor({ story, onBack, onSaved }) {
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(null); // id of photo/stop currently asking AI
   const [aiError, setAiError] = useState(null);
+  const [themes, setThemes] = useState([]);
 
   useEffect(() => {
     setDraft(story);
     setDirty(false);
   }, [story]);
+
+  useEffect(() => {
+    fetchThemes().then(setThemes).catch(() => {});
+  }, []);
 
   function markDirty(updater) {
     setDraft(updater);
@@ -39,6 +44,23 @@ export default function StoryEditor({ story, onBack, onSaved }) {
         s.id !== stopId
           ? s
           : { ...s, photos: s.photos.map((p) => (p.id === photoId ? { ...p, ...patch } : p)) }
+      ),
+    }));
+  }
+
+  function toggleFeatured(stopId, photoId) {
+    markDirty((d) => ({
+      ...d,
+      stops: d.stops.map((s) =>
+        s.id !== stopId
+          ? s
+          : {
+              ...s,
+              photos: s.photos.map((p) => ({
+                ...p,
+                featured: p.id === photoId ? !p.featured : false,
+              })),
+            }
       ),
     }));
   }
@@ -108,6 +130,24 @@ export default function StoryEditor({ story, onBack, onSaved }) {
         onChange={(e) => markDirty((d) => ({ ...d, title: e.target.value }))}
       />
 
+      <div className="theme-picker">
+        {themes.map((t) => (
+          <button
+            key={t.id}
+            className={`theme-swatch ${draft.theme === t.id ? "active" : ""}`}
+            title={t.label}
+            onClick={() => markDirty((d) => ({ ...d, theme: t.id }))}
+          >
+            <span className="theme-swatch-colors">
+              {t.swatch.map((c, i) => (
+                <span key={i} style={{ background: c }} />
+              ))}
+            </span>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       <textarea
         className="story-intro"
         placeholder="Write an intro for this story…"
@@ -131,6 +171,13 @@ export default function StoryEditor({ story, onBack, onSaved }) {
             placeholder="What happened here?"
             value={stop.narrative}
             onChange={(e) => updateStop(stop.id, { narrative: e.target.value })}
+          />
+
+          <input
+            className="stop-pull-quote-input"
+            placeholder="Pull quote (optional) — one striking line, rendered large"
+            value={stop.pullQuote || ""}
+            onChange={(e) => updateStop(stop.id, { pullQuote: e.target.value })}
           />
 
           <div className="stop-research">
@@ -159,16 +206,25 @@ export default function StoryEditor({ story, onBack, onSaved }) {
             {stop.photos
               .filter((p) => p.included)
               .map((photo) => (
-                <div className="photo-card" key={photo.id}>
+                <div className={`photo-card ${photo.featured ? "featured" : ""}`} key={photo.id}>
                   {photo.thumbUrl && <img src={photo.thumbUrl} alt="" />}
-                  <label className="photo-include">
-                    <input
-                      type="checkbox"
-                      checked={photo.included}
-                      onChange={(e) => updatePhoto(stop.id, photo.id, { included: e.target.checked })}
-                    />
-                    include
-                  </label>
+                  <div className="photo-card-row">
+                    <label className="photo-include">
+                      <input
+                        type="checkbox"
+                        checked={photo.included}
+                        onChange={(e) => updatePhoto(stop.id, photo.id, { included: e.target.checked })}
+                      />
+                      include
+                    </label>
+                    <button
+                      className="feature-btn"
+                      title={photo.featured ? "Featured photo for this stop" : "Make this the featured photo"}
+                      onClick={() => toggleFeatured(stop.id, photo.id)}
+                    >
+                      {photo.featured ? "★ Featured" : "☆ Feature"}
+                    </button>
+                  </div>
                   <textarea
                     placeholder="Caption…"
                     value={photo.caption}

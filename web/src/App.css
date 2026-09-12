@@ -332,6 +332,58 @@
   outline: 1px dashed var(--terracotta);
 }
 
+.theme-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.theme-swatch {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.7rem 0.35rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: white;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.theme-swatch.active {
+  border-color: var(--terracotta);
+  box-shadow: 0 0 0 1px var(--terracotta);
+}
+
+.theme-swatch-colors {
+  display: flex;
+}
+
+.theme-swatch-colors span {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  margin-left: -5px;
+}
+
+.theme-swatch-colors span:first-child {
+  margin-left: 0;
+}
+
+.stop-pull-quote-input {
+  font: inherit;
+  font-style: italic;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+  background: white;
+  color: var(--ink);
+}
+
 textarea {
   font: inherit;
   width: 100%;
@@ -427,6 +479,11 @@ textarea {
   margin-bottom: 1rem;
 }
 
+.photo-card.featured {
+  border-color: var(--terracotta);
+  box-shadow: 0 0 0 1px var(--terracotta);
+}
+
 .photo-count-hint {
   margin: 0;
   font-size: 0.85rem;
@@ -487,10 +544,28 @@ textarea {
   font-size: 0.85rem;
 }
 
+.photo-card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
 .photo-include {
   font-size: 0.8rem;
   display: flex;
   align-items: center;
   gap: 0.3rem;
   color: #6b5d4d;
+}
+
+.feature-btn {
+  font: inherit;
+  font-size: 0.75rem;
+  border: none;
+  background: none;
+  color: var(--terracotta);
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
 }

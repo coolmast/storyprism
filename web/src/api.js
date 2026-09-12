@@ -10,6 +10,8 @@ export const fetchAlbums = () => fetch("/api/albums").then(json);
 export const fetchItinerary = (albumUid) =>
   fetch(`/api/albums/${albumUid}/itinerary`).then(json);
 
+export const fetchThemes = () => fetch("/api/themes").then(json);
+
 export const fetchStories = () => fetch("/api/stories").then(json);
 export const fetchStory = (id) => fetch(`/api/stories/${id}`).then(json);
 

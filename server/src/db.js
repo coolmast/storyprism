@@ -18,6 +18,7 @@ db.exec(`
     title TEXT NOT NULL,
     intro TEXT NOT NULL DEFAULT '',
     outro TEXT NOT NULL DEFAULT '',
+    theme TEXT NOT NULL DEFAULT 'coastal',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
@@ -33,7 +34,8 @@ db.exec(`
     ended_at TEXT,
     heading TEXT NOT NULL DEFAULT '',
     narrative TEXT NOT NULL DEFAULT '',
-    research TEXT NOT NULL DEFAULT ''
+    research TEXT NOT NULL DEFAULT '',
+    pull_quote TEXT NOT NULL DEFAULT ''
   );
 
   CREATE TABLE IF NOT EXISTS stop_photos (
@@ -45,7 +47,8 @@ db.exec(`
     height INTEGER,
     position INTEGER NOT NULL,
     caption TEXT NOT NULL DEFAULT '',
-    included INTEGER NOT NULL DEFAULT 1
+    included INTEGER NOT NULL DEFAULT 1,
+    featured INTEGER NOT NULL DEFAULT 0
   );
 
   CREATE INDEX IF NOT EXISTS idx_stops_story ON stops(story_id);
