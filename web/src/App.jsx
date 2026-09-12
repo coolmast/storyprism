@@ -40,6 +40,48 @@ export default function App() {
     fetchAlbums().then(setAlbums).catch((e) => setError(e.message));
   }, []);
 
+  // The app is a single-page app with no URL routing beyond this - "tab"
+  // was pure in-memory React state, so the address bar always stayed at
+  // "/" no matter what you were doing. On mobile that's a real bug, not
+  // just a cosmetic one: opening "View story" (a new tab with a map and
+  // 50+ photos) is exactly the kind of thing that gets a backgrounded tab
+  // evicted from memory under pressure, and when Android reloads it later
+  // from its last URL, "/" always resets to the start screen - there was
+  // no history entry anywhere that pointed back at "the editor for story
+  // X". Same story for the actual back button/gesture. Fixing this means
+  // reflecting the current story in the URL and restoring from it on
+  // load/back, not just switching an in-memory tab.
+  async function applyRoute() {
+    const match = window.location.pathname.match(/^\/edit\/([^/]+)$/);
+    if (match) {
+      try {
+        const story = await fetchStory(match[1]);
+        setActiveStory(story);
+        setTab("editor");
+        return;
+      } catch {
+        // Story was deleted or the id is stale - fall through to a sane
+        // default instead of showing a dead editor.
+      }
+    }
+    setTab(window.location.pathname === "/library" ? "stories" : "new");
+  }
+
+  useEffect(() => {
+    applyRoute();
+    window.addEventListener("popstate", applyRoute);
+    return () => window.removeEventListener("popstate", applyRoute);
+  }, []);
+
+  function goTo(newTab, story = null) {
+    setTab(newTab);
+    if (story) setActiveStory(story);
+    const path = newTab === "editor" && story ? `/edit/${story.id}` : newTab === "stories" ? "/library" : "/";
+    if (window.location.pathname !== path) {
+      window.history.pushState({}, "", path);
+    }
+  }
+
   useEffect(() => {
     if (source === "album") {
       if (!selectedUid) {
@@ -83,8 +125,7 @@ export default function App() {
           ? { albumUid: selectedUid, contentLanguage: lang }
           : { dateFrom, dateTo, title: rangeTitle, contentLanguage: lang };
       const story = await createStory(payload);
-      setActiveStory(story);
-      setTab("editor");
+      goTo("editor", story);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -94,8 +135,7 @@ export default function App() {
 
   async function openStory(id) {
     const story = await fetchStory(id);
-    setActiveStory(story);
-    setTab("editor");
+    goTo("editor", story);
   }
 
   async function removeStory(id) {
@@ -112,10 +152,10 @@ export default function App() {
         <h1>{t("appTitle")}</h1>
         <span>{t("appTagline")}</span>
         <nav className="tabs">
-          <button className={tab === "new" ? "active" : ""} onClick={() => setTab("new")}>
+          <button className={tab === "new" ? "active" : ""} onClick={() => goTo("new")}>
             {t("tabNewStory")}
           </button>
-          <button className={tab === "stories" ? "active" : ""} onClick={() => setTab("stories")}>
+          <button className={tab === "stories" ? "active" : ""} onClick={() => goTo("stories")}>
             {t("tabMyStories")}
           </button>
         </nav>
@@ -217,7 +257,7 @@ export default function App() {
           <main className="content">
             <StoryEditor
               story={activeStory}
-              onBack={() => setTab("stories")}
+              onBack={() => goTo("stories")}
               onSaved={(s) => setActiveStory(s)}
             />
           </main>
