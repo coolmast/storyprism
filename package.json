@@ -1,0 +1,8 @@
+{
+  "name": "story-builder",
+  "private": true,
+  "workspaces": [
+    "server",
+    "web"
+  ]
+}

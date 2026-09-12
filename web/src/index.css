@@ -1,0 +1,20 @@
+:root {
+  color-scheme: light;
+  --ink: #2b2420;
+  --paper: #faf6f0;
+  --terracotta: #c8703d;
+  --teal: #2f6f6a;
+  --sand: #e8dcc8;
+  --line: #d8cbb5;
+  font-family: "Iowan Old Style", "Georgia", serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+}
