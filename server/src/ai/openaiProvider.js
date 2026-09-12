@@ -284,6 +284,10 @@ export async function organizeNotesIntoStory({ storyTitle, stops, notesText, lan
     .map(
       (s, i) =>
         `${i + 1}. id="${s.id}" - "${s.heading}"${s.dateRange ? ` (${s.dateRange})` : ""}\n` +
+        `   Places actually photographed here (often more specific than the heading above - ` +
+        `prefer these for matching a place name mentioned in the notes): ${
+          s.placeNames?.length ? s.placeNames.join(", ") : "(none known)"
+        }\n` +
         `   Existing narrative: ${s.narrative ? `"${s.narrative}"` : "(none yet)"}\n` +
         `   Photo captions: ${s.captions.length ? s.captions.map((c) => `"${c}"`).join(", ") : "(none)"}`
     )
@@ -297,7 +301,8 @@ export async function organizeNotesIntoStory({ storyTitle, stops, notesText, lan
         "text for specific stops in a photo-story app. You're given the stops of a trip, in chronological " +
         "order, and the traveler's raw notes (which may cover the whole trip, ramble, jump around, or only " +
         "describe some of the stops). Your job: figure out which parts of the notes belong to which stop " +
-        "(match by place names, described activities, and chronological order), then rewrite each matched " +
+        "(match by place names - a stop's photographed-places list is more reliable than its heading for " +
+        "this - plus described activities and chronological order), then rewrite each matched " +
         `portion into a polished 1-2 paragraph first-person narrative for that stop. ${GHOSTWRITER_VOICE_RULES} ` +
         "Only produce a suggestion for a stop when the notes actually say something about it - do not " +
         "invent content for stops the notes don't cover, and do not force every stop to get a suggestion. " +

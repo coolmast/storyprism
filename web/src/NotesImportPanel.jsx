@@ -42,16 +42,20 @@ export default function NotesImportPanel({ storyId, stops, onApplySuggestion }) 
     }
   }
 
-  function apply(s) {
+  // Tracked and keyed by index, not s.stopId: the AI can (and did, in
+  // testing) suggest two separate drafts for the same stop, and keying by
+  // stopId meant clicking "Use this" on one silently marked both as used -
+  // React was also reusing the same key for both list items.
+  function apply(s, index) {
     onApplySuggestion(s.stopId, {
       narrative: s.narrative,
       ...(s.pullQuote ? { pullQuote: s.pullQuote } : {}),
     });
-    setApplied((a) => ({ ...a, [s.stopId]: true }));
+    setApplied((a) => ({ ...a, [index]: true }));
   }
 
   function applyAll() {
-    suggestions.forEach((s) => !applied[s.stopId] && apply(s));
+    suggestions.forEach((s, i) => !applied[i] && apply(s, i));
   }
 
   if (!open) {
@@ -116,14 +120,14 @@ export default function NotesImportPanel({ storyId, stops, onApplySuggestion }) 
               {t("useAll")}
             </button>
           </div>
-          {suggestions.map((s) => (
-            <div key={s.stopId} className="interview-draft">
+          {suggestions.map((s, i) => (
+            <div key={i} className="interview-draft">
               <h4>{t("forStop", headingFor(s.stopId))}</h4>
               <p>{s.narrative}</p>
               {s.pullQuote && <p className="interview-draft-quote">{t("pullQuoteLabel", s.pullQuote)}</p>}
               <div className="interview-draft-actions">
-                <button className="save-btn" onClick={() => apply(s)} disabled={applied[s.stopId]}>
-                  {applied[s.stopId] ? t("used") : t("useThis")}
+                <button className="save-btn" onClick={() => apply(s, i)} disabled={applied[i]}>
+                  {applied[i] ? t("used") : t("useThis")}
                 </button>
               </div>
             </div>

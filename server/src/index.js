@@ -242,6 +242,14 @@ app.post("/api/stories/:id/import-notes", async (req, res) => {
         dateRange: new Date(s.startedAt).toLocaleDateString(),
         narrative: s.narrative,
         captions: s.photos.filter((p) => p.included && p.caption).map((p) => p.caption),
+        // The stop's heading alone can miss a specific named place the
+        // notes mention - e.g. a stop headed "Lerkil" whose actual photos
+        // are of the "Särö Västerskog" nature reserve nearby. Info-card
+        // place names and place-suggestion chips both come from real photo
+        // place labels, so they're a much better signal than the heading
+        // for "does this stop actually cover the place this paragraph is
+        // about" - found via a real mismatch during testing.
+        placeNames: [...new Set([...(s.suggestedPlaces || []), ...(s.infoCards || []).map((c) => c.placeName)])],
       })),
     });
     res.json({ suggestions });
