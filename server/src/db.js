@@ -51,6 +51,16 @@ db.exec(`
     featured INTEGER NOT NULL DEFAULT 0
   );
 
+  CREATE TABLE IF NOT EXISTS stop_embeds (
+    id TEXT PRIMARY KEY,
+    stop_id TEXT NOT NULL REFERENCES stops(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL,
+    url TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    position INTEGER NOT NULL
+  );
+
   CREATE INDEX IF NOT EXISTS idx_stops_story ON stops(story_id);
   CREATE INDEX IF NOT EXISTS idx_stop_photos_stop ON stop_photos(stop_id);
+  CREATE INDEX IF NOT EXISTS idx_stop_embeds_stop ON stop_embeds(stop_id);
 `);

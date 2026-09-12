@@ -1,4 +1,5 @@
 import { getTheme } from "./themes.js";
+import { isEmbeddable } from "./embeds.js";
 
 function escapeHtml(str = "") {
   return String(str).replace(/[&<>"']/g, (c) => ({
@@ -57,6 +58,21 @@ export function renderStoryDeck(story) {
         ${stop.pullQuote ? `<blockquote class="deck-quote">${escapeHtml(stop.pullQuote)}</blockquote>` : ""}
       </section>`;
 
+      // Only embeddable (allowlisted + a real /embed link) routes get their
+      // own slide; a plain activity-page link wouldn't render inside an
+      // iframe anyway, so it's skipped here rather than shown as a dead frame.
+      const embedSlides = (stop.embeds || [])
+        .filter((e) => isEmbeddable(e.url))
+        .map(
+          (e) => `
+      <section>
+        ${e.title ? `<h3 class="deck-embed-title">${escapeHtml(e.title)}</h3>` : ""}
+        <iframe class="deck-embed-frame" src="${escapeHtml(e.url)}" allowfullscreen
+                title="${escapeHtml(e.title || e.provider)}"></iframe>
+      </section>`
+        )
+        .join("\n");
+
       // A plain <img>, not data-background-image: reveal's background layer
       // for *nested* (vertical-stack) slides doesn't reliably composite
       // under Playwright/headless Chrome - it stayed black in testing even
@@ -87,7 +103,7 @@ export function renderStoryDeck(story) {
         )
         .join("\n");
 
-      return `<section>${textSlide}${featuredSlide}${gridSlides}</section>`;
+      return `<section>${textSlide}${embedSlides}${featuredSlide}${gridSlides}</section>`;
     })
     .join("\n");
 
@@ -163,6 +179,8 @@ export function renderStoryDeck(story) {
     content: ""; position: absolute; inset: 0;
     background: linear-gradient(to top, rgba(0,0,0,0.75), rgba(0,0,0,0.25) 70%);
   }
+  .deck-embed-title { margin: 0 0 0.4em 0; }
+  .deck-embed-frame { width: 100%; height: 80vh; border: none; border-radius: 8px; }
   .img-slide { position: relative; height: 100%; }
   .deck-featured-img {
     position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;

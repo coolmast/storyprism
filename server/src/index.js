@@ -17,6 +17,7 @@ import { renderStoryHtml } from "./render.js";
 import { renderStoryDeck } from "./deck.js";
 import { renderStoryPdf, renderDeckPdf } from "./pdf.js";
 import { THEMES } from "./themes.js";
+import { fetchArticleText } from "./article.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -175,6 +176,38 @@ app.post("/api/stories/:id/stops/:stopId/interview/draft", async (req, res) => {
       history: Array.isArray(req.body.history) ? req.body.history : [],
     });
     res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+app.post("/api/stories/:id/import-notes", async (req, res) => {
+  const story = getStory(req.params.id);
+  if (!story) return res.status(404).json({ error: "Not found" });
+
+  try {
+    let notesText = (req.body.text || "").trim();
+    if (!notesText && req.body.url) {
+      const article = await fetchArticleText(req.body.url);
+      notesText = article.text;
+    }
+    if (!notesText) {
+      return res.status(400).json({ error: "Paste some notes or provide a URL" });
+    }
+
+    const suggestions = await getProvider().organizeNotesIntoStory({
+      storyTitle: story.title,
+      notesText,
+      stops: story.stops.map((s) => ({
+        id: s.id,
+        heading: s.heading || s.placeLabel || "Stop",
+        dateRange: new Date(s.startedAt).toLocaleDateString(),
+        narrative: s.narrative,
+        captions: s.photos.filter((p) => p.included && p.caption).map((p) => p.caption),
+      })),
+    });
+    res.json({ suggestions });
   } catch (err) {
     console.error(err);
     res.status(502).json({ error: err.message });

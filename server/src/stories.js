@@ -3,6 +3,7 @@ import { db } from "./db.js";
 import { listAlbums, getAlbumPhotos, thumbUrl } from "./photoprism.js";
 import { buildItinerary } from "./itinerary.js";
 import { DEFAULT_THEME } from "./themes.js";
+import { isAllowedEmbedHost } from "./embeds.js";
 
 const insertStory = db.prepare(`
   INSERT INTO stories (id, album_uid, album_title, title, intro, outro, theme, created_at, updated_at)
@@ -99,6 +100,9 @@ export function getStory(id) {
   const photoStmt = db.prepare(
     "SELECT * FROM stop_photos WHERE stop_id = ? ORDER BY position"
   );
+  const embedStmt = db.prepare(
+    "SELECT * FROM stop_embeds WHERE stop_id = ? ORDER BY position"
+  );
 
   return {
     id: story.id,
@@ -134,6 +138,12 @@ export function getStory(id) {
         included: !!p.included,
         featured: !!p.featured,
       })),
+      embeds: embedStmt.all(s.id).map((e) => ({
+        id: e.id,
+        provider: e.provider,
+        url: e.url,
+        title: e.title,
+      })),
     })),
   };
 }
@@ -150,6 +160,11 @@ const updatePhotoStmt = db.prepare(
 const clearFeaturedStmt = db.prepare(
   "UPDATE stop_photos SET featured = 0 WHERE stop_id = @stopId"
 );
+const deleteEmbedsStmt = db.prepare("DELETE FROM stop_embeds WHERE stop_id = @stopId");
+const insertEmbedStmt = db.prepare(`
+  INSERT INTO stop_embeds (id, stop_id, provider, url, title, position)
+  VALUES (@id, @stopId, @provider, @url, @title, @position)
+`);
 const touchStoryStmt = db.prepare("UPDATE stories SET updated_at = @now WHERE id = @id");
 
 export function updateStory(id, data) {
@@ -191,6 +206,23 @@ export function updateStory(id, data) {
           position: index,
         });
       });
+
+      // Full-replace rather than diff/upsert: the list is short, and this
+      // avoids needing to reconcile client-generated vs server-generated
+      // ids for a field with no other references.
+      deleteEmbedsStmt.run({ stopId: stop.id });
+      (stop.embeds ?? [])
+        .filter((e) => e.url && isAllowedEmbedHost(e.url))
+        .forEach((embed, index) => {
+          insertEmbedStmt.run({
+            id: randomUUID(),
+            stopId: stop.id,
+            provider: embed.provider || "Route",
+            url: embed.url,
+            title: embed.title || "",
+            position: index,
+          });
+        });
     }
     touchStoryStmt.run({ id, now });
   });

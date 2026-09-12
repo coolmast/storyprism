@@ -55,3 +55,10 @@ export const draftFromInterview = (storyId, stopId, history) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ history }),
   }).then(json);
+
+export const importNotes = (storyId, { text, url }) =>
+  fetch(`/api/stories/${storyId}/import-notes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, url }),
+  }).then(json);

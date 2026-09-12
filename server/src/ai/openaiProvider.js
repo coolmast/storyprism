@@ -177,3 +177,64 @@ export async function draftFromInterview({ heading, narrative, captions, researc
   const data = await res.json();
   return JSON.parse(data.choices[0].message.content);
 }
+
+const GHOSTWRITER_VOICE_RULES =
+  'Write like a specific person telling a friend about their trip, not a travel brochure: avoid stock ' +
+  'phrases ("heart swelled", "wrapped around us like an embrace", "little did we know", "we couldn\'t ' +
+  'believe our eyes"). Prefer plain, concrete detail over generic sensory adjectives - name the actual ' +
+  "thing, sound, or feeling rather than reaching for a simile. Short sentences are fine.";
+
+export async function organizeNotesIntoStory({ storyTitle, stops, notesText }) {
+  const stopList = stops
+    .map(
+      (s, i) =>
+        `${i + 1}. id="${s.id}" - "${s.heading}"${s.dateRange ? ` (${s.dateRange})` : ""}\n` +
+        `   Existing narrative: ${s.narrative ? `"${s.narrative}"` : "(none yet)"}\n` +
+        `   Photo captions: ${s.captions.length ? s.captions.map((c) => `"${c}"`).join(", ") : "(none)"}`
+    )
+    .join("\n");
+
+  const messages = [
+    {
+      role: "system",
+      content:
+        "You are a ghostwriter helping someone turn their own long-form travel notes into the narrative " +
+        "text for specific stops in a photo-story app. You're given the stops of a trip, in chronological " +
+        "order, and the traveler's raw notes (which may cover the whole trip, ramble, jump around, or only " +
+        "describe some of the stops). Your job: figure out which parts of the notes belong to which stop " +
+        "(match by place names, described activities, and chronological order), then rewrite each matched " +
+        `portion into a polished 1-2 paragraph first-person narrative for that stop. ${GHOSTWRITER_VOICE_RULES} ` +
+        "Only produce a suggestion for a stop when the notes actually say something about it - do not " +
+        "invent content for stops the notes don't cover, and do not force every stop to get a suggestion. " +
+        "If a stop already has a narrative and the notes add to it, write a richer combined version rather " +
+        "than contradicting what's already there. Suggest a short pull-quote sentence for a stop only if " +
+        "something in the notes genuinely fits as one.\n\n" +
+        'Respond as JSON: {"suggestions": [{"stopId": string, "narrative": string, "pullQuote": string|null}]}',
+    },
+    {
+      role: "user",
+      content: `Trip: "${storyTitle}"\n\nStops:\n${stopList}\n\nTraveler's notes:\n${notesText}`,
+    },
+  ];
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: INTERVIEW_MODEL,
+      messages,
+      response_format: { type: "json_object" },
+      max_tokens: Math.min(4000, 400 * stops.length + 600),
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`OpenAI notes-import request failed: ${res.status} ${await res.text()}`);
+  }
+  const data = await res.json();
+  const parsed = JSON.parse(data.choices[0].message.content);
+  return Array.isArray(parsed.suggestions) ? parsed.suggestions : [];
+}

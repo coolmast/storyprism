@@ -8,10 +8,12 @@
     "start": "node src/index.js"
   },
   "dependencies": {
+    "@mozilla/readability": "^0.6.0",
     "better-sqlite3": "^11.7.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "jsdom": "^30.0.1",
     "photoswipe": "^5.4.4",
     "playwright-core": "^1.63.0",
     "reveal.js": "^6.0.2"

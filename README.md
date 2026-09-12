@@ -1,7 +1,9 @@
 # Story Builder
 
 Turns a PhotoPrism album into an editable travel story: itinerary extraction
-from photo GPS/time metadata, a map view, manual + AI-assisted captions, and
+from photo GPS/time metadata, a map view, manual + AI-assisted captions,
+embedded Strava/Komoot/Garmin routes, an AI ghostwriter that interviews you
+and can reorganize your own existing travel writing into the story, and
 export to a shareable single-page web view, a reveal.js presentation, or a
 printable PDF (either format).
 
@@ -36,10 +38,20 @@ printable PDF (either format).
     view at `/api/stories/:id/export/pdf` (cover page, page numbers, 6
     photos/page cap) and the deck at `/api/stories/:id/export/deck-pdf`
     (reveal.js's own built-in print-pdf mode, one slide per page).
+  - A stop can carry route/activity embeds (Strava, Komoot, Garmin Connect)
+    — `server/src/embeds.js` allowlists hosts and decides iframe vs. a
+    link-out card, stored in the `stop_embeds` table.
+  - Long-form travel notes (pasted, or a blog URL fetched and extracted via
+    `server/src/article.js`'s Readability-based parser) can be handed to
+    the AI, which reads all the story's stops and segments/rewrites the
+    notes across the right ones (`organizeNotesIntoStory` in
+    `server/src/ai/openaiProvider.js`).
 - `web/` — React (Vite) frontend: album picker + map (M1), story list +
   editor (M2/M3) with theme picker, drag-to-reorder photo grid,
-  featured-photo/pull-quote controls, and a per-stop AI interview panel
-  (`InterviewPanel.jsx`), links out to view/present/PDF export (M4).
+  featured-photo/pull-quote controls, a per-stop AI interview panel
+  (`InterviewPanel.jsx`), a per-stop route-embed manager
+  (`RouteEmbeds.jsx`), and a story-level notes-import panel
+  (`NotesImportPanel.jsx`), links out to view/present/PDF export (M4).
 
 ## Running locally
 
@@ -74,6 +86,9 @@ useful for a second person to use the editor from their own device.
       smelled, felt, what it reminded them of), then drafts a rewritten
       narrative + pull quote suggestion from the conversation on request,
       iteratively (keep chatting, keep re-drafting)
+- [x] Route/activity embeds (Strava, Komoot, Garmin Connect) per stop, and
+      AI notes import that segments/rewrites your own long-form travel
+      writing (pasted or a blog URL) across the right stops
 - [ ] Containerize (Dockerfiles + docker-compose) to run alongside PhotoPrism
       — deferred until this has been used for real and the deployment shape
       (same host as PhotoPrism? synced elsewhere?) is clearer
@@ -87,6 +102,27 @@ useful for a second person to use the editor from their own device.
 
 ## Notes
 
+- **Route embeds only iframe a URL that is both from an allowlisted host
+  (strava.com, komoot.com/.de, garmin.com) and looks like the provider's
+  actual embed link** (path or query contains "embed") — enforced
+  server-side on save (`isAllowedEmbedHost` in `embeds.js`), not just in
+  the UI. A plain activity/tour page URL is shown as a link-out card
+  instead of an iframe, because most of those pages refuse to be framed
+  (they'd just show blank or an error) — you need the specific "Embed"
+  share link the service itself generates. Garmin Connect in particular
+  doesn't have as well-known an embed format as Strava/Komoot; if their
+  embed doesn't render, the link-out card is the honest fallback.
+- **AI notes import will confidently write as if any text you give it is
+  your own trip account** — tested it against a Wikipedia article (not a
+  travel diary) and it happily produced a plausible-sounding first-person
+  narrative from encyclopedia facts. That's expected LLM ghostwriting
+  behavior, not a bug, but it means the feature is only as good as what
+  you feed it: paste your own actual notes/blog post, not a reference
+  page. One consolidated AI call sees all stops + the full notes text at
+  once (not one call per stop) so it can match content to the *right*
+  stop by place name and chronology and split a rambling multi-day post
+  correctly — confirmed with a 3-paragraph test note spanning 3 stops,
+  each paragraph landed on the correct one.
 - **The ghostwriter interview's conversation is not persisted to the
   story** — it lives only in `InterviewPanel.jsx`'s component state, same
   as the other one-shot AI actions (draft-caption, research). Collapsing

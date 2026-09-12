@@ -1,4 +1,5 @@
 import { getTheme } from "./themes.js";
+import { isEmbeddable } from "./embeds.js";
 
 function escapeHtml(str = "") {
   return String(str).replace(/[&<>"']/g, (c) => ({
@@ -48,6 +49,23 @@ function photoFigure(p, fallbackAlt) {
     </figure>`;
 }
 
+function embedBlock(embed) {
+  if (isEmbeddable(embed.url)) {
+    return `
+    <div class="route-embed">
+      ${embed.title ? `<p class="route-embed-title">${escapeHtml(embed.title)}</p>` : ""}
+      <div class="route-embed-frame">
+        <iframe src="${escapeHtml(embed.url)}" loading="lazy" allowfullscreen
+                title="${escapeHtml(embed.title || embed.provider)}"></iframe>
+      </div>
+    </div>`;
+  }
+  return `
+    <a class="route-embed-link" href="${escapeHtml(embed.url)}" target="_blank" rel="noreferrer">
+      🏔 View "${escapeHtml(embed.title || embed.provider)}" on ${escapeHtml(embed.provider)} ↗
+    </a>`;
+}
+
 // More than this on one printed page and photos get too small to be worth
 // looking at (this only forces a page break in print/PDF - on screen the
 // gallery still scrolls as one continuous masonry). The featured photo, if
@@ -95,6 +113,7 @@ export function renderStoryHtml(story) {
           : ""
       }
       ${stop.research ? `<aside class="research"><p>${escapeHtml(stop.research)}</p></aside>` : ""}
+      ${(stop.embeds || []).map(embedBlock).join("\n")}
       ${
         gridPhotos.length
           ? chunk(gridPhotos, PHOTOS_PER_PRINTED_PAGE)
@@ -196,6 +215,20 @@ export function renderStoryHtml(story) {
   .research {
     background: var(--sand); border-left: 4px solid var(--accent2);
     padding: 0.9rem 1.1rem; margin: 1rem 0; border-radius: 0 6px 6px 0; font-size: 0.95rem;
+  }
+  .route-embed { margin: 1.2rem 0; }
+  .route-embed-title { font-weight: bold; margin: 0 0 0.4rem 0; }
+  .route-embed-frame {
+    position: relative; width: 100%; padding-top: 65%;
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--line);
+  }
+  .route-embed-frame iframe {
+    position: absolute; inset: 0; width: 100%; height: 100%; border: none;
+  }
+  .route-embed-link {
+    display: inline-block; margin: 1.2rem 0; padding: 0.6rem 1rem;
+    border: 1px solid var(--accent); border-radius: 8px;
+    color: var(--accent); text-decoration: none; font-weight: bold;
   }
   .featured-photo { margin: 1.4rem 0; }
   .featured-photo img {

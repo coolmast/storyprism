@@ -539,10 +539,130 @@ textarea {
   margin-top: 0.5rem;
 }
 
+.notes-import {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.8rem;
+  background: white;
+  margin-bottom: 0.5rem;
+}
+
+.notes-import-tabs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.notes-import-tabs button {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: white;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.notes-import-tabs button.active {
+  border-color: var(--terracotta);
+  background: var(--terracotta);
+  color: white;
+}
+
+.notes-import-text {
+  min-height: 8rem;
+}
+
+.notes-import-url {
+  font: inherit;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.notes-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.notes-suggestions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+  color: #6b5d4d;
+}
+
 .stop-research {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.route-embeds {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.route-embed-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.route-embed-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: white;
+}
+
+.route-embed-provider {
+  font-weight: bold;
+  color: var(--teal);
+  flex: none;
+}
+
+.route-embed-list a {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.route-embed-add {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.route-embed-add input {
+  font: inherit;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  flex: 1;
+  min-width: 180px;
+}
+
+.route-embed-hint {
+  font-size: 0.8rem;
+  color: #6b5d4d;
+  margin: 0;
 }
 
 .photo-grid {

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { saveStory, draftCaption, researchPlace, fetchThemes } from "./api.js";
 import IncludedPhotoGrid from "./IncludedPhotoGrid.jsx";
 import InterviewPanel from "./InterviewPanel.jsx";
+import RouteEmbeds from "./RouteEmbeds.jsx";
+import NotesImportPanel from "./NotesImportPanel.jsx";
 
 function formatRange(start, end) {
   const opts = { day: "numeric", month: "short", year: "numeric" };
@@ -180,6 +182,12 @@ export default function StoryEditor({ story, onBack, onSaved }) {
         onChange={(e) => markDirty((d) => ({ ...d, intro: e.target.value }))}
       />
 
+      <NotesImportPanel
+        storyId={draft.id}
+        stops={draft.stops}
+        onApplySuggestion={(stopId, patch) => updateStop(stopId, patch)}
+      />
+
       {draft.stops.map((stop) => (
         <section key={stop.id} className="stop-editor">
           <div className="stop-editor-header">
@@ -232,6 +240,11 @@ export default function StoryEditor({ story, onBack, onSaved }) {
               />
             )}
           </div>
+
+          <RouteEmbeds
+            embeds={stop.embeds || []}
+            onChange={(embeds) => updateStop(stop.id, { embeds })}
+          />
 
           <p className="photo-count-hint">
             {stop.photos.filter((p) => p.included).length} of {stop.photos.length} photos in the
