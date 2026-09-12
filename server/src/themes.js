@@ -1,18 +1,18 @@
+// CARTO's basemaps.cartocdn.com raster tiles (previously used for the
+// Voyager/Positron/Dark basemaps below) now require an API key we don't
+// have - unauthenticated requests still return 200 PNGs, but with an
+// "API KEY REQUIRED" watermark baked into the image, which is why maps on
+// every theme but "vintage" (the only one that was already on plain OSM)
+// rendered as a big empty-looking, watermarked box. Standard OpenStreetMap
+// tiles are the one raster source that's reliably free with no key, so
+// every theme now uses those; the different-per-theme "mood" is instead
+// applied as a CSS filter on Leaflet's tile pane (see mapFilter, used in
+// render.js) - grayscale for a Positron-like light look, invert+hue-rotate
+// for a Dark-Matter-like look (a standard trick for faking a dark basemap
+// from light OSM tiles), sepia for a vintage-postcard tint.
 const OSM_STANDARD = {
   url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
   attribution: "&copy; OpenStreetMap contributors",
-};
-const CARTO_VOYAGER = {
-  url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-  attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
-};
-const CARTO_POSITRON = {
-  url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-  attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
-};
-const CARTO_DARK = {
-  url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-  attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
 };
 
 // Each theme is a self-contained visual identity: palette + font pairing +
@@ -36,7 +36,8 @@ export const THEMES = {
     headingCase: "none",
     headingTracking: "normal",
     heroScrim: "linear-gradient(to top, rgba(20,15,10,0.85), rgba(20,15,10,0.1) 60%)",
-    mapTiles: CARTO_VOYAGER,
+    mapTiles: OSM_STANDARD,
+    mapFilter: "",
   },
   monochrome: {
     label: "Monochrome Editorial",
@@ -53,7 +54,8 @@ export const THEMES = {
     headingCase: "uppercase",
     headingTracking: "0.02em",
     heroScrim: "linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.15) 55%)",
-    mapTiles: CARTO_POSITRON,
+    mapTiles: OSM_STANDARD,
+    mapFilter: "grayscale(1) contrast(0.95) brightness(1.05)",
   },
   vintage: {
     label: "Vintage Postcard",
@@ -71,6 +73,7 @@ export const THEMES = {
     headingTracking: "0.03em",
     heroScrim: "linear-gradient(to top, rgba(40,25,10,0.88), rgba(40,25,10,0.2) 55%)",
     mapTiles: OSM_STANDARD,
+    mapFilter: "sepia(0.35) saturate(1.3) brightness(1.02)",
   },
   bold: {
     label: "Bold Modern",
@@ -87,7 +90,8 @@ export const THEMES = {
     headingCase: "uppercase",
     headingTracking: "0.04em",
     heroScrim: "linear-gradient(to top, rgba(0,0,0,0.92), rgba(0,0,0,0.1) 60%)",
-    mapTiles: CARTO_DARK,
+    mapTiles: OSM_STANDARD,
+    mapFilter: "invert(1) hue-rotate(180deg) brightness(0.9) contrast(1.1)",
   },
 };
 

@@ -273,8 +273,24 @@ useful for a second person to use the editor from their own device.
 - Adding a 5th theme is a single new entry in `THEMES` in `themes.js` —
   render.js, deck.js, the editor's theme picker, and the `/api/themes`
   endpoint all read from that one object, nothing else to touch. Each
-  theme also picks its own map basemap (OSM standard, or CARTO
-  Voyager/Positron/Dark Matter — all free, no API key) to match its mood.
+  theme picks its own map mood via a CSS filter applied to Leaflet's tile
+  pane (grayscale, sepia, inverted-for-dark, or none) rather than a
+  different tile provider per theme — see the next note for why.
+- **CARTO's free basemap tiles now require an API key we don't have**:
+  `basemaps.cartocdn.com` (used for the Voyager/Positron/Dark Matter
+  basemaps on 3 of the 4 themes) still returns `200 image/png` for
+  unauthenticated requests, but with an "API KEY REQUIRED" watermark
+  baked into the tile image itself - not an error, so it wasn't obvious
+  from the network tab, just a map that looked broken/empty. Found via a
+  real user report ("empty frame below the top image"); confirmed by
+  actually looking at the rendered map rather than trusting a 200 status.
+  Fixed by switching every theme to plain OpenStreetMap tiles (the one
+  raster source still reliably free with no key) and faking each theme's
+  basemap mood with a CSS `filter` on `map.getPane('tilePane')` instead -
+  grayscale for the light/minimal look, sepia for the vintage-postcard
+  tint, `invert(1) hue-rotate(180deg)` for a dark-mode look (a standard
+  trick for getting a dark basemap out of light OSM tiles). Verified by
+  screenshotting the map on all 4 themes after the fix.
 - The PDF caps each printed page at 6 photos (`PHOTOS_PER_PRINTED_PAGE` in
   `render.js`) so they stay a legible size — more than that on an A4 page
   and they get too small to be worth printing. A stop's featured photo

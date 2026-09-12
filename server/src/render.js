@@ -369,6 +369,10 @@ export function renderStoryHtml(story) {
       L.tileLayer('${theme.mapTiles.url}', {
         attribution: '${theme.mapTiles.attribution}'
       }).addTo(map);
+      // Gives each theme its own basemap mood (light/dark/warm) without
+      // depending on a keyed tile provider - see the comment above
+      // OSM_STANDARD in themes.js for why this replaced per-theme CARTO URLs.
+      ${theme.mapFilter ? `map.getPane('tilePane').style.filter = '${theme.mapFilter}';` : ""}
       const latlngs = points.map(p => [p.lat, p.lng]);
       L.polyline(latlngs, { color: '${theme.accent}', weight: 3, dashArray: '6 8' }).addTo(map);
       points.forEach(p => {
