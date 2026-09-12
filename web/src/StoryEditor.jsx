@@ -87,9 +87,17 @@ export default function StoryEditor({ story, onBack, onSaved }) {
     <div className="story-editor">
       <div className="editor-toolbar">
         <button className="link-btn" onClick={onBack}>← My Stories</button>
-        <button className="save-btn" onClick={handleSave} disabled={saving || !dirty}>
-          {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
-        </button>
+        <div className="toolbar-actions">
+          <a className="link-btn" href={`/story/${draft.id}`} target="_blank" rel="noreferrer">
+            View story ↗
+          </a>
+          <a className="link-btn" href={`/api/stories/${draft.id}/export/pdf`}>
+            Download PDF ↓
+          </a>
+          <button className="save-btn" onClick={handleSave} disabled={saving || !dirty}>
+            {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
+          </button>
+        </div>
       </div>
 
       {aiError && <p className="error">{aiError}</p>}

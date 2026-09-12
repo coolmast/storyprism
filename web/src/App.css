@@ -309,6 +309,13 @@
   cursor: pointer;
   font: inherit;
   padding: 0;
+  text-decoration: none;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
 }
 
 .story-title-input {

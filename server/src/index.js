@@ -1,4 +1,6 @@
 import "dotenv/config";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import cors from "cors";
 import { listAlbums, getAlbumPhotos, thumbUrl } from "./photoprism.js";
@@ -11,10 +13,18 @@ import {
   deleteStory,
 } from "./stories.js";
 import { getProvider } from "./ai/index.js";
+import { renderStoryHtml } from "./render.js";
+import { renderStoryPdf } from "./pdf.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(
+  "/vendor/leaflet",
+  express.static(path.join(__dirname, "../../node_modules/leaflet/dist"))
+);
 
 app.get("/api/albums", async (req, res) => {
   try {
@@ -108,6 +118,28 @@ app.post("/api/stories/:id/stops/:stopId/research", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(502).json({ error: err.message });
+  }
+});
+
+app.get("/story/:id", (req, res) => {
+  const story = getStory(req.params.id);
+  if (!story) return res.status(404).send("Story not found");
+  res.type("html").send(renderStoryHtml(story));
+});
+
+app.get("/api/stories/:id/export/pdf", async (req, res) => {
+  const story = getStory(req.params.id);
+  if (!story) return res.status(404).json({ error: "Not found" });
+
+  try {
+    const pdf = await renderStoryPdf(`http://localhost:${port}/story/${story.id}`);
+    res
+      .type("application/pdf")
+      .set("Content-Disposition", `attachment; filename="${story.title.replace(/[^\w -]/g, "")}.pdf"`)
+      .send(pdf);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
   }
 });
 
