@@ -40,7 +40,9 @@ db.exec(`
     id TEXT PRIMARY KEY,
     stop_id TEXT NOT NULL REFERENCES stops(id) ON DELETE CASCADE,
     photo_uid TEXT NOT NULL,
-    thumb_url TEXT,
+    hash TEXT,
+    width INTEGER,
+    height INTEGER,
     position INTEGER NOT NULL,
     caption TEXT NOT NULL DEFAULT '',
     included INTEGER NOT NULL DEFAULT 1

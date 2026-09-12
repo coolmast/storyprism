@@ -52,17 +52,22 @@ export function renderStoryHtml(story) {
       ${stop.research ? `<aside class="research"><p>${escapeHtml(stop.research)}</p></aside>` : ""}
       ${
         photos.length
-          ? `<div class="photo-mosaic">
+          ? `<div class="photo-mosaic" id="mosaic-${i}">
         ${photos
           .map(
             (p) => `
           <figure>
-            <img src="${escapeHtml(p.thumbUrl)}" alt="">
+            <a class="pswp-item" href="${escapeHtml(p.fullUrl || p.thumbUrl)}"
+               data-pswp-width="${p.width || 1600}" data-pswp-height="${p.height || 1200}"
+               target="_blank" rel="noreferrer">
+              <img src="${escapeHtml(p.thumbUrl)}" alt="" width="${p.width || ""}" height="${p.height || ""}">
+            </a>
             ${p.caption ? `<figcaption>${escapeHtml(p.caption)}</figcaption>` : ""}
           </figure>`
           )
           .join("\n")}
-      </div>`
+      </div>
+      <button class="shuffle-btn no-print" onclick="shuffleMosaic('mosaic-${i}')">&#128256; Shuffle layout</button>`
           : ""
       }
     </section>`;
@@ -76,6 +81,7 @@ export function renderStoryHtml(story) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(story.title)}</title>
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/vendor/photoswipe/photoswipe.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
@@ -137,17 +143,24 @@ export function renderStoryHtml(story) {
     padding: 0.9rem 1.1rem; margin: 1rem 0; border-radius: 0 6px 6px 0; font-size: 0.95rem;
   }
   .photo-mosaic {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 0.9rem; margin-top: 1.2rem;
+    column-count: 3; column-gap: 0.9rem; margin-top: 1.2rem;
   }
-  .photo-mosaic figure { margin: 0; }
-  .photo-mosaic img { width: 100%; height: 220px; object-fit: cover; border-radius: 8px; display: block; }
+  @media (max-width: 700px) { .photo-mosaic { column-count: 2; } }
+  .photo-mosaic figure { margin: 0 0 0.9rem; break-inside: avoid; }
+  .photo-mosaic a { display: block; }
+  .photo-mosaic img { width: 100%; height: auto; border-radius: 8px; display: block; cursor: zoom-in; }
   .photo-mosaic figcaption { font-size: 0.85rem; color: #6b5d4d; margin-top: 0.35rem; }
+  .shuffle-btn {
+    font: inherit; font-size: 0.85rem; margin-top: 0.8rem;
+    padding: 0.35rem 0.9rem; border: 1px solid var(--terracotta); background: white;
+    color: var(--terracotta); border-radius: 999px; cursor: pointer;
+  }
   footer { text-align: center; color: #a1927c; font-size: 0.8rem; padding: 2rem; }
   @media print {
     .hero { min-height: 40vh; }
     #map { break-inside: avoid; }
     .stop { break-before: page; }
+    .no-print { display: none; }
   }
 </style>
 </head>
@@ -166,6 +179,26 @@ export function renderStoryHtml(story) {
     <footer>${escapeHtml(story.albumTitle)} &middot; built with Story Builder</footer>
   </main>
   <script src="/vendor/leaflet/leaflet.js"></script>
+  <script src="/vendor/photoswipe/umd/photoswipe.umd.min.js"></script>
+  <script src="/vendor/photoswipe/umd/photoswipe-lightbox.umd.min.js"></script>
+  <script>
+    const lightbox = new PhotoSwipeLightbox({
+      gallery: 'main',
+      children: 'a.pswp-item',
+      pswpModule: PhotoSwipe,
+    });
+    lightbox.init();
+
+    function shuffleMosaic(id) {
+      const el = document.getElementById(id);
+      const figures = Array.from(el.children);
+      for (let i = figures.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [figures[i], figures[j]] = [figures[j], figures[i]];
+      }
+      figures.forEach((f) => el.appendChild(f));
+    }
+  </script>
   <script>
     const points = ${JSON.stringify(mapPoints)};
     if (points.length && document.getElementById('map')) {

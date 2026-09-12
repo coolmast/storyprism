@@ -17,7 +17,10 @@ export to a shareable single-page web view or a printable PDF.
     wired up (vision captioning + web-search-backed place research).
   - Renders a story to a standalone HTML page (`server/src/render.js`,
     served at `/story/:id`) and to PDF via headless Chrome
-    (`server/src/pdf.js`, served at `/api/stories/:id/export/pdf`).
+    (`server/src/pdf.js`, served at `/api/stories/:id/export/pdf`). The
+    page is a CSS-columns masonry gallery (real aspect ratios, not
+    cropped squares) with a PhotoSwipe lightbox and a per-stop shuffle
+    button to try a different random layout.
 - `web/` — React (Vite) frontend: album picker + map (M1), story list +
   editor (M2/M3), links out to the view/PDF export (M4).
 
@@ -61,8 +64,12 @@ useful for a second person to use the editor from their own device.
   into. Tune the constants in `server/src/itinerary.js` if stops come out
   too coarse/fine for road-trip albums.
 - A stop can have 50-100+ photos; creating a story pre-selects a spread of
-  ~6 per stop as "included" so the editor starts curated instead of a wall
+  ~20 per stop as "included" so the editor starts curated instead of a wall
   of caption boxes. The rest are one click away under "N more photos".
+- Gallery images use PhotoPrism's `fit_*` sizes (scaled, real aspect ratio)
+  rather than `tile_*` (center-cropped square) — that's what makes the
+  masonry layout actually vary instead of showing a uniform grid of crops.
+  The lightbox opens `fit_2048` for a sharper full view.
 - The story view/PDF embed PhotoPrism thumbnail URLs directly, so they only
   work on the same network as PhotoPrism (or via VPN). Sharing a story with
   someone off-network would need downloading/embedding the images instead —

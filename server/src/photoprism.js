@@ -46,6 +46,9 @@ export async function getAlbumPhotos(albumUid, { count = 1000 } = {}) {
   }));
 }
 
-export function thumbUrl(hash, size = "tile_500") {
+// "fit_*" sizes scale to fit within a box, preserving the original aspect
+// ratio; "tile_*" sizes are center-cropped squares. We want real aspect
+// ratios for a varied, masonry-style gallery, so fit_* is the default.
+export function thumbUrl(hash, size = "fit_720") {
   return `${BASE_URL}/api/v1/t/${hash}/public/${size}`;
 }

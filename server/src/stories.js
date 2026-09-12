@@ -12,8 +12,8 @@ const insertStop = db.prepare(`
   VALUES (@id, @storyId, @position, @lat, @lng, @placeLabel, @startedAt, @endedAt, @heading, '')
 `);
 const insertPhoto = db.prepare(`
-  INSERT INTO stop_photos (id, stop_id, photo_uid, thumb_url, position, caption, included)
-  VALUES (@id, @stopId, @photoUid, @thumbUrl, @position, '', @included)
+  INSERT INTO stop_photos (id, stop_id, photo_uid, hash, width, height, position, caption, included)
+  VALUES (@id, @stopId, @photoUid, @hash, @width, @height, @position, '', @included)
 `);
 
 export async function createStoryFromAlbum(albumUid) {
@@ -22,11 +22,7 @@ export async function createStoryFromAlbum(albumUid) {
   if (!album) throw new Error("Album not found");
 
   const photos = await getAlbumPhotos(albumUid);
-  const withThumbs = photos.map((p) => ({
-    ...p,
-    thumbUrl: p.thumbHash ? thumbUrl(p.thumbHash) : null,
-  }));
-  const stops = buildItinerary(withThumbs);
+  const stops = buildItinerary(photos);
 
   const storyId = randomUUID();
   const now = new Date().toISOString();
@@ -49,9 +45,9 @@ export async function createStoryFromAlbum(albumUid) {
       });
       // Stops from a real trip can have 50-100+ photos; defaulting all of
       // them to "included" would make the editor an unusable wall of
-      // caption boxes. Pre-select a small spread across the stop's time
-      // range so the story starts curated, and let the user add more.
-      const CURATED_PER_STOP = 6;
+      // caption boxes. Pre-select a spread across the stop's time range so
+      // the story starts curated, and let the user add more.
+      const CURATED_PER_STOP = 20;
       const step = Math.max(1, Math.floor(stop.photos.length / CURATED_PER_STOP));
 
       stop.photos.forEach((p, j) => {
@@ -59,7 +55,9 @@ export async function createStoryFromAlbum(albumUid) {
           id: randomUUID(),
           stopId,
           photoUid: p.uid,
-          thumbUrl: p.thumbUrl,
+          hash: p.thumbHash,
+          width: p.width || null,
+          height: p.height || null,
           position: j,
           included: j % step === 0 ? 1 : 0,
         });
@@ -117,7 +115,10 @@ export function getStory(id) {
       photos: photoStmt.all(s.id).map((p) => ({
         id: p.id,
         photoUid: p.photo_uid,
-        thumbUrl: p.thumb_url,
+        thumbUrl: p.hash ? thumbUrl(p.hash, "fit_720") : null,
+        fullUrl: p.hash ? thumbUrl(p.hash, "fit_2048") : null,
+        width: p.width,
+        height: p.height,
         position: p.position,
         caption: p.caption,
         included: !!p.included,

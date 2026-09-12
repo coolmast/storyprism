@@ -25,6 +25,10 @@ app.use(
   "/vendor/leaflet",
   express.static(path.join(__dirname, "../../node_modules/leaflet/dist"))
 );
+app.use(
+  "/vendor/photoswipe",
+  express.static(path.join(__dirname, "../../node_modules/photoswipe/dist"))
+);
 
 app.get("/api/albums", async (req, res) => {
   try {
