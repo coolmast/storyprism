@@ -72,6 +72,17 @@ export function renderStoryDeck(story) {
 
   const stopSlides = story.stops
     .map((stop, i) => {
+      // Same rule as the web view: a stop with nothing in it (every photo
+      // unchecked, no narrative/pullquote/embeds/info cards) shouldn't get
+      // its own slide.
+      const isEmpty =
+        includedByStop[i].length === 0 &&
+        !stop.narrative &&
+        !stop.pullQuote &&
+        !(stop.embeds || []).length &&
+        !(stop.infoCards || []).length;
+      if (isEmpty) return "";
+
       const featured = featuredByStop[i];
       const gridPhotos = featured
         ? includedByStop[i].filter((p) => p.id !== featured.id)

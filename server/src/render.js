@@ -142,6 +142,22 @@ export function renderStoryHtml(story, { editMode = false } = {}) {
 
   const stopsHtml = story.stops
     .map((stop, i) => {
+      // A stop the user emptied out (unchecked every photo) and never gave
+      // any other content shouldn't render as a bare heading+date with
+      // nothing under it - skip it entirely rather than leave a dead
+      // section on the finished page. Numbering below still uses the
+      // original index (not a renumbered count of visible stops only) so
+      // it stays consistent with the map markers, which number by the
+      // same original position.
+      const isEmpty =
+        includedByStop[i].length === 0 &&
+        !stop.narrative &&
+        !stop.pullQuote &&
+        !stop.research &&
+        !(stop.embeds || []).length &&
+        !(stop.infoCards || []).length;
+      if (isEmpty) return "";
+
       const featured = featuredByStop[i];
       const gridPhotos = featured
         ? includedByStop[i].filter((p) => p.id !== featured.id)
