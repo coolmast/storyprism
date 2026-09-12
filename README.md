@@ -53,14 +53,37 @@ view, a reveal.js presentation, or a printable PDF (either format).
     any place manually. Generating one is a web-search-backed AI call
     (`generateInfoCard`) that freely picks whatever facts actually fit the
     place (a national park gets area/flora, a museum gets founded
-    year/collection) rather than a fixed schema per place type.
+    year/collection) rather than a fixed schema per place type. Each card
+    also has a `placement` (`top`/`middle`/`end` — where it lands relative
+    to the stop's photos) and an optional `heroPhotoHash`, picked from the
+    stop's photos that matched the same place name/label used to generate
+    the card (`getMatchingPhotosForPlace` in `stories.js`, reusing the
+    exact place-matching logic from suggestion detection).
+  - Internationalization is two independent settings
+    (`server/src/i18n.js`): the story's `contentLanguage` (English/German/
+    Danish so far) drives everything AI-generated — captions, research,
+    interview replies, info cards, notes-import — via a `language` param
+    threaded through every provider call, plus the static chrome baked into
+    the rendered output itself (dates, the shuffle button, the footer,
+    PDF page-number label). It's stored per story and applied at render
+    time in `render.js`/`deck.js`/`pdf.js`, entirely separate from the
+    UI's own display language.
 - `web/` — React (Vite) frontend: album picker + map (M1), story list +
   editor (M2/M3) with theme picker, drag-to-reorder photo grid,
   featured-photo/pull-quote controls, a per-stop AI interview panel
   (`InterviewPanel.jsx`), a per-stop route-embed manager
-  (`RouteEmbeds.jsx`), a per-stop info-card manager (`InfoCards.jsx`), and
-  a story-level notes-import panel (`NotesImportPanel.jsx`), links out to
+  (`RouteEmbeds.jsx`), a per-stop info-card manager (`InfoCards.jsx`,
+  including the placement selector and hero-photo picker), and a
+  story-level notes-import panel (`NotesImportPanel.jsx`), links out to
   view/present/PDF export (M4).
+  - UI language is a separate concern from the story's content language:
+    `web/src/i18n.jsx` is a small dictionary + React context
+    (`LanguageProvider`/`useI18n`) covering every UI string, persisted to
+    `localStorage` and defaulting from `navigator.language` when it
+    matches a supported code. The content-language picker lives in
+    `StoryEditor.jsx` next to the theme picker and is per-story, so (per
+    the original ask) the UI can be in English while a story's AI text and
+    exported output come out in German.
 
 ## Running locally
 
@@ -100,7 +123,13 @@ useful for a second person to use the editor from their own device.
       writing (pasted or a blog URL) across the right stops
 - [x] Enriched place info cards, suggested from PhotoPrism place labels and
       photo titles (free, already-fetched data), generated on request via
-      web-search-backed AI with a flexible fact schema per place
+      web-search-backed AI with a flexible fact schema per place, with a
+      placement choice (right after the heading / mid-gallery / near the
+      end) and an optional hero photo picked from matching photos
+- [x] Internationalization — UI language (English/German/Danish) and a
+      story's content language are independent settings; content language
+      drives AI output and the rendered output's own chrome (dates,
+      footer, PDF page numbers)
 - [ ] Containerize (Dockerfiles + docker-compose) to run alongside PhotoPrism
       — deferred until this has been used for real and the deployment shape
       (same host as PhotoPrism? synced elsewhere?) is clearer
@@ -247,6 +276,35 @@ useful for a second person to use the editor from their own device.
   which made programmatic measurement unreliable). Worth a follow-up
   design pass if the deck's info-card slide bothers you visually; the web
   view and PDF don't have this issue.
+- **Every JSON-returning AI function is told to keep field names in
+  English and translate only the values**: without that instruction the
+  model translated JSON keys too when asked to respond in German/Danish,
+  which would have broken every caller that reads e.g. `card.summary` by
+  name. Verified in testing — German output correctly kept `subtitle`/
+  `summary`/`facts[].label` as keys while translating their contents (and
+  the fact *labels themselves*, e.g. "Established year" → "Gründungsjahr",
+  are values, not keys, so they do get translated, which is the point).
+- **A slide deck has no real "middle of the scroll"**, so while the web
+  view genuinely splits a stop's photo grid in half to slot a `middle`
+  card between the two halves (`photoGroup` in `render.js`, reusing the
+  existing print-pagination chunking for both halves), the deck
+  (`deck.js`) just treats `middle` and `end` cards the same way — both
+  land after all of a stop's grid slides. Documented as an intentional
+  simplification specific to the deck format, not a bug.
+- **`web/src/i18n.jsx` (not `.js`)**: it exports a React context provider
+  with JSX in its body, so Vite's rolldown-based build refuses to parse it
+  as plain `.js` ("JSX syntax is disabled") — caught immediately by
+  running a production build (`npx vite build`) after writing it, before
+  any manual testing. Any future i18n-adjacent frontend file that returns
+  JSX needs the same `.jsx` extension.
+- **Language-picker labels are native endonyms, not translated names**:
+  `/api/languages` returns "Deutsch"/"Dansk", not "German"/"Danish" run
+  through the current UI language — a language picker conventionally
+  shows each option in its own language regardless of UI locale. Kept
+  separate from `LANGUAGE_NAMES` (English names) in `server/src/i18n.js`,
+  which is still what gets fed into AI prompts ("Respond in German.") —
+  AI instruction wording and picker-label wording are different concerns
+  that happened to share one lookup table before this split.
 - Known flakiness in this dev environment (not a code issue per se): the
   backend intermittently crashes with a native-module assertion in
   `better-sqlite3` on startup under this box's Node 24.20.0 build —

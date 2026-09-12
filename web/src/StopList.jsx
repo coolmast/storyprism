@@ -1,13 +1,16 @@
-function formatRange(start, end) {
+import { useI18n } from "./i18n.jsx";
+
+function formatRange(start, end, locale) {
   const s = new Date(start);
   const e = new Date(end);
   const opts = { day: "numeric", month: "short" };
   return s.toDateString() === e.toDateString()
-    ? s.toLocaleDateString(undefined, opts)
-    : `${s.toLocaleDateString(undefined, opts)} – ${e.toLocaleDateString(undefined, opts)}`;
+    ? s.toLocaleDateString(locale, opts)
+    : `${s.toLocaleDateString(locale, opts)} – ${e.toLocaleDateString(locale, opts)}`;
 }
 
 export default function StopList({ stops }) {
+  const { t, locale } = useI18n();
   return (
     <ol className="stop-list">
       {stops.map((s) => (
@@ -20,8 +23,10 @@ export default function StopList({ stops }) {
               )}
             </div>
             <div className="stop-meta">
-              <h3>{s.placeCity || s.placeLabel || "Unknown place"}</h3>
-              <span>{formatRange(s.startedAt, s.endedAt)} · {s.photoCount} photos</span>
+              <h3>{s.placeCity || s.placeLabel || t("unknownPlace")}</h3>
+              <span>
+                {formatRange(s.startedAt, s.endedAt, locale)} · {t("photosCount", s.photoCount)}
+              </span>
             </div>
           </div>
         </li>

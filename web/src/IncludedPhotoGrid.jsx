@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import Sortable from "sortablejs";
+import { useI18n } from "./i18n.jsx";
 
 // Drag handle keeps the checkbox/textarea/buttons inside each card
 // clickable - Sortable only starts a drag from ".drag-handle".
@@ -12,6 +13,7 @@ export default function IncludedPhotoGrid({
   onDraftCaption,
   busy,
 }) {
+  const { t } = useI18n();
   const gridRef = useRef(null);
 
   useEffect(() => {
@@ -34,7 +36,7 @@ export default function IncludedPhotoGrid({
     <div className="photo-grid" ref={gridRef}>
       {photos.map((photo) => (
         <div className={`photo-card ${photo.featured ? "featured" : ""}`} key={photo.id}>
-          <span className="drag-handle" title="Drag to reorder">
+          <span className="drag-handle" title={t("dragHandleTitle")}>
             &#10021;
           </span>
           {photo.thumbUrl && <img src={photo.thumbUrl} alt="" />}
@@ -45,18 +47,18 @@ export default function IncludedPhotoGrid({
                 checked={photo.included}
                 onChange={(e) => onUpdatePhoto(stopId, photo.id, { included: e.target.checked })}
               />
-              include
+              {t("include")}
             </label>
             <button
               className="feature-btn"
-              title={photo.featured ? "Featured photo for this stop" : "Make this the featured photo"}
+              title={photo.featured ? t("featuredTitle") : t("makeFeaturedTitle")}
               onClick={() => onToggleFeatured(stopId, photo.id)}
             >
-              {photo.featured ? "★ Featured" : "☆ Feature"}
+              {photo.featured ? t("featuredBtn") : t("featureBtn")}
             </button>
           </div>
           <textarea
-            placeholder="Caption…"
+            placeholder={t("captionPlaceholder")}
             value={photo.caption}
             onChange={(e) => onUpdatePhoto(stopId, photo.id, { caption: e.target.value })}
           />
@@ -65,7 +67,7 @@ export default function IncludedPhotoGrid({
             onClick={() => onDraftCaption(stopId, photo.id)}
             disabled={busy === photo.id}
           >
-            {busy === photo.id ? "…" : "✨ Draft caption"}
+            {busy === photo.id ? "…" : t("draftCaptionBtn")}
           </button>
         </div>
       ))}

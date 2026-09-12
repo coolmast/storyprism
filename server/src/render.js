@@ -1,5 +1,6 @@
 import { getTheme } from "./themes.js";
 import { isEmbeddable } from "./embeds.js";
+import { getStrings } from "./i18n.js";
 
 function escapeHtml(str = "") {
   return String(str).replace(/[&<>"']/g, (c) => ({
@@ -19,16 +20,16 @@ function paragraphs(text) {
     .join("\n");
 }
 
-function dateRange(start, end) {
+function dateRange(start, end, locale) {
   const opts = { day: "numeric", month: "long", year: "numeric" };
-  const s = new Date(start).toLocaleDateString("en-GB", opts);
-  const e = new Date(end).toLocaleDateString("en-GB", opts);
+  const s = new Date(start).toLocaleDateString(locale, opts);
+  const e = new Date(end).toLocaleDateString(locale, opts);
   return s === e ? s : `${s} &ndash; ${e}`;
 }
 
-function tripDateRange(stops) {
+function tripDateRange(stops, locale) {
   if (stops.length === 0) return "";
-  return dateRange(stops[0].startedAt, stops[stops.length - 1].endedAt);
+  return dateRange(stops[0].startedAt, stops[stops.length - 1].endedAt, locale);
 }
 
 function chunk(arr, size) {
@@ -49,7 +50,7 @@ function photoFigure(p, fallbackAlt) {
     </figure>`;
 }
 
-function embedBlock(embed) {
+function embedBlock(embed, strings) {
   if (isEmbeddable(embed.url)) {
     return `
     <div class="route-embed">
@@ -62,13 +63,14 @@ function embedBlock(embed) {
   }
   return `
     <a class="route-embed-link" href="${escapeHtml(embed.url)}" target="_blank" rel="noreferrer">
-      🏔 View "${escapeHtml(embed.title || embed.provider)}" on ${escapeHtml(embed.provider)} ↗
+      ${strings.viewOn(embed.title || embed.provider, embed.provider)}
     </a>`;
 }
 
 function infoCardBlock(card) {
   return `
     <div class="info-card">
+      ${card.heroPhotoUrl ? `<img class="info-card-hero" src="${escapeHtml(card.heroPhotoUrl)}" alt="${escapeHtml(card.placeName)}">` : ""}
       <div class="info-card-header">
         <h3>${escapeHtml(card.placeName)}</h3>
         ${card.subtitle ? `<p class="info-card-subtitle">${escapeHtml(card.subtitle)}</p>` : ""}
@@ -94,8 +96,25 @@ function infoCardBlock(card) {
 // any, doesn't count against this - it gets its own full-width treatment.
 const PHOTOS_PER_PRINTED_PAGE = 6;
 
+function photoGroup(photos, groupKey, stopHeading, strings) {
+  if (!photos.length) return "";
+  return chunk(photos, PHOTOS_PER_PRINTED_PAGE)
+    .map((pagePhotos, ci) => {
+      const mosaicId = `mosaic-${groupKey}-${ci}`;
+      return `
+      <div class="photo-mosaic-page">
+        <div class="photo-mosaic" id="${mosaicId}">
+          ${pagePhotos.map((p) => photoFigure(p, stopHeading)).join("\n")}
+        </div>
+        <button class="shuffle-btn no-print" onclick="shuffleMosaic('${mosaicId}')">${strings.shuffleLayout}</button>
+      </div>`;
+    })
+    .join("\n");
+}
+
 export function renderStoryHtml(story) {
   const theme = getTheme(story.theme);
+  const strings = getStrings(story.contentLanguage);
   const includedByStop = story.stops.map((s) => s.photos.filter((p) => p.included));
   const featuredByStop = includedByStop.map((photos) => photos.find((p) => p.featured));
   const coverPhoto = (featuredByStop.find(Boolean) || includedByStop.flat()[0])?.thumbUrl;
@@ -114,14 +133,34 @@ export function renderStoryHtml(story) {
         ? includedByStop[i].filter((p) => p.id !== featured.id)
         : includedByStop[i];
 
+      const cards = stop.infoCards || [];
+      const topCards = cards.filter((c) => (c.placement || "top") === "top");
+      const middleCards = cards.filter((c) => c.placement === "middle");
+      const endCards = cards.filter((c) => c.placement === "end");
+
+      // A "middle" card splits the photo grid in two, so it visually lands
+      // partway through the stop's photos rather than always at the top or
+      // bottom - each half paginates independently for print.
+      const photosHtml = middleCards.length
+        ? (() => {
+            const mid = Math.ceil(gridPhotos.length / 2);
+            return (
+              photoGroup(gridPhotos.slice(0, mid), `${i}a`, stop.heading, strings) +
+              middleCards.map(infoCardBlock).join("\n") +
+              photoGroup(gridPhotos.slice(mid), `${i}b`, stop.heading, strings)
+            );
+          })()
+        : photoGroup(gridPhotos, `${i}`, stop.heading, strings);
+
       return `
     <section class="stop" id="stop-${i}">
       <div class="stop-head">
         <h2><span class="stop-number">${i + 1}</span>${escapeHtml(stop.heading)}</h2>
-        <p class="stop-dates">${dateRange(stop.startedAt, stop.endedAt)}</p>
+        <p class="stop-dates">${dateRange(stop.startedAt, stop.endedAt, strings.dateLocale)}</p>
       </div>
       ${stop.narrative ? `<div class="narrative">${paragraphs(stop.narrative)}</div>` : ""}
       ${stop.pullQuote ? `<blockquote class="pull-quote">${escapeHtml(stop.pullQuote)}</blockquote>` : ""}
+      ${topCards.map(infoCardBlock).join("\n")}
       ${
         featured
           ? `<figure class="featured-photo">
@@ -135,30 +174,15 @@ export function renderStoryHtml(story) {
           : ""
       }
       ${stop.research ? `<aside class="research"><p>${escapeHtml(stop.research)}</p></aside>` : ""}
-      ${(stop.infoCards || []).map(infoCardBlock).join("\n")}
-      ${(stop.embeds || []).map(embedBlock).join("\n")}
-      ${
-        gridPhotos.length
-          ? chunk(gridPhotos, PHOTOS_PER_PRINTED_PAGE)
-              .map((pagePhotos, ci) => {
-                const mosaicId = `mosaic-${i}-${ci}`;
-                return `
-      <div class="photo-mosaic-page">
-        <div class="photo-mosaic" id="${mosaicId}">
-          ${pagePhotos.map((p) => photoFigure(p, stop.heading)).join("\n")}
-        </div>
-        <button class="shuffle-btn no-print" onclick="shuffleMosaic('${mosaicId}')">&#128256; Shuffle layout</button>
-      </div>`;
-              })
-              .join("\n")
-          : ""
-      }
+      ${(stop.embeds || []).map((e) => embedBlock(e, strings)).join("\n")}
+      ${photosHtml}
+      ${endCards.map(infoCardBlock).join("\n")}
     </section>`;
     })
     .join("\n");
 
   return `<!doctype html>
-<html lang="en">
+<html lang="${story.contentLanguage || "en"}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -241,7 +265,11 @@ export function renderStoryHtml(story) {
   }
   .info-card {
     border: 1px solid var(--line); border-radius: 10px;
-    padding: 1.1rem 1.3rem; margin: 1.2rem 0; background: var(--sand);
+    padding: 1.1rem 1.3rem; margin: 1.2rem 0; background: var(--sand); overflow: hidden;
+  }
+  .info-card-hero {
+    display: block; width: calc(100% + 2.6rem); margin: -1.1rem -1.3rem 1rem;
+    max-height: 280px; object-fit: cover;
   }
   .info-card-header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
   .info-card-header h3 { margin: 0; font-family: var(--heading-font); }
@@ -303,7 +331,7 @@ export function renderStoryHtml(story) {
   <div class="hero" ${coverPhoto ? `style="background-image:url('${escapeHtml(coverPhoto)}')"` : ""}>
     <div class="hero-text">
       <h1>${escapeHtml(story.title)}</h1>
-      <p class="dates">${tripDateRange(story.stops)}</p>
+      <p class="dates">${tripDateRange(story.stops, strings.dateLocale)}</p>
     </div>
   </div>
   <main>
@@ -311,7 +339,7 @@ export function renderStoryHtml(story) {
     ${mapPoints.length ? `<div id="map"></div>` : ""}
     ${stopsHtml}
     ${story.outro ? `<div class="outro">${paragraphs(story.outro)}</div>` : ""}
-    <footer>${escapeHtml(story.albumTitle)} &middot; built with Story Builder</footer>
+    <footer>${strings.builtWith(escapeHtml(story.albumTitle))}</footer>
   </main>
   <script src="/vendor/leaflet/leaflet.js"></script>
   <script src="/vendor/photoswipe/umd/photoswipe.umd.min.js"></script>

@@ -1,25 +1,35 @@
 import { useEffect, useState } from "react";
-import { saveStory, draftCaption, researchPlace, fetchThemes } from "./api.js";
+import { saveStory, draftCaption, researchPlace, fetchThemes, fetchLanguages } from "./api.js";
 import IncludedPhotoGrid from "./IncludedPhotoGrid.jsx";
 import InterviewPanel from "./InterviewPanel.jsx";
 import RouteEmbeds from "./RouteEmbeds.jsx";
 import NotesImportPanel from "./NotesImportPanel.jsx";
 import InfoCards from "./InfoCards.jsx";
+import { useI18n } from "./i18n.jsx";
 
-function formatRange(start, end) {
+const THEME_LABEL_KEY = {
+  coastal: "themeCoastal",
+  monochrome: "themeMonochrome",
+  vintage: "themeVintage",
+  bold: "themeBold",
+};
+
+function formatRange(start, end, locale) {
   const opts = { day: "numeric", month: "short", year: "numeric" };
-  const s = new Date(start).toLocaleDateString(undefined, opts);
-  const e = new Date(end).toLocaleDateString(undefined, opts);
+  const s = new Date(start).toLocaleDateString(locale, opts);
+  const e = new Date(end).toLocaleDateString(locale, opts);
   return s === e ? s : `${s} – ${e}`;
 }
 
 export default function StoryEditor({ story, onBack, onSaved }) {
+  const { t, locale } = useI18n();
   const [draft, setDraft] = useState(story);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(null); // id of photo/stop currently asking AI
   const [aiError, setAiError] = useState(null);
   const [themes, setThemes] = useState([]);
+  const [languages, setLanguages] = useState([]);
 
   useEffect(() => {
     setDraft(story);
@@ -28,6 +38,7 @@ export default function StoryEditor({ story, onBack, onSaved }) {
 
   useEffect(() => {
     fetchThemes().then(setThemes).catch(() => {});
+    fetchLanguages().then(setLanguages).catch(() => {});
   }, []);
 
   function markDirty(updater) {
@@ -130,22 +141,22 @@ export default function StoryEditor({ story, onBack, onSaved }) {
   return (
     <div className="story-editor">
       <div className="editor-toolbar">
-        <button className="link-btn" onClick={onBack}>← My Stories</button>
+        <button className="link-btn" onClick={onBack}>{t("backToStories")}</button>
         <div className="toolbar-actions">
           <a className="link-btn" href={`/story/${draft.id}`} target="_blank" rel="noreferrer">
-            View story ↗
+            {t("viewStory")}
           </a>
           <a className="link-btn" href={`/story/${draft.id}/present`} target="_blank" rel="noreferrer">
-            Present ↗
+            {t("present")}
           </a>
           <a className="link-btn" href={`/api/stories/${draft.id}/export/pdf`}>
-            Download PDF ↓
+            {t("downloadPdf")}
           </a>
           <a className="link-btn" href={`/api/stories/${draft.id}/export/deck-pdf`}>
-            Download Slides ↓
+            {t("downloadSlides")}
           </a>
           <button className="save-btn" onClick={handleSave} disabled={saving || !dirty}>
-            {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
+            {saving ? t("saving") : dirty ? t("saveChanges") : t("saved")}
           </button>
         </div>
       </div>
@@ -159,26 +170,39 @@ export default function StoryEditor({ story, onBack, onSaved }) {
       />
 
       <div className="theme-picker">
-        {themes.map((t) => (
+        {themes.map((theme) => (
           <button
-            key={t.id}
-            className={`theme-swatch ${draft.theme === t.id ? "active" : ""}`}
-            title={t.label}
-            onClick={() => markDirty((d) => ({ ...d, theme: t.id }))}
+            key={theme.id}
+            className={`theme-swatch ${draft.theme === theme.id ? "active" : ""}`}
+            title={THEME_LABEL_KEY[theme.id] ? t(THEME_LABEL_KEY[theme.id]) : theme.label}
+            onClick={() => markDirty((d) => ({ ...d, theme: theme.id }))}
           >
             <span className="theme-swatch-colors">
-              {t.swatch.map((c, i) => (
+              {theme.swatch.map((c, i) => (
                 <span key={i} style={{ background: c }} />
               ))}
             </span>
-            {t.label}
+            {THEME_LABEL_KEY[theme.id] ? t(THEME_LABEL_KEY[theme.id]) : theme.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="lang-picker">
+        <span className="lang-picker-label">{t("contentLanguageLabel")}</span>
+        {languages.map((l) => (
+          <button
+            key={l.code}
+            className={`lang-picker-btn ${draft.contentLanguage === l.code ? "active" : ""}`}
+            onClick={() => markDirty((d) => ({ ...d, contentLanguage: l.code }))}
+          >
+            {l.label}
           </button>
         ))}
       </div>
 
       <textarea
         className="story-intro"
-        placeholder="Write an intro for this story…"
+        placeholder={t("introPlaceholder")}
         value={draft.intro}
         onChange={(e) => markDirty((d) => ({ ...d, intro: e.target.value }))}
       />
@@ -197,19 +221,19 @@ export default function StoryEditor({ story, onBack, onSaved }) {
               value={stop.heading}
               onChange={(e) => updateStop(stop.id, { heading: e.target.value })}
             />
-            <span className="stop-dates">{formatRange(stop.startedAt, stop.endedAt)}</span>
+            <span className="stop-dates">{formatRange(stop.startedAt, stop.endedAt, locale)}</span>
           </div>
 
           <textarea
             className="stop-narrative"
-            placeholder="What happened here?"
+            placeholder={t("narrativePlaceholder")}
             value={stop.narrative}
             onChange={(e) => updateStop(stop.id, { narrative: e.target.value })}
           />
 
           <input
             className="stop-pull-quote-input"
-            placeholder="Pull quote (optional) — one striking line, rendered large"
+            placeholder={t("pullQuotePlaceholder")}
             value={stop.pullQuote || ""}
             onChange={(e) => updateStop(stop.id, { pullQuote: e.target.value })}
           />
@@ -231,7 +255,7 @@ export default function StoryEditor({ story, onBack, onSaved }) {
               onClick={() => handleResearch(stop.id)}
               disabled={busy === stop.id}
             >
-              {busy === stop.id ? "Researching…" : "✨ Research this place"}
+              {busy === stop.id ? t("researching") : t("researchThisPlace")}
             </button>
             {stop.research && (
               <textarea
@@ -256,8 +280,7 @@ export default function StoryEditor({ story, onBack, onSaved }) {
           />
 
           <p className="photo-count-hint">
-            {stop.photos.filter((p) => p.included).length} of {stop.photos.length} photos in the
-            story — drag &#10021; to reorder, check more below to add them.
+            {t("photoCountHint", stop.photos.filter((p) => p.included).length, stop.photos.length)}
           </p>
 
           <IncludedPhotoGrid
@@ -273,7 +296,7 @@ export default function StoryEditor({ story, onBack, onSaved }) {
           {stop.photos.some((p) => !p.included) && (
             <details className="more-photos">
               <summary>
-                {stop.photos.filter((p) => !p.included).length} more photos from this stop
+                {t("morePhotosSummary", stop.photos.filter((p) => !p.included).length)}
               </summary>
               <div className="thumb-grid">
                 {stop.photos
@@ -296,7 +319,7 @@ export default function StoryEditor({ story, onBack, onSaved }) {
 
       <textarea
         className="story-outro"
-        placeholder="Write an outro for this story…"
+        placeholder={t("outroPlaceholder")}
         value={draft.outro}
         onChange={(e) => markDirty((d) => ({ ...d, outro: e.target.value }))}
       />

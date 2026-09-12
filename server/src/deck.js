@@ -1,5 +1,6 @@
 import { getTheme } from "./themes.js";
 import { isEmbeddable } from "./embeds.js";
+import { getStrings } from "./i18n.js";
 
 function escapeHtml(str = "") {
   return String(str).replace(/[&<>"']/g, (c) => ({
@@ -11,16 +12,16 @@ function escapeHtml(str = "") {
   }[c]));
 }
 
-function dateRange(start, end) {
+function dateRange(start, end, locale) {
   const opts = { day: "numeric", month: "long", year: "numeric" };
-  const s = new Date(start).toLocaleDateString("en-GB", opts);
-  const e = new Date(end).toLocaleDateString("en-GB", opts);
+  const s = new Date(start).toLocaleDateString(locale, opts);
+  const e = new Date(end).toLocaleDateString(locale, opts);
   return s === e ? s : `${s} &ndash; ${e}`;
 }
 
-function tripDateRange(stops) {
+function tripDateRange(stops, locale) {
   if (stops.length === 0) return "";
-  return dateRange(stops[0].startedAt, stops[stops.length - 1].endedAt);
+  return dateRange(stops[0].startedAt, stops[stops.length - 1].endedAt, locale);
 }
 
 function chunk(arr, size) {
@@ -37,31 +38,10 @@ const PHOTOS_PER_SLIDE = 6;
 // rest - while left/right moves between stops. No map here; reveal.js's
 // fixed-size slides don't suit an interactive Leaflet map, and the web
 // view already covers that.
-export function renderStoryDeck(story) {
-  const theme = getTheme(story.theme);
-  const includedByStop = story.stops.map((s) => s.photos.filter((p) => p.included));
-  const featuredByStop = includedByStop.map((photos) => photos.find((p) => p.featured));
-  const coverPhoto = (featuredByStop.find(Boolean) || includedByStop.flat()[0])?.thumbUrl;
-
-  const stopSlides = story.stops
-    .map((stop, i) => {
-      const featured = featuredByStop[i];
-      const gridPhotos = featured
-        ? includedByStop[i].filter((p) => p.id !== featured.id)
-        : includedByStop[i];
-
-      const textSlide = `
+function infoCardSlide(card) {
+  return `
       <section>
-        <h2><span class="deck-number">${i + 1}</span>${escapeHtml(stop.heading)}</h2>
-        <p class="deck-dates">${dateRange(stop.startedAt, stop.endedAt)}</p>
-        ${stop.narrative ? `<p class="deck-narrative">${escapeHtml(stop.narrative)}</p>` : ""}
-        ${stop.pullQuote ? `<blockquote class="deck-quote">${escapeHtml(stop.pullQuote)}</blockquote>` : ""}
-      </section>`;
-
-      const infoCardSlides = (stop.infoCards || [])
-        .map(
-          (card) => `
-      <section>
+        ${card.heroPhotoUrl ? `<img class="deck-card-hero" src="${escapeHtml(card.heroPhotoUrl)}" alt="${escapeHtml(card.placeName)}">` : ""}
         <h2>${escapeHtml(card.placeName)}</h2>
         ${card.subtitle ? `<p class="deck-dates">${escapeHtml(card.subtitle)}</p>` : ""}
         ${card.summary ? `<p class="deck-narrative">${escapeHtml(card.summary)}</p>` : ""}
@@ -76,8 +56,42 @@ export function renderStoryDeck(story) {
         </div>`
             : ""
         }
-      </section>`
-        )
+      </section>`;
+}
+
+export function renderStoryDeck(story) {
+  const theme = getTheme(story.theme);
+  const strings = getStrings(story.contentLanguage);
+  const includedByStop = story.stops.map((s) => s.photos.filter((p) => p.included));
+  const featuredByStop = includedByStop.map((photos) => photos.find((p) => p.featured));
+  const coverPhoto = (featuredByStop.find(Boolean) || includedByStop.flat()[0])?.thumbUrl;
+
+  const stopSlides = story.stops
+    .map((stop, i) => {
+      const featured = featuredByStop[i];
+      const gridPhotos = featured
+        ? includedByStop[i].filter((p) => p.id !== featured.id)
+        : includedByStop[i];
+
+      const textSlide = `
+      <section>
+        <h2><span class="deck-number">${i + 1}</span>${escapeHtml(stop.heading)}</h2>
+        <p class="deck-dates">${dateRange(stop.startedAt, stop.endedAt, strings.dateLocale)}</p>
+        ${stop.narrative ? `<p class="deck-narrative">${escapeHtml(stop.narrative)}</p>` : ""}
+        ${stop.pullQuote ? `<blockquote class="deck-quote">${escapeHtml(stop.pullQuote)}</blockquote>` : ""}
+      </section>`;
+
+      // A slide deck has no real "middle of the scroll" - top-placed cards
+      // get a slide before the photo grids (matching the web view), while
+      // middle/end ones both just land after the grids in this format.
+      const cards = stop.infoCards || [];
+      const topCardSlides = cards
+        .filter((c) => (c.placement || "top") === "top")
+        .map(infoCardSlide)
+        .join("\n");
+      const laterCardSlides = cards
+        .filter((c) => c.placement === "middle" || c.placement === "end")
+        .map(infoCardSlide)
         .join("\n");
 
       // Only embeddable (allowlisted + a real /embed link) routes get their
@@ -125,12 +139,12 @@ export function renderStoryDeck(story) {
         )
         .join("\n");
 
-      return `<section>${textSlide}${infoCardSlides}${embedSlides}${featuredSlide}${gridSlides}</section>`;
+      return `<section>${textSlide}${topCardSlides}${embedSlides}${featuredSlide}${gridSlides}${laterCardSlides}</section>`;
     })
     .join("\n");
 
   return `<!doctype html>
-<html lang="en">
+<html lang="${story.contentLanguage || "en"}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -202,6 +216,7 @@ export function renderStoryDeck(story) {
     background: linear-gradient(to top, rgba(0,0,0,0.75), rgba(0,0,0,0.25) 70%);
   }
   .deck-embed-title { margin: 0 0 0.4em 0; }
+  .deck-card-hero { width: 100%; max-height: 32vh; object-fit: cover; border-radius: 8px; margin-bottom: 0.5em; display: block; }
   .deck-facts {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: 0.5em 1em; margin-top: 0.8em; font-size: 0.6em;
@@ -226,7 +241,7 @@ export function renderStoryDeck(story) {
     <div class="slides">
       <section class="bg-slide cover-slide" ${coverPhoto ? `data-background-image="${escapeHtml(coverPhoto)}" data-background-size="cover"` : ""}>
         <h1>${escapeHtml(story.title)}</h1>
-        <p class="deck-dates">${tripDateRange(story.stops)}</p>
+        <p class="deck-dates">${tripDateRange(story.stops, strings.dateLocale)}</p>
       </section>
       ${story.intro ? `<section><p class="deck-narrative">${escapeHtml(story.intro)}</p></section>` : ""}
       ${stopSlides}

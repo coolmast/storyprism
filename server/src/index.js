@@ -11,7 +11,9 @@ import {
   getStory,
   updateStory,
   deleteStory,
+  getMatchingPhotosForPlace,
 } from "./stories.js";
+import { LANGUAGES, NATIVE_LANGUAGE_NAMES, languageName } from "./i18n.js";
 import { getProvider } from "./ai/index.js";
 import { renderStoryHtml } from "./render.js";
 import { renderStoryDeck } from "./deck.js";
@@ -46,6 +48,10 @@ app.get("/api/themes", (req, res) => {
   );
 });
 
+app.get("/api/languages", (req, res) => {
+  res.json(LANGUAGES.map((code) => ({ code, label: NATIVE_LANGUAGE_NAMES[code] })));
+});
+
 app.get("/api/albums", async (req, res) => {
   try {
     res.json(await listAlbums());
@@ -75,9 +81,9 @@ app.get("/api/stories", (req, res) => {
 
 app.post("/api/stories", async (req, res) => {
   try {
-    const { albumUid } = req.body;
+    const { albumUid, contentLanguage } = req.body;
     if (!albumUid) return res.status(400).json({ error: "albumUid is required" });
-    res.status(201).json(await createStoryFromAlbum(albumUid));
+    res.status(201).json(await createStoryFromAlbum(albumUid, contentLanguage));
   } catch (err) {
     console.error(err);
     res.status(502).json({ error: err.message });
@@ -115,6 +121,7 @@ app.post("/api/stories/:id/stops/:stopId/photos/:photoId/draft-caption", async (
       place: stop.heading || stop.placeLabel,
       date: stop.startedAt,
       storyTitle: story.title,
+      language: languageName(story.contentLanguage),
     });
     res.json({ caption });
   } catch (err) {
@@ -133,6 +140,7 @@ app.post("/api/stories/:id/stops/:stopId/research", async (req, res) => {
       place: stop.heading || stop.placeLabel || "this place",
       storyTitle: story.title,
       dateRange: new Date(stop.startedAt).toLocaleDateString(),
+      language: languageName(story.contentLanguage),
     });
     res.json({ research });
   } catch (err) {
@@ -154,6 +162,7 @@ app.post("/api/stories/:id/stops/:stopId/interview", async (req, res) => {
       captions: stop.photos.filter((p) => p.included && p.caption).map((p) => p.caption),
       research: stop.research,
       history: Array.isArray(req.body.history) ? req.body.history : [],
+      language: languageName(story.contentLanguage),
     });
     res.json({ reply });
   } catch (err) {
@@ -174,6 +183,7 @@ app.post("/api/stories/:id/stops/:stopId/interview/draft", async (req, res) => {
       captions: stop.photos.filter((p) => p.included && p.caption).map((p) => p.caption),
       research: stop.research,
       history: Array.isArray(req.body.history) ? req.body.history : [],
+      language: languageName(story.contentLanguage),
     });
     res.json(result);
   } catch (err) {
@@ -199,6 +209,7 @@ app.post("/api/stories/:id/import-notes", async (req, res) => {
     const suggestions = await getProvider().organizeNotesIntoStory({
       storyTitle: story.title,
       notesText,
+      language: languageName(story.contentLanguage),
       stops: story.stops.map((s) => ({
         id: s.id,
         heading: s.heading || s.placeLabel || "Stop",
@@ -226,12 +237,20 @@ app.post("/api/stories/:id/stops/:stopId/info-cards", async (req, res) => {
     const card = await getProvider().generateInfoCard({
       placeName,
       context: stop.heading !== placeName ? `near ${stop.heading}` : "",
+      language: languageName(story.contentLanguage),
     });
     res.json({ placeName, ...card });
   } catch (err) {
     console.error(err);
     res.status(502).json({ error: err.message });
   }
+});
+
+app.get("/api/stories/:id/stops/:stopId/places/:placeName/photos", (req, res) => {
+  const story = getStory(req.params.id);
+  const stop = story?.stops.find((s) => s.id === req.params.stopId);
+  if (!stop) return res.status(404).json({ error: "Not found" });
+  res.json(getMatchingPhotosForPlace(stop.id, req.params.placeName));
 });
 
 app.get("/story/:id", (req, res) => {
@@ -251,7 +270,7 @@ app.get("/api/stories/:id/export/pdf", async (req, res) => {
   if (!story) return res.status(404).json({ error: "Not found" });
 
   try {
-    const pdf = await renderStoryPdf(`http://localhost:${port}/story/${story.id}`);
+    const pdf = await renderStoryPdf(`http://localhost:${port}/story/${story.id}`, story.contentLanguage);
     res
       .type("application/pdf")
       .set("Content-Disposition", `attachment; filename="${story.title.replace(/[^\w -]/g, "")}.pdf"`)

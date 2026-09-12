@@ -11,15 +11,16 @@ export const fetchItinerary = (albumUid) =>
   fetch(`/api/albums/${albumUid}/itinerary`).then(json);
 
 export const fetchThemes = () => fetch("/api/themes").then(json);
+export const fetchLanguages = () => fetch("/api/languages").then(json);
 
 export const fetchStories = () => fetch("/api/stories").then(json);
 export const fetchStory = (id) => fetch(`/api/stories/${id}`).then(json);
 
-export const createStory = (albumUid) =>
+export const createStory = (albumUid, contentLanguage) =>
   fetch("/api/stories", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ albumUid }),
+    body: JSON.stringify({ albumUid, contentLanguage }),
   }).then(json);
 
 export const saveStory = (id, data) =>
@@ -69,3 +70,8 @@ export const generateInfoCard = (storyId, stopId, placeName) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ placeName }),
   }).then(json);
+
+export const fetchMatchingPhotos = (storyId, stopId, placeName) =>
+  fetch(
+    `/api/stories/${storyId}/stops/${stopId}/places/${encodeURIComponent(placeName)}/photos`
+  ).then(json);

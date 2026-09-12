@@ -5,9 +5,13 @@ import ItineraryMap from "./ItineraryMap.jsx";
 import StopList from "./StopList.jsx";
 import StoryList from "./StoryList.jsx";
 import StoryEditor from "./StoryEditor.jsx";
+import { useI18n, UI_LANGUAGES } from "./i18n.jsx";
 import "./App.css";
 
+const LANG_FLAG = { en: "🇬🇧", de: "🇩🇪", da: "🇩🇰" };
+
 export default function App() {
+  const { lang, setLang, t } = useI18n();
   const [tab, setTab] = useState("new"); // "new" | "stories" | "editor"
 
   const [albums, setAlbums] = useState([]);
@@ -46,7 +50,7 @@ export default function App() {
     setCreating(true);
     setError(null);
     try {
-      const story = await createStory(selectedUid);
+      const story = await createStory(selectedUid, lang);
       setActiveStory(story);
       setTab("editor");
     } catch (e) {
@@ -63,7 +67,7 @@ export default function App() {
   }
 
   async function removeStory(id) {
-    if (!confirm("Delete this story? This can't be undone.")) return;
+    if (!confirm(t("deleteStoryConfirm"))) return;
     await deleteStory(id);
     refreshStories();
   }
@@ -73,16 +77,27 @@ export default function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Story Builder</h1>
-        <span>Turn a PhotoPrism album into a travel story</span>
+        <h1>{t("appTitle")}</h1>
+        <span>{t("appTagline")}</span>
         <nav className="tabs">
           <button className={tab === "new" ? "active" : ""} onClick={() => setTab("new")}>
-            New Story
+            {t("tabNewStory")}
           </button>
           <button className={tab === "stories" ? "active" : ""} onClick={() => setTab("stories")}>
-            My Stories
+            {t("tabMyStories")}
           </button>
         </nav>
+        <div className="lang-switcher" title={t("uiLanguageLabel")}>
+          {UI_LANGUAGES.map((code) => (
+            <button
+              key={code}
+              className={lang === code ? "active" : ""}
+              onClick={() => setLang(code)}
+            >
+              {LANG_FLAG[code]} {code.toUpperCase()}
+            </button>
+          ))}
+        </div>
       </header>
 
       {tab === "new" && (
@@ -92,16 +107,16 @@ export default function App() {
             <AlbumList albums={albums} selectedUid={selectedUid} onSelect={setSelectedUid} />
           </aside>
           <main className="content">
-            {!selectedUid && <p className="hint">Pick an album to build its itinerary.</p>}
+            {!selectedUid && <p className="hint">{t("pickAlbumHint")}</p>}
             {selectedUid && (
               <>
                 <div className="content-header">
                   <h2>{selectedAlbum?.title}</h2>
                   <button className="save-btn" onClick={handleCreateStory} disabled={creating}>
-                    {creating ? "Creating…" : "Create story from this album"}
+                    {creating ? t("creating") : t("createStoryBtn")}
                   </button>
                 </div>
-                {loading && <p>Loading itinerary…</p>}
+                {loading && <p>{t("loadingItinerary")}</p>}
                 {!loading && (
                   <>
                     <ItineraryMap stops={stops} />
@@ -117,7 +132,7 @@ export default function App() {
       {tab === "stories" && (
         <div className="app-body single">
           <main className="content">
-            <h2>My Stories</h2>
+            <h2>{t("myStoriesTitle")}</h2>
             {error && <p className="error">{error}</p>}
             <StoryList stories={stories} onOpen={openStory} onDelete={removeStory} />
           </main>

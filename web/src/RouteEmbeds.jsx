@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { detectProvider } from "./embeds.js";
+import { useI18n } from "./i18n.jsx";
 
 export default function RouteEmbeds({ embeds, onChange }) {
+  const { t } = useI18n();
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
 
@@ -31,7 +33,7 @@ export default function RouteEmbeds({ embeds, onChange }) {
                 {e.title || e.url}
               </a>
               <button className="link-btn" onClick={() => remove(e.id)}>
-                Remove
+                {t("removeBtn")}
               </button>
             </li>
           ))}
@@ -39,23 +41,20 @@ export default function RouteEmbeds({ embeds, onChange }) {
       )}
       <div className="route-embed-add">
         <input
-          placeholder="Paste a Strava/Komoot/Garmin route link…"
+          placeholder={t("pasteRouteLink")}
           value={url}
           onChange={(e) => setUrl(e.target.value)}
         />
         <input
-          placeholder="Title (optional)"
+          placeholder={t("titleOptional")}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
         <button className="ai-btn small" onClick={add} disabled={!url.trim()}>
-          Add route
+          {t("addRoute")}
         </button>
       </div>
-      <p className="route-embed-hint">
-        Use the service's "Embed" share link for an interactive map on the page; any other link just
-        shows as a button out to the route.
-      </p>
+      <p className="route-embed-hint">{t("routeEmbedHint")}</p>
     </div>
   );
 }

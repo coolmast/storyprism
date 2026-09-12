@@ -2,6 +2,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-
 import { useEffect } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { useI18n } from "./i18n.jsx";
 
 const stopIcon = (n) =>
   L.divIcon({
@@ -21,11 +22,12 @@ function FitBounds({ points }) {
 }
 
 export default function ItineraryMap({ stops }) {
+  const { t, locale } = useI18n();
   const located = stops.filter((s) => s.lat != null);
   const points = located.map((s) => [s.lat, s.lng]);
 
   if (located.length === 0) {
-    return <div className="map-empty">No geotagged photos in this album yet.</div>;
+    return <div className="map-empty">{t("noGeotagged")}</div>;
   }
 
   return (
@@ -38,11 +40,11 @@ export default function ItineraryMap({ stops }) {
       {located.map((s) => (
         <Marker key={s.index} position={[s.lat, s.lng]} icon={stopIcon(s.index + 1)}>
           <Popup>
-            <strong>{s.placeCity || s.placeLabel || "Unknown place"}</strong>
+            <strong>{s.placeCity || s.placeLabel || t("unknownPlace")}</strong>
             <br />
-            {new Date(s.startedAt).toLocaleDateString()}
+            {new Date(s.startedAt).toLocaleDateString(locale)}
             <br />
-            {s.photoCount} photos
+            {t("photosCount", s.photoCount)}
             {s.photos[0]?.thumbUrl && (
               <div>
                 <img src={s.photos[0].thumbUrl} alt="" width={160} />

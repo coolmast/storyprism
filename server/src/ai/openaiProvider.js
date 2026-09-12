@@ -3,6 +3,12 @@ const CAPTION_MODEL = "gpt-4o-mini";
 const RESEARCH_MODEL = "gpt-4o-mini";
 const INTERVIEW_MODEL = "gpt-4o-mini";
 
+// Omit the instruction for English - the model defaults there anyway, and
+// it keeps prompts shorter for the common case.
+function languageInstruction(language) {
+  return language && language !== "English" ? ` Respond in ${language}.` : "";
+}
+
 async function fetchImageAsDataUrl(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Could not fetch photo for captioning: ${res.status}`);
@@ -11,7 +17,7 @@ async function fetchImageAsDataUrl(url) {
   return `data:${mime};base64,${buf.toString("base64")}`;
 }
 
-export async function draftCaption({ photoUrl, place, date, storyTitle }) {
+export async function draftCaption({ photoUrl, place, date, storyTitle, language }) {
   const dataUrl = await fetchImageAsDataUrl(photoUrl);
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -27,7 +33,8 @@ export async function draftCaption({ photoUrl, place, date, storyTitle }) {
           role: "system",
           content:
             "You write short, warm, specific photo captions for a family travel story. " +
-            "One sentence. Describe what's actually visible, not generic travel filler. No hashtags, no quotes around the caption.",
+            "One sentence. Describe what's actually visible, not generic travel filler. No hashtags, no quotes around the caption." +
+            languageInstruction(language),
         },
         {
           role: "user",
@@ -58,7 +65,7 @@ function extractResponseText(data) {
   return textPart?.text || "";
 }
 
-export async function researchPlace({ place, storyTitle, dateRange }) {
+export async function researchPlace({ place, storyTitle, dateRange, language }) {
   const res = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -72,7 +79,7 @@ export async function researchPlace({ place, storyTitle, dateRange }) {
         `Write a short (3-4 sentence) engaging paragraph about "${place}" for a travel story. ` +
         `The writer visited around ${dateRange} as part of a trip called "${storyTitle}". ` +
         `Mention 1-2 concrete, verifiable facts (history, geography, what it's known for). ` +
-        `Plain prose, no headings, no citations markup.`,
+        `Plain prose, no headings, no citations markup.${languageInstruction(language)}`,
     }),
   });
 
@@ -91,7 +98,7 @@ function extractJson(text) {
   return JSON.parse(cleaned);
 }
 
-export async function generateInfoCard({ placeName, context }) {
+export async function generateInfoCard({ placeName, context, language }) {
   const res = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -110,7 +117,9 @@ export async function generateInfoCard({ placeName, context }) {
         "standout piece, a waterfall might get height/water source. Don't force facts that don't fit. " +
         "Use only facts you can verify from search; omit a fact rather than guess. Write a one-sentence " +
         "subtitle (what kind of place, in a few words) and a short 2-3 sentence summary in plain, " +
-        "specific prose (no travel-brochure language).\n\n" +
+        `specific prose (no travel-brochure language).${languageInstruction(language)} The JSON field ` +
+        "names themselves must stay in English; only the subtitle/summary/fact label/fact value text " +
+        "should be in the requested language.\n\n" +
         'Respond with ONLY this JSON, no other text: {"subtitle": string, "summary": string, ' +
         '"facts": [{"label": string, "value": string}]}',
     }),
@@ -147,10 +156,21 @@ Ask short, specific, warm follow-up questions about what is missing: how the pla
 
 Ask at most 2-3 questions per turn. Be conversational and curious, never a form or a checklist. Keep your own messages brief: at most one short sentence of warm reaction to what they just said, then your questions. Never write their story for them in this conversation - only ask questions. If they seem to be repeating themselves or say they are done, acknowledge it warmly and suggest they click "Draft rewrite" instead of asking more questions.`;
 
-export async function interviewTurn({ heading, dateRange, narrative, captions, research, history }) {
+export async function interviewTurn({
+  heading,
+  dateRange,
+  narrative,
+  captions,
+  research,
+  history,
+  language,
+}) {
   const context = describeStopContext({ heading, dateRange, narrative, captions, research });
   const messages = [
-    { role: "system", content: `${INTERVIEWER_SYSTEM_PROMPT}\n\nContext:\n${context}` },
+    {
+      role: "system",
+      content: `${INTERVIEWER_SYSTEM_PROMPT}${languageInstruction(language)}\n\nContext:\n${context}`,
+    },
     ...history,
   ];
   if (history.length === 0) {
@@ -176,7 +196,7 @@ export async function interviewTurn({ heading, dateRange, narrative, captions, r
   return data.choices[0].message.content.trim();
 }
 
-export async function draftFromInterview({ heading, narrative, captions, research, history }) {
+export async function draftFromInterview({ heading, narrative, captions, research, history, language }) {
   const context = describeStopContext({ heading, narrative, captions, research });
   const transcript = history
     .map((m) => `${m.role === "user" ? "Traveler" : "Ghostwriter"}: ${m.content}`)
@@ -194,7 +214,9 @@ export async function draftFromInterview({ heading, narrative, captions, researc
         "detail over generic sensory adjectives - name the actual thing, sound, or feeling they described " +
         "rather than reaching for a simile. Short sentences are fine. Also suggest one short, striking " +
         "pull-quote sentence drawn from or inspired by the conversation, or null if nothing in the " +
-        'conversation fits well as a pull quote.\n\nRespond as JSON: {"narrative": string, "pullQuote": string|null}',
+        `conversation fits well as a pull quote.${languageInstruction(language)} (Keep the JSON field names ` +
+        'in English; only the narrative/pullQuote text itself should be in the requested language.)\n\n' +
+        'Respond as JSON: {"narrative": string, "pullQuote": string|null}',
     },
     {
       role: "user",
@@ -229,7 +251,7 @@ const GHOSTWRITER_VOICE_RULES =
   'believe our eyes"). Prefer plain, concrete detail over generic sensory adjectives - name the actual ' +
   "thing, sound, or feeling rather than reaching for a simile. Short sentences are fine.";
 
-export async function organizeNotesIntoStory({ storyTitle, stops, notesText }) {
+export async function organizeNotesIntoStory({ storyTitle, stops, notesText, language }) {
   const stopList = stops
     .map(
       (s, i) =>
@@ -253,7 +275,9 @@ export async function organizeNotesIntoStory({ storyTitle, stops, notesText }) {
         "invent content for stops the notes don't cover, and do not force every stop to get a suggestion. " +
         "If a stop already has a narrative and the notes add to it, write a richer combined version rather " +
         "than contradicting what's already there. Suggest a short pull-quote sentence for a stop only if " +
-        "something in the notes genuinely fits as one.\n\n" +
+        `something in the notes genuinely fits as one.${languageInstruction(language)} The notes themselves ` +
+        "may be in any language - translate as needed. (Keep the JSON field names in English; only the " +
+        "narrative/pullQuote text should be in the requested language.)\n\n" +
         'Respond as JSON: {"suggestions": [{"stopId": string, "narrative": string, "pullQuote": string|null}]}',
     },
     {

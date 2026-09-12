@@ -100,3 +100,16 @@ export function suggestPlacesForStop(photos) {
     .map((c) => c.name)
     .slice(0, 6);
 }
+
+// Given the same photo rows suggestPlacesForStop was run on, find which
+// ones actually carry the given place name (by PlaceLabel or photo Title)
+// - these are the candidates for an info card's hero image, since they're
+// the photos that "signaled" this place in the first place.
+export function photosMatchingPlace(photos, placeName) {
+  const target = placeName.trim().toLowerCase();
+  return photos.filter((p) => {
+    if (p.placeLabel && primaryName(p.placeLabel).toLowerCase() === target) return true;
+    const subject = titleSubject(p.title);
+    return subject && subject.toLowerCase() === target;
+  });
+}

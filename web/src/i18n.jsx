@@ -1,0 +1,363 @@
+import { createContext, useContext, useEffect, useState } from "react";
+
+export const UI_LANGUAGES = ["en", "de", "da"];
+const STORAGE_KEY = "story-builder-ui-lang";
+
+const LOCALE = { en: "en-GB", de: "de-DE", da: "da-DK" };
+
+// UI chrome only - the story's own content (captions, narrative, AI text)
+// is a separate "content language" set per story and sent to the AI, not
+// looked up here. Keep both dictionaries growing together when adding a
+// string used in both places (rare - most content strings are server-side).
+const DICT = {
+  en: {
+    appTitle: "Story Builder",
+    appTagline: "Turn a PhotoPrism album into a travel story",
+    tabNewStory: "New Story",
+    tabMyStories: "My Stories",
+    pickAlbumHint: "Pick an album to build its itinerary.",
+    createStoryBtn: "Create story from this album",
+    creating: "Creating…",
+    loadingItinerary: "Loading itinerary…",
+    myStoriesTitle: "My Stories",
+    noStoriesYet: 'No stories yet — create one from an album under "New Story".',
+    deleteStoryConfirm: "Delete this story? This can't be undone.",
+    deleteStoryTitle: "Delete story",
+    storyCardMeta: (albumTitle, stopCount, date) =>
+      `${albumTitle} · ${stopCount} stops · updated ${date}`,
+
+    unknownPlace: "Unknown place",
+    noGeotagged: "No geotagged photos in this album yet.",
+    photosCount: (n) => `${n} photos`,
+
+    backToStories: "← My Stories",
+    viewStory: "View story ↗",
+    present: "Present ↗",
+    downloadPdf: "Download PDF ↓",
+    downloadSlides: "Download Slides ↓",
+    saving: "Saving…",
+    saveChanges: "Save changes",
+    saved: "Saved",
+
+    uiLanguageLabel: "Interface",
+    contentLanguageLabel: "Story language",
+
+    introPlaceholder: "Write an intro for this story…",
+    outroPlaceholder: "Write an outro for this story…",
+    narrativePlaceholder: "What happened here?",
+    pullQuotePlaceholder: "Pull quote (optional) — one striking line, rendered large",
+    researching: "Researching…",
+    researchThisPlace: "✨ Research this place",
+    photoCountHint: (included, total) =>
+      `${included} of ${total} photos in the story — drag ✥ to reorder, check more below to add them.`,
+    morePhotosSummary: (n) => `${n} more photos from this stop`,
+
+    themeCoastal: "Coastal",
+    themeMonochrome: "Monochrome Editorial",
+    themeVintage: "Vintage Postcard",
+    themeBold: "Bold Modern",
+
+    dragHandleTitle: "Drag to reorder",
+    include: "include",
+    featuredTitle: "Featured photo for this stop",
+    makeFeaturedTitle: "Make this the featured photo",
+    featuredBtn: "★ Featured",
+    featureBtn: "☆ Feature",
+    captionPlaceholder: "Caption…",
+    draftCaptionBtn: "✨ Draft caption",
+
+    interviewMeBtn: "💬 Interview me about this stop",
+    ghostwriterInterview: "💬 Ghostwriter interview",
+    collapse: "Collapse",
+    typeYourAnswer: "Type your answer…",
+    send: "Send",
+    draftRewriteBtn: "✍️ Draft rewrite from this conversation",
+    proposedRewrite: "Proposed rewrite",
+    pullQuoteLabel: (q) => `Pull quote: "${q}"`,
+    useThis: "Use this",
+    keepChattingInstead: "Keep chatting instead",
+    usedRewriteMsg: "Used that rewrite - keep going if you want to refine it further.",
+
+    removeBtn: "Remove",
+    pasteRouteLink: "Paste a Strava/Komoot/Garmin route link…",
+    titleOptional: "Title (optional)",
+    addRoute: "Add route",
+    routeEmbedHint:
+      'Use the service\'s "Embed" share link for an interactive map on the page; any other link just shows as a button out to the route.',
+
+    suggestedFromPhotos: "Suggested from your photos:",
+    researchingPlace: (name) => `Researching ${name}…`,
+    addPlaceByName: "Or add any other place by name…",
+    addInfoCard: "Add info card",
+    placementLabel: "Placement",
+    placementTop: "Right after heading",
+    placementMiddle: "In the middle of the photos",
+    placementEnd: "Near the end",
+    heroPhotoLabel: "Hero image",
+    heroPhotoNone: "None",
+    chooseHeroBtn: "Choose from matching photos",
+
+    importNotesBtn: "📝 Import travel notes",
+    importNotesHeader: "📝 Import travel notes",
+    importNotesHint:
+      "Paste the long-form notes or article you already wrote about this trip (or link to it), and the AI will figure out which stop each part belongs to and draft a narrative for it.",
+    pasteTextTab: "Paste text",
+    linkToArticleTab: "Link to article",
+    notesPlaceholder: "Paste your travel notes here…",
+    urlPlaceholder: "https://your-blog.example.com/the-trip",
+    readingAndOrganizing: "Reading and organizing…",
+    organizeIntoStory: "Organize into story",
+    noSuggestionsFound: "The AI didn't find anything in there it could confidently match to a stop.",
+    suggestionsFound: (n) => `${n} suggestion(s) found`,
+    useAll: "Use all",
+    forStop: (heading) => `For "${heading}"`,
+    used: "Used",
+    thatStop: "that stop",
+  },
+  de: {
+    appTitle: "Story Builder",
+    appTagline: "Verwandle ein PhotoPrism-Album in eine Reisegeschichte",
+    tabNewStory: "Neue Geschichte",
+    tabMyStories: "Meine Geschichten",
+    pickAlbumHint: "Wähle ein Album, um die Reiseroute zu erstellen.",
+    createStoryBtn: "Geschichte aus diesem Album erstellen",
+    creating: "Wird erstellt…",
+    loadingItinerary: "Reiseroute wird geladen…",
+    myStoriesTitle: "Meine Geschichten",
+    noStoriesYet: 'Noch keine Geschichten — erstelle eine aus einem Album unter „Neue Geschichte".',
+    deleteStoryConfirm: "Diese Geschichte löschen? Das kann nicht rückgängig gemacht werden.",
+    deleteStoryTitle: "Geschichte löschen",
+    storyCardMeta: (albumTitle, stopCount, date) =>
+      `${albumTitle} · ${stopCount} Stopps · aktualisiert ${date}`,
+
+    unknownPlace: "Unbekannter Ort",
+    noGeotagged: "Noch keine Fotos mit Standortdaten in diesem Album.",
+    photosCount: (n) => `${n} Fotos`,
+
+    backToStories: "← Meine Geschichten",
+    viewStory: "Geschichte ansehen ↗",
+    present: "Präsentieren ↗",
+    downloadPdf: "PDF herunterladen ↓",
+    downloadSlides: "Folien herunterladen ↓",
+    saving: "Wird gespeichert…",
+    saveChanges: "Änderungen speichern",
+    saved: "Gespeichert",
+
+    uiLanguageLabel: "Oberfläche",
+    contentLanguageLabel: "Sprache der Geschichte",
+
+    introPlaceholder: "Schreibe eine Einleitung für diese Geschichte…",
+    outroPlaceholder: "Schreibe einen Abschluss für diese Geschichte…",
+    narrativePlaceholder: "Was ist hier passiert?",
+    pullQuotePlaceholder: "Zitat (optional) — eine markante Zeile, groß dargestellt",
+    researching: "Wird recherchiert…",
+    researchThisPlace: "✨ Diesen Ort recherchieren",
+    photoCountHint: (included, total) =>
+      `${included} von ${total} Fotos in der Geschichte — mit ✥ ziehen zum Sortieren, unten weitere hinzufügen.`,
+    morePhotosSummary: (n) => `${n} weitere Fotos von diesem Stopp`,
+
+    themeCoastal: "Küste",
+    themeMonochrome: "Monochromes Editorial",
+    themeVintage: "Vintage-Postkarte",
+    themeBold: "Modern & Kräftig",
+
+    dragHandleTitle: "Zum Sortieren ziehen",
+    include: "einbeziehen",
+    featuredTitle: "Hervorgehobenes Foto für diesen Stopp",
+    makeFeaturedTitle: "Als hervorgehobenes Foto festlegen",
+    featuredBtn: "★ Hervorgehoben",
+    featureBtn: "☆ Hervorheben",
+    captionPlaceholder: "Bildunterschrift…",
+    draftCaptionBtn: "✨ Bildunterschrift entwerfen",
+
+    interviewMeBtn: "💬 Interview mich zu diesem Stopp",
+    ghostwriterInterview: "💬 Ghostwriter-Interview",
+    collapse: "Einklappen",
+    typeYourAnswer: "Deine Antwort…",
+    send: "Senden",
+    draftRewriteBtn: "✍️ Neufassung aus diesem Gespräch entwerfen",
+    proposedRewrite: "Vorgeschlagene Neufassung",
+    pullQuoteLabel: (q) => `Zitat: „${q}"`,
+    useThis: "Übernehmen",
+    keepChattingInstead: "Stattdessen weiter chatten",
+    usedRewriteMsg: "Neufassung übernommen - mach weiter, wenn du sie noch verfeinern willst.",
+
+    removeBtn: "Entfernen",
+    pasteRouteLink: "Strava-/Komoot-/Garmin-Routenlink einfügen…",
+    titleOptional: "Titel (optional)",
+    addRoute: "Route hinzufügen",
+    routeEmbedHint:
+      'Nutze den „Einbetten"-Link des Dienstes für eine interaktive Karte auf der Seite; jeder andere Link erscheint nur als Button zur Route.',
+
+    suggestedFromPhotos: "Vorschläge aus deinen Fotos:",
+    researchingPlace: (name) => `${name} wird recherchiert…`,
+    addPlaceByName: "Oder einen anderen Ort nach Namen hinzufügen…",
+    addInfoCard: "Infokarte hinzufügen",
+    placementLabel: "Platzierung",
+    placementTop: "Direkt nach der Überschrift",
+    placementMiddle: "In der Mitte der Fotos",
+    placementEnd: "Gegen Ende",
+    heroPhotoLabel: "Titelbild",
+    heroPhotoNone: "Keins",
+    chooseHeroBtn: "Aus passenden Fotos wählen",
+
+    importNotesBtn: "📝 Reisenotizen importieren",
+    importNotesHeader: "📝 Reisenotizen importieren",
+    importNotesHint:
+      "Füge die ausführlichen Notizen oder den Artikel ein, den du bereits über diese Reise geschrieben hast (oder verlinke ihn), und die KI ordnet die Teile den passenden Stopps zu und entwirft dafür einen Text.",
+    pasteTextTab: "Text einfügen",
+    linkToArticleTab: "Artikel verlinken",
+    notesPlaceholder: "Füge hier deine Reisenotizen ein…",
+    urlPlaceholder: "https://dein-blog.beispiel.de/die-reise",
+    readingAndOrganizing: "Wird gelesen und eingeordnet…",
+    organizeIntoStory: "In die Geschichte einordnen",
+    noSuggestionsFound:
+      "Die KI konnte darin nichts finden, das sie einem Stopp sicher zuordnen konnte.",
+    suggestionsFound: (n) => `${n} Vorschlag/Vorschläge gefunden`,
+    useAll: "Alle übernehmen",
+    forStop: (heading) => `Für „${heading}"`,
+    used: "Übernommen",
+    thatStop: "diesen Stopp",
+  },
+  da: {
+    appTitle: "Story Builder",
+    appTagline: "Lav et PhotoPrism-album om til en rejsehistorie",
+    tabNewStory: "Ny historie",
+    tabMyStories: "Mine historier",
+    pickAlbumHint: "Vælg et album for at bygge ruten.",
+    createStoryBtn: "Opret historie fra dette album",
+    creating: "Opretter…",
+    loadingItinerary: "Indlæser rute…",
+    myStoriesTitle: "Mine historier",
+    noStoriesYet: 'Ingen historier endnu — opret en fra et album under "Ny historie".',
+    deleteStoryConfirm: "Slet denne historie? Dette kan ikke fortrydes.",
+    deleteStoryTitle: "Slet historie",
+    storyCardMeta: (albumTitle, stopCount, date) =>
+      `${albumTitle} · ${stopCount} stop · opdateret ${date}`,
+
+    unknownPlace: "Ukendt sted",
+    noGeotagged: "Ingen geotaggede billeder i dette album endnu.",
+    photosCount: (n) => `${n} billeder`,
+
+    backToStories: "← Mine historier",
+    viewStory: "Se historie ↗",
+    present: "Præsenter ↗",
+    downloadPdf: "Download PDF ↓",
+    downloadSlides: "Download slides ↓",
+    saving: "Gemmer…",
+    saveChanges: "Gem ændringer",
+    saved: "Gemt",
+
+    uiLanguageLabel: "Grænseflade",
+    contentLanguageLabel: "Historiens sprog",
+
+    introPlaceholder: "Skriv en introduktion til historien…",
+    outroPlaceholder: "Skriv en afslutning på historien…",
+    narrativePlaceholder: "Hvad skete der her?",
+    pullQuotePlaceholder: "Citat (valgfrit) — én slående linje, vist stort",
+    researching: "Undersøger…",
+    researchThisPlace: "✨ Undersøg dette sted",
+    photoCountHint: (included, total) =>
+      `${included} af ${total} billeder i historien — træk ✥ for at sortere, tjek flere nedenfor.`,
+    morePhotosSummary: (n) => `${n} flere billeder fra dette stop`,
+
+    themeCoastal: "Kyst",
+    themeMonochrome: "Monokrom Redaktionel",
+    themeVintage: "Retro Postkort",
+    themeBold: "Moderne & Kraftfuld",
+
+    dragHandleTitle: "Træk for at sortere",
+    include: "medtag",
+    featuredTitle: "Fremhævet billede for dette stop",
+    makeFeaturedTitle: "Gør dette til det fremhævede billede",
+    featuredBtn: "★ Fremhævet",
+    featureBtn: "☆ Fremhæv",
+    captionPlaceholder: "Billedtekst…",
+    draftCaptionBtn: "✨ Udkast til billedtekst",
+
+    interviewMeBtn: "💬 Interview mig om dette stop",
+    ghostwriterInterview: "💬 Spøgelsesskriver-interview",
+    collapse: "Fold sammen",
+    typeYourAnswer: "Skriv dit svar…",
+    send: "Send",
+    draftRewriteBtn: "✍️ Lav udkast fra denne samtale",
+    proposedRewrite: "Foreslået omskrivning",
+    pullQuoteLabel: (q) => `Citat: "${q}"`,
+    useThis: "Brug denne",
+    keepChattingInstead: "Fortsæt chatten i stedet",
+    usedRewriteMsg: "Omskrivning brugt - fortsæt hvis du vil forfine den yderligere.",
+
+    removeBtn: "Fjern",
+    pasteRouteLink: "Indsæt et Strava-/Komoot-/Garmin-rutelink…",
+    titleOptional: "Titel (valgfrit)",
+    addRoute: "Tilføj rute",
+    routeEmbedHint:
+      'Brug tjenestens "Indlejr"-link for et interaktivt kort på siden; ethvert andet link vises blot som en knap til ruten.',
+
+    suggestedFromPhotos: "Foreslået fra dine billeder:",
+    researchingPlace: (name) => `Undersøger ${name}…`,
+    addPlaceByName: "Eller tilføj et andet sted med navn…",
+    addInfoCard: "Tilføj infokort",
+    placementLabel: "Placering",
+    placementTop: "Lige efter overskriften",
+    placementMiddle: "Midt i billederne",
+    placementEnd: "Mod slutningen",
+    heroPhotoLabel: "Hovedbillede",
+    heroPhotoNone: "Ingen",
+    chooseHeroBtn: "Vælg blandt matchende billeder",
+
+    importNotesBtn: "📝 Importér rejsenotater",
+    importNotesHeader: "📝 Importér rejsenotater",
+    importNotesHint:
+      "Indsæt de lange notater eller artiklen, du allerede har skrevet om turen (eller link til den), og AI'en finder ud af, hvilket stop hver del hører til, og laver et udkast til teksten.",
+    pasteTextTab: "Indsæt tekst",
+    linkToArticleTab: "Link til artikel",
+    notesPlaceholder: "Indsæt dine rejsenotater her…",
+    urlPlaceholder: "https://din-blog.eksempel.dk/turen",
+    readingAndOrganizing: "Læser og organiserer…",
+    organizeIntoStory: "Organisér i historien",
+    noSuggestionsFound: "AI'en kunne ikke finde noget, den sikkert kunne matche til et stop.",
+    suggestionsFound: (n) => `${n} forslag fundet`,
+    useAll: "Brug alle",
+    forStop: (heading) => `Til "${heading}"`,
+    used: "Brugt",
+    thatStop: "det stop",
+  },
+};
+
+const LanguageContext = createContext(null);
+
+export function LanguageProvider({ children }) {
+  const [lang, setLangState] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved && UI_LANGUAGES.includes(saved)) return saved;
+    } catch {
+      /* ignore */
+    }
+    const nav = (navigator.language || "en").slice(0, 2);
+    return UI_LANGUAGES.includes(nav) ? nav : "en";
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, lang);
+    } catch {
+      /* private browsing etc - just doesn't persist */
+    }
+  }, [lang]);
+
+  const t = (key, ...args) => {
+    const entry = DICT[lang]?.[key] ?? DICT.en[key] ?? key;
+    return typeof entry === "function" ? entry(...args) : entry;
+  };
+
+  const value = { lang, setLang: setLangState, t, locale: LOCALE[lang] };
+  return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
+}
+
+export function useI18n() {
+  const ctx = useContext(LanguageContext);
+  if (!ctx) throw new Error("useI18n must be used within LanguageProvider");
+  return ctx;
+}

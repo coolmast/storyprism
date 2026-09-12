@@ -1,6 +1,8 @@
 import { chromium } from "playwright-core";
+import { getStrings } from "./i18n.js";
 
-export async function renderStoryPdf(url) {
+export async function renderStoryPdf(url, language) {
+  const strings = getStrings(language);
   const browser = await chromium.launch({ channel: "chrome", headless: true });
   try {
     const page = await browser.newPage();
@@ -25,7 +27,7 @@ export async function renderStoryPdf(url) {
       headerTemplate: "<div></div>",
       footerTemplate: `
         <div style="width:100%; font-size:9px; text-align:center; color:#999; font-family:Georgia,serif;">
-          <span class="pageNumber"></span> / <span class="totalPages"></span>
+          ${strings.pageOf} <span class="pageNumber"></span> / <span class="totalPages"></span>
         </div>`,
     });
   } finally {

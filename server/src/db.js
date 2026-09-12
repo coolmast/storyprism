@@ -19,6 +19,7 @@ db.exec(`
     intro TEXT NOT NULL DEFAULT '',
     outro TEXT NOT NULL DEFAULT '',
     theme TEXT NOT NULL DEFAULT 'coastal',
+    content_language TEXT NOT NULL DEFAULT 'en',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
@@ -60,7 +61,9 @@ db.exec(`
     subtitle TEXT NOT NULL DEFAULT '',
     summary TEXT NOT NULL DEFAULT '',
     facts TEXT NOT NULL DEFAULT '[]',
-    position INTEGER NOT NULL
+    position INTEGER NOT NULL,
+    placement TEXT NOT NULL DEFAULT 'top',
+    hero_photo_hash TEXT
   );
 
   CREATE TABLE IF NOT EXISTS stop_embeds (

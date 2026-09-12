@@ -4,11 +4,12 @@ import { listAlbums, getAlbumPhotos, thumbUrl } from "./photoprism.js";
 import { buildItinerary } from "./itinerary.js";
 import { DEFAULT_THEME } from "./themes.js";
 import { isAllowedEmbedHost } from "./embeds.js";
-import { suggestPlacesForStop } from "./places.js";
+import { suggestPlacesForStop, photosMatchingPlace } from "./places.js";
+import { DEFAULT_LANGUAGE } from "./i18n.js";
 
 const insertStory = db.prepare(`
-  INSERT INTO stories (id, album_uid, album_title, title, intro, outro, theme, created_at, updated_at)
-  VALUES (@id, @albumUid, @albumTitle, @title, '', '', @theme, @now, @now)
+  INSERT INTO stories (id, album_uid, album_title, title, intro, outro, theme, content_language, created_at, updated_at)
+  VALUES (@id, @albumUid, @albumTitle, @title, '', '', @theme, @contentLanguage, @now, @now)
 `);
 const insertStop = db.prepare(`
   INSERT INTO stops (id, story_id, position, lat, lng, place_label, started_at, ended_at, heading, narrative)
@@ -19,7 +20,7 @@ const insertPhoto = db.prepare(`
   VALUES (@id, @stopId, @photoUid, @hash, @width, @height, @position, '', @included, @title, @placeLabel)
 `);
 
-export async function createStoryFromAlbum(albumUid) {
+export async function createStoryFromAlbum(albumUid, contentLanguage = DEFAULT_LANGUAGE) {
   const albums = await listAlbums();
   const album = albums.find((a) => a.uid === albumUid);
   if (!album) throw new Error("Album not found");
@@ -37,6 +38,7 @@ export async function createStoryFromAlbum(albumUid) {
       albumTitle: album.title,
       title: album.title,
       theme: DEFAULT_THEME,
+      contentLanguage,
       now,
     });
 
@@ -118,6 +120,7 @@ export function getStory(id) {
     intro: story.intro,
     outro: story.outro,
     theme: story.theme,
+    contentLanguage: story.content_language,
     createdAt: story.created_at,
     updatedAt: story.updated_at,
     stops: stops.map((s) => {
@@ -163,6 +166,8 @@ export function getStory(id) {
           subtitle: c.subtitle,
           summary: c.summary,
           facts: JSON.parse(c.facts || "[]"),
+          placement: c.placement || "top",
+          heroPhotoUrl: c.hero_photo_hash ? thumbUrl(c.hero_photo_hash, "fit_1280") : null,
         })),
       };
     }),
@@ -170,7 +175,7 @@ export function getStory(id) {
 }
 
 const updateStoryStmt = db.prepare(
-  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, updated_at = @now WHERE id = @id"
+  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, content_language = @contentLanguage, updated_at = @now WHERE id = @id"
 );
 const updateStopStmt = db.prepare(
   "UPDATE stops SET heading = @heading, narrative = @narrative, research = @research, pull_quote = @pullQuote WHERE id = @id AND story_id = @storyId"
@@ -188,8 +193,8 @@ const insertEmbedStmt = db.prepare(`
 `);
 const deleteInfoCardsStmt = db.prepare("DELETE FROM stop_info_cards WHERE stop_id = @stopId");
 const insertInfoCardStmt = db.prepare(`
-  INSERT INTO stop_info_cards (id, stop_id, place_name, subtitle, summary, facts, position)
-  VALUES (@id, @stopId, @placeName, @subtitle, @summary, @facts, @position)
+  INSERT INTO stop_info_cards (id, stop_id, place_name, subtitle, summary, facts, position, placement, hero_photo_hash)
+  VALUES (@id, @stopId, @placeName, @subtitle, @summary, @facts, @position, @placement, @heroPhotoHash)
 `);
 const touchStoryStmt = db.prepare("UPDATE stories SET updated_at = @now WHERE id = @id");
 
@@ -205,6 +210,7 @@ export function updateStory(id, data) {
       intro: data.intro ?? existing.intro,
       outro: data.outro ?? existing.outro,
       theme: data.theme ?? existing.theme,
+      contentLanguage: data.contentLanguage ?? existing.contentLanguage,
       now,
     });
 
@@ -260,6 +266,8 @@ export function updateStory(id, data) {
           summary: card.summary || "",
           facts: JSON.stringify(card.facts || []),
           position: index,
+          placement: ["top", "middle", "end"].includes(card.placement) ? card.placement : "top",
+          heroPhotoHash: card.heroPhotoHash || null,
         });
       });
     }
@@ -268,6 +276,19 @@ export function updateStory(id, data) {
   tx();
 
   return getStory(id);
+}
+
+// For the info card hero-image picker: which of this stop's photos are the
+// ones that actually signaled this place name, so the user picks from a
+// short relevant set instead of the whole stop.
+export function getMatchingPhotosForPlace(stopId, placeName) {
+  const rows = db
+    .prepare("SELECT hash, title, place_label FROM stop_photos WHERE stop_id = ? AND hash IS NOT NULL")
+    .all(stopId);
+  return photosMatchingPlace(
+    rows.map((r) => ({ hash: r.hash, title: r.title, placeLabel: r.place_label })),
+    placeName
+  ).map((p) => ({ hash: p.hash, thumbUrl: thumbUrl(p.hash, "fit_720") }));
 }
 
 export function deleteStory(id) {

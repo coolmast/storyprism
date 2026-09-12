@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { interviewTurn, draftFromInterview } from "./api.js";
+import { useI18n } from "./i18n.jsx";
 
 // Conversation lives only in this component's state - it's a within-session
 // ghostwriter chat, not persisted to the story. Re-opening the panel after
@@ -7,6 +8,7 @@ import { interviewTurn, draftFromInterview } from "./api.js";
 // fresh. That matches how the other AI actions here work (one-shot, not
 // stored) while still giving real back-and-forth iteration during a sitting.
 export default function InterviewPanel({ storyId, stopId, onUseDraft }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -65,14 +67,14 @@ export default function InterviewPanel({ storyId, stopId, onUseDraft }) {
     setDraft(null);
     setMessages((m) => [
       ...m,
-      { role: "assistant", content: "Used that rewrite - keep going if you want to refine it further." },
+      { role: "assistant", content: t("usedRewriteMsg") },
     ]);
   }
 
   if (!open) {
     return (
       <button className="ai-btn" onClick={open_}>
-        💬 Interview me about this stop
+        {t("interviewMeBtn")}
       </button>
     );
   }
@@ -80,9 +82,9 @@ export default function InterviewPanel({ storyId, stopId, onUseDraft }) {
   return (
     <div className="interview-panel">
       <div className="interview-header">
-        <span>💬 Ghostwriter interview</span>
+        <span>{t("ghostwriterInterview")}</span>
         <button className="link-btn" onClick={() => setOpen(false)}>
-          Collapse
+          {t("collapse")}
         </button>
       </div>
 
@@ -99,17 +101,17 @@ export default function InterviewPanel({ storyId, stopId, onUseDraft }) {
 
       {draft && (
         <div className="interview-draft">
-          <h4>Proposed rewrite</h4>
+          <h4>{t("proposedRewrite")}</h4>
           <p>{draft.narrative}</p>
           {draft.pullQuote && (
-            <p className="interview-draft-quote">Pull quote: “{draft.pullQuote}”</p>
+            <p className="interview-draft-quote">{t("pullQuoteLabel", draft.pullQuote)}</p>
           )}
           <div className="interview-draft-actions">
             <button className="save-btn" onClick={acceptDraft}>
-              Use this
+              {t("useThis")}
             </button>
             <button className="link-btn" onClick={() => setDraft(null)}>
-              Keep chatting instead
+              {t("keepChattingInstead")}
             </button>
           </div>
         </div>
@@ -119,7 +121,7 @@ export default function InterviewPanel({ storyId, stopId, onUseDraft }) {
         <>
           <div className="interview-input-row">
             <textarea
-              placeholder="Type your answer…"
+              placeholder={t("typeYourAnswer")}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
@@ -131,7 +133,7 @@ export default function InterviewPanel({ storyId, stopId, onUseDraft }) {
               disabled={busy}
             />
             <button className="save-btn" onClick={send} disabled={busy || !input.trim()}>
-              Send
+              {t("send")}
             </button>
           </div>
           <button
@@ -139,7 +141,7 @@ export default function InterviewPanel({ storyId, stopId, onUseDraft }) {
             onClick={requestDraft}
             disabled={busy || messages.length === 0}
           >
-            ✍️ Draft rewrite from this conversation
+            {t("draftRewriteBtn")}
           </button>
         </>
       )}
