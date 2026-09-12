@@ -43,11 +43,8 @@ export async function listAlbums({ count = 200 } = {}) {
   ];
 }
 
-export async function getAlbumPhotos(albumUid, { count = 1000 } = {}) {
-  const photos = await ppFetch(
-    `/api/v1/photos?album=${albumUid}&count=${count}&order=oldest&merged=true`
-  );
-  return photos.map((p) => ({
+function mapPhoto(p) {
+  return {
     uid: p.UID,
     title: p.Title,
     takenAt: p.TakenAt,
@@ -60,7 +57,31 @@ export async function getAlbumPhotos(albumUid, { count = 1000 } = {}) {
     width: p.Width,
     height: p.Height,
     thumbHash: p.Files?.[0]?.Hash ?? null,
-  }));
+  };
+}
+
+export async function getAlbumPhotos(albumUid, { count = 1000 } = {}) {
+  const photos = await ppFetch(
+    `/api/v1/photos?album=${albumUid}&count=${count}&order=oldest&merged=true`
+  );
+  return photos.map(mapPhoto);
+}
+
+// A custom snapshot across the whole library by date, for trips that don't
+// fit a single album or PhotoPrism "moment" - e.g. one spanning New Year's
+// (splits across two yearly moments) or a multi-country trip (splits across
+// several country moments). PhotoPrism's "before" bound is exclusive of the
+// date itself, so bump it by a day to make the user's "to" date inclusive of
+// that whole day.
+export async function getPhotosByDateRange(from, to, { count = 3000 } = {}) {
+  const beforeDate = new Date(`${to}T00:00:00Z`);
+  beforeDate.setUTCDate(beforeDate.getUTCDate() + 1);
+  const before = beforeDate.toISOString().slice(0, 10);
+
+  const photos = await ppFetch(
+    `/api/v1/photos?after=${from}&before=${before}&count=${count}&order=oldest&merged=true`
+  );
+  return photos.map(mapPhoto);
 }
 
 // "fit_*" sizes scale to fit within a box, preserving the original aspect

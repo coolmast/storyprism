@@ -9,6 +9,8 @@ async function json(res) {
 export const fetchAlbums = () => fetch("/api/albums").then(json);
 export const fetchItinerary = (albumUid) =>
   fetch(`/api/albums/${albumUid}/itinerary`).then(json);
+export const fetchItineraryByDate = (from, to) =>
+  fetch(`/api/itinerary/by-date?from=${from}&to=${to}`).then(json);
 
 export const fetchThemes = () => fetch("/api/themes").then(json);
 export const fetchLanguages = () => fetch("/api/languages").then(json);
@@ -16,11 +18,11 @@ export const fetchLanguages = () => fetch("/api/languages").then(json);
 export const fetchStories = () => fetch("/api/stories").then(json);
 export const fetchStory = (id) => fetch(`/api/stories/${id}`).then(json);
 
-export const createStory = (albumUid, contentLanguage) =>
+export const createStory = (payload) =>
   fetch("/api/stories", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ albumUid, contentLanguage }),
+    body: JSON.stringify(payload),
   }).then(json);
 
 export const saveStory = (id, data) =>

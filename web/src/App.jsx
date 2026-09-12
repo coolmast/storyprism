@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { fetchAlbums, fetchItinerary, fetchStories, fetchStory, createStory, deleteStory } from "./api.js";
+import {
+  fetchAlbums,
+  fetchItinerary,
+  fetchItineraryByDate,
+  fetchStories,
+  fetchStory,
+  createStory,
+  deleteStory,
+} from "./api.js";
 import AlbumList from "./AlbumList.jsx";
 import ItineraryMap from "./ItineraryMap.jsx";
 import StopList from "./StopList.jsx";
@@ -13,9 +21,13 @@ const LANG_FLAG = { en: "🇬🇧", de: "🇩🇪", da: "🇩🇰" };
 export default function App() {
   const { lang, setLang, t } = useI18n();
   const [tab, setTab] = useState("new"); // "new" | "stories" | "editor"
+  const [source, setSource] = useState("album"); // "album" | "dateRange"
 
   const [albums, setAlbums] = useState([]);
   const [selectedUid, setSelectedUid] = useState(null);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [rangeTitle, setRangeTitle] = useState("");
   const [stops, setStops] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -29,14 +41,30 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!selectedUid) return;
-    setLoading(true);
-    setError(null);
-    fetchItinerary(selectedUid)
-      .then(setStops)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [selectedUid]);
+    if (source === "album") {
+      if (!selectedUid) {
+        setStops([]);
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      fetchItinerary(selectedUid)
+        .then(setStops)
+        .catch((e) => setError(e.message))
+        .finally(() => setLoading(false));
+    } else {
+      if (!dateFrom || !dateTo) {
+        setStops([]);
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      fetchItineraryByDate(dateFrom, dateTo)
+        .then(setStops)
+        .catch((e) => setError(e.message))
+        .finally(() => setLoading(false));
+    }
+  }, [source, selectedUid, dateFrom, dateTo]);
 
   function refreshStories() {
     fetchStories().then(setStories).catch((e) => setError(e.message));
@@ -50,7 +78,11 @@ export default function App() {
     setCreating(true);
     setError(null);
     try {
-      const story = await createStory(selectedUid, lang);
+      const payload =
+        source === "album"
+          ? { albumUid: selectedUid, contentLanguage: lang }
+          : { dateFrom, dateTo, title: rangeTitle, contentLanguage: lang };
+      const story = await createStory(payload);
       setActiveStory(story);
       setTab("editor");
     } catch (e) {
@@ -103,17 +135,58 @@ export default function App() {
       {tab === "new" && (
         <div className="app-body">
           <aside className="sidebar">
+            <div className="source-toggle">
+              <button className={source === "album" ? "active" : ""} onClick={() => setSource("album")}>
+                {t("sourceAlbum")}
+              </button>
+              <button
+                className={source === "dateRange" ? "active" : ""}
+                onClick={() => setSource("dateRange")}
+              >
+                {t("sourceDateRange")}
+              </button>
+            </div>
             {error && <p className="error">{error}</p>}
-            <AlbumList albums={albums} selectedUid={selectedUid} onSelect={setSelectedUid} />
+            {source === "album" && (
+              <AlbumList albums={albums} selectedUid={selectedUid} onSelect={setSelectedUid} />
+            )}
+            {source === "dateRange" && (
+              <div className="date-range-picker">
+                <p className="route-embed-hint">{t("dateRangeHint")}</p>
+                <label className="date-range-field">
+                  {t("dateFromLabel")}
+                  <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+                </label>
+                <label className="date-range-field">
+                  {t("dateToLabel")}
+                  <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+                </label>
+                <input
+                  className="date-range-title-input"
+                  placeholder={t("customTitlePlaceholder")}
+                  value={rangeTitle}
+                  onChange={(e) => setRangeTitle(e.target.value)}
+                />
+              </div>
+            )}
           </aside>
           <main className="content">
-            {!selectedUid && <p className="hint">{t("pickAlbumHint")}</p>}
-            {selectedUid && (
+            {source === "album" && !selectedUid && <p className="hint">{t("pickAlbumHint")}</p>}
+            {source === "dateRange" && !(dateFrom && dateTo) && (
+              <p className="hint">{t("pickDateRangeHint")}</p>
+            )}
+            {((source === "album" && selectedUid) || (source === "dateRange" && dateFrom && dateTo)) && (
               <>
                 <div className="content-header">
-                  <h2>{selectedAlbum?.title}</h2>
+                  <h2>
+                    {source === "album" ? selectedAlbum?.title : rangeTitle || `${dateFrom} – ${dateTo}`}
+                  </h2>
                   <button className="save-btn" onClick={handleCreateStory} disabled={creating}>
-                    {creating ? t("creating") : t("createStoryBtn")}
+                    {creating
+                      ? t("creating")
+                      : source === "album"
+                      ? t("createStoryBtn")
+                      : t("createStoryFromRangeBtn")}
                   </button>
                 </div>
                 {loading && <p>{t("loadingItinerary")}</p>}

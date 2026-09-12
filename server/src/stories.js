@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { db } from "./db.js";
-import { listAlbums, getAlbumPhotos, thumbUrl } from "./photoprism.js";
+import { listAlbums, getAlbumPhotos, getPhotosByDateRange, thumbUrl } from "./photoprism.js";
 import { buildItinerary } from "./itinerary.js";
 import { DEFAULT_THEME } from "./themes.js";
 import { isAllowedEmbedHost } from "./embeds.js";
@@ -19,6 +19,44 @@ const insertPhoto = db.prepare(`
   INSERT INTO stop_photos (id, stop_id, photo_uid, hash, width, height, position, caption, included, title, place_label)
   VALUES (@id, @stopId, @photoUid, @hash, @width, @height, @position, '', @included, @title, @placeLabel)
 `);
+
+function insertStops(storyId, stops) {
+  stops.forEach((stop, i) => {
+    const stopId = randomUUID();
+    insertStop.run({
+      id: stopId,
+      storyId,
+      position: i,
+      lat: stop.lat,
+      lng: stop.lng,
+      placeLabel: stop.placeCity || stop.placeLabel || null,
+      startedAt: stop.startedAt,
+      endedAt: stop.endedAt,
+      heading: stop.placeCity || stop.placeLabel || `Stop ${i + 1}`,
+    });
+    // Stops from a real trip can have 50-100+ photos; defaulting all of
+    // them to "included" would make the editor an unusable wall of
+    // caption boxes. Pre-select a spread across the stop's time range so
+    // the story starts curated, and let the user add more.
+    const CURATED_PER_STOP = 20;
+    const step = Math.max(1, Math.floor(stop.photos.length / CURATED_PER_STOP));
+
+    stop.photos.forEach((p, j) => {
+      insertPhoto.run({
+        id: randomUUID(),
+        stopId,
+        photoUid: p.uid,
+        hash: p.thumbHash,
+        width: p.width || null,
+        height: p.height || null,
+        position: j,
+        included: j % step === 0 ? 1 : 0,
+        title: p.title || "",
+        placeLabel: p.placeLabel || "",
+      });
+    });
+  });
+}
 
 export async function createStoryFromAlbum(albumUid, contentLanguage = DEFAULT_LANGUAGE) {
   const albums = await listAlbums();
@@ -41,42 +79,39 @@ export async function createStoryFromAlbum(albumUid, contentLanguage = DEFAULT_L
       contentLanguage,
       now,
     });
+    insertStops(storyId, stops);
+  });
+  tx();
 
-    stops.forEach((stop, i) => {
-      const stopId = randomUUID();
-      insertStop.run({
-        id: stopId,
-        storyId,
-        position: i,
-        lat: stop.lat,
-        lng: stop.lng,
-        placeLabel: stop.placeCity || stop.placeLabel || null,
-        startedAt: stop.startedAt,
-        endedAt: stop.endedAt,
-        heading: stop.placeCity || stop.placeLabel || `Stop ${i + 1}`,
-      });
-      // Stops from a real trip can have 50-100+ photos; defaulting all of
-      // them to "included" would make the editor an unusable wall of
-      // caption boxes. Pre-select a spread across the stop's time range so
-      // the story starts curated, and let the user add more.
-      const CURATED_PER_STOP = 20;
-      const step = Math.max(1, Math.floor(stop.photos.length / CURATED_PER_STOP));
+  return getStory(storyId);
+}
 
-      stop.photos.forEach((p, j) => {
-        insertPhoto.run({
-          id: randomUUID(),
-          stopId,
-          photoUid: p.uid,
-          hash: p.thumbHash,
-          width: p.width || null,
-          height: p.height || null,
-          position: j,
-          included: j % step === 0 ? 1 : 0,
-          title: p.title || "",
-          placeLabel: p.placeLabel || "",
-        });
-      });
+// For trips that don't fit a single album or PhotoPrism "moment" - crossing
+// New Year's (splits across two yearly moments) or spanning several
+// countries. Not backed by any one PhotoPrism album, so album_uid is left
+// empty rather than added as a nullable column - the schema has no
+// migration mechanism, and an empty string is a fine "no source album"
+// sentinel given album_uid is only ever used to look the album back up,
+// which a date-range story has no reason to do.
+export async function createStoryFromDateRange(from, to, title, contentLanguage = DEFAULT_LANGUAGE) {
+  const photos = await getPhotosByDateRange(from, to);
+  const stops = buildItinerary(photos);
+
+  const storyId = randomUUID();
+  const now = new Date().toISOString();
+  const storyTitle = (title || "").trim() || `Trip ${from} – ${to}`;
+
+  const tx = db.transaction(() => {
+    insertStory.run({
+      id: storyId,
+      albumUid: "",
+      albumTitle: storyTitle,
+      title: storyTitle,
+      theme: DEFAULT_THEME,
+      contentLanguage,
+      now,
     });
+    insertStops(storyId, stops);
   });
   tx();
 

@@ -3,10 +3,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
 import cors from "cors";
-import { listAlbums, getAlbumPhotos, thumbUrl } from "./photoprism.js";
+import { listAlbums, getAlbumPhotos, getPhotosByDateRange, thumbUrl } from "./photoprism.js";
 import { buildItinerary } from "./itinerary.js";
 import {
   createStoryFromAlbum,
+  createStoryFromDateRange,
   listStories,
   getStory,
   updateStory,
@@ -75,15 +76,40 @@ app.get("/api/albums/:uid/itinerary", async (req, res) => {
   }
 });
 
+app.get("/api/itinerary/by-date", async (req, res) => {
+  try {
+    const { from, to } = req.query;
+    if (!from || !to) {
+      return res.status(400).json({ error: "from and to are required (YYYY-MM-DD)" });
+    }
+    const photos = await getPhotosByDateRange(from, to);
+    const withThumbs = photos.map((p) => ({
+      ...p,
+      thumbUrl: p.thumbHash ? thumbUrl(p.thumbHash) : null,
+    }));
+    res.json(buildItinerary(withThumbs));
+  } catch (err) {
+    console.error(err);
+    res.status(502).json({ error: err.message });
+  }
+});
+
 app.get("/api/stories", (req, res) => {
   res.json(listStories());
 });
 
 app.post("/api/stories", async (req, res) => {
   try {
-    const { albumUid, contentLanguage } = req.body;
-    if (!albumUid) return res.status(400).json({ error: "albumUid is required" });
-    res.status(201).json(await createStoryFromAlbum(albumUid, contentLanguage));
+    const { albumUid, dateFrom, dateTo, title, contentLanguage } = req.body;
+    if (albumUid) {
+      return res.status(201).json(await createStoryFromAlbum(albumUid, contentLanguage));
+    }
+    if (dateFrom && dateTo) {
+      return res
+        .status(201)
+        .json(await createStoryFromDateRange(dateFrom, dateTo, title, contentLanguage));
+    }
+    return res.status(400).json({ error: "albumUid or dateFrom/dateTo is required" });
   } catch (err) {
     console.error(err);
     res.status(502).json({ error: err.message });

@@ -99,6 +99,62 @@
   padding: 0.5rem;
 }
 
+.source-toggle {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.3rem 0 0.9rem;
+}
+
+.source-toggle button {
+  flex: 1;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--terracotta);
+  background: transparent;
+  color: var(--terracotta);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.source-toggle button.active {
+  background: var(--terracotta);
+  color: white;
+}
+
+.date-range-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 0 0.1rem;
+}
+
+.date-range-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: #6b5d4d;
+}
+
+.date-range-field input {
+  font: inherit;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: white;
+  color: var(--ink);
+}
+
+.date-range-title-input {
+  font: inherit;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: white;
+  color: var(--ink);
+}
+
 .content {
   flex: 1;
   padding: 1.5rem;

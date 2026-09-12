@@ -11,7 +11,12 @@ view, a reveal.js presentation, or a printable PDF (either format).
 
 - `server/` — Node/Express API.
   - Talks to PhotoPrism's REST API (read-only, no auth needed on this
-    instance) — `server/src/photoprism.js`.
+    instance) — `server/src/photoprism.js`. A story's source photos can
+    come from a manually-curated album, one of PhotoPrism's auto-generated
+    "moment" albums (country+year groupings), or an arbitrary date range
+    across the whole library (`getPhotosByDateRange`) for a trip that
+    doesn't fit either - crossing New Year's (splits across two yearly
+    moments) or spanning several countries.
   - Clusters photos into itinerary "stops" by time/distance gaps —
     `server/src/itinerary.js`.
   - Stores stories (per-stop headings, narrative, pull quotes, per-photo
@@ -130,6 +135,10 @@ useful for a second person to use the editor from their own device.
       story's content language are independent settings; content language
       drives AI output and the rendered output's own chrome (dates,
       footer, PDF page numbers)
+- [x] Two more story sources beyond manually-curated albums: PhotoPrism's
+      auto-generated "moment" albums (country+year), and an arbitrary
+      custom date range across the whole library for trips that cross
+      New Year's or span several countries/moments
 - [ ] Containerize (Dockerfiles + docker-compose) to run alongside PhotoPrism
       — deferred until this has been used for real and the deployment shape
       (same host as PhotoPrism? synced elsewhere?) is clearer
@@ -143,6 +152,25 @@ useful for a second person to use the editor from their own device.
 
 ## Notes
 
+- **PhotoPrism has no photo-count for "moment" albums**: manually-curated
+  albums (`type=album`) have a real `PhotoCount`, but moments (`type=moment`)
+  are a saved search filter (e.g. `country:au year:2019`), not a static
+  membership list, so PhotoPrism always reports `PhotoCount: 0` for them.
+  Rather than compute a real count (94 moments × a full photo-search
+  round-trip just to render the picker isn't worth the latency), the count
+  badge is simply omitted for that group in `AlbumList.jsx`.
+- **Custom date-range stories aren't backed by any one PhotoPrism album**,
+  so `album_uid` is stored as an empty string rather than made nullable -
+  the schema has no migration mechanism (`CREATE TABLE IF NOT EXISTS` only),
+  and `album_uid` is only ever used to look the source album back up, which
+  a date-range story has no reason to do. `album_title`/`title` default to
+  `Trip {from} – {to}` unless the user typed one.
+- **PhotoPrism's `before` date filter is exclusive**: `before=2022-01-05`
+  returns photos up to but not including Jan 5. `getPhotosByDateRange`
+  bumps the user's "to" date by one day internally so picking "to: Jan 5"
+  in the UI actually includes that whole day - confirmed by querying a
+  range spanning New Year's (`after=2021-12-28&before=2022-01-05` vs. the
+  bumped `...&before=2022-01-06`) and checking which dates came back.
 - **Info card suggestions come from data already fetched, not extra
   PhotoPrism calls**: PhotoPrism's per-photo `PlaceLabel` (bulk list
   response) ranges from broad ("Mölle, Sweden") to specific ("Strandbaden,
