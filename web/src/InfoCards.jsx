@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { generateInfoCard, fetchMatchingPhotos } from "./api.js";
 import { useI18n } from "./i18n.jsx";
+import { uid } from "./uid.js";
 
 // suggestedPlaces comes from the server (PhotoPrism PlaceLabels + auto
 // photo titles for this stop's included photos - see server/src/places.js)
@@ -29,7 +30,7 @@ export default function InfoCards({ storyId, stopId, suggestedPlaces, infoCards,
       const card = await generateInfoCard(storyId, stopId, placeName.trim());
       onChange([
         ...infoCards,
-        { id: crypto.randomUUID(), placement: "top", heroPhotoHash: null, heroPhotoUrl: null, ...card },
+        { id: uid(), placement: "top", heroPhotoHash: null, heroPhotoUrl: null, ...card },
       ]);
       setManualName("");
     } catch (e) {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { detectProvider } from "./embeds.js";
 import { useI18n } from "./i18n.jsx";
+import { uid } from "./uid.js";
 
 export default function RouteEmbeds({ embeds, onChange }) {
   const { t } = useI18n();
@@ -12,7 +13,7 @@ export default function RouteEmbeds({ embeds, onChange }) {
     if (!trimmed) return;
     onChange([
       ...embeds,
-      { id: crypto.randomUUID(), provider: detectProvider(trimmed), url: trimmed, title: title.trim() },
+      { id: uid(), provider: detectProvider(trimmed), url: trimmed, title: title.trim() },
     ]);
     setUrl("");
     setTitle("");

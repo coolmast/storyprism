@@ -114,6 +114,20 @@
   color: #a13a2f;
 }
 
+.album-group-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b5d4d;
+  padding: 0.8rem 0.6rem 0.3rem;
+}
+
+.album-group-label:first-child {
+  padding-top: 0.2rem;
+}
+
 .album-list {
   list-style: none;
   margin: 0;

@@ -12,9 +12,14 @@ async function ppFetch(path) {
   return res.json();
 }
 
-export async function listAlbums({ count = 200 } = {}) {
-  const albums = await ppFetch(`/api/v1/albums?count=${count}&type=album`);
-  return albums.map((a) => ({
+// PhotoPrism has manually-curated "album" entries plus several auto-generated
+// types (moment, month, folder, state, ...). We only surface "moment" here
+// alongside manual albums - it's the one that's actually useful as a story
+// starting point (a "Sweden 2022"-style country+year grouping); the others
+// are either too broad (month/state) or too granular (one per folder) to be
+// a sane album picker entry.
+function mapAlbum(a, type) {
+  return {
     uid: a.UID,
     title: a.Title,
     description: a.Description,
@@ -23,7 +28,19 @@ export async function listAlbums({ count = 200 } = {}) {
     month: a.Month,
     day: a.Day,
     thumb: a.Thumb,
-  }));
+    type,
+  };
+}
+
+export async function listAlbums({ count = 200 } = {}) {
+  const [albums, moments] = await Promise.all([
+    ppFetch(`/api/v1/albums?count=${count}&type=album`),
+    ppFetch(`/api/v1/albums?count=${count}&type=moment`),
+  ]);
+  return [
+    ...albums.map((a) => mapAlbum(a, "album")),
+    ...moments.map((a) => mapAlbum(a, "moment")),
+  ];
 }
 
 export async function getAlbumPhotos(albumUid, { count = 1000 } = {}) {
