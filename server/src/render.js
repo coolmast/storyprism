@@ -67,12 +67,16 @@ function embedBlock(embed, strings) {
     </a>`;
 }
 
-function infoCardBlock(card) {
+function infoCardBlock(card, strings) {
   return `
     <div class="info-card">
       ${card.heroPhotoUrl ? `<img class="info-card-hero" src="${escapeHtml(card.heroPhotoUrl)}" alt="${escapeHtml(card.placeName)}">` : ""}
       <div class="info-card-header">
-        <h3>${escapeHtml(card.placeName)}</h3>
+        <h3>${escapeHtml(card.placeName)}${
+          card.websiteUrl
+            ? ` <a class="info-card-link" href="${escapeHtml(card.websiteUrl)}" target="_blank" rel="noreferrer" title="${escapeHtml(strings.visitWebsite)}" aria-label="${escapeHtml(strings.visitWebsite)}">↗</a>`
+            : ""
+        }</h3>
         ${card.subtitle ? `<p class="info-card-subtitle">${escapeHtml(card.subtitle)}</p>` : ""}
       </div>
       ${card.summary ? `<p class="info-card-summary">${escapeHtml(card.summary)}</p>` : ""}
@@ -156,7 +160,7 @@ export function renderStoryHtml(story, { editMode = false } = {}) {
             const mid = Math.ceil(gridPhotos.length / 2);
             return (
               photoGroup(gridPhotos.slice(0, mid), `${i}a`, stop.heading, strings, editMode) +
-              middleCards.map(infoCardBlock).join("\n") +
+              middleCards.map((c) => infoCardBlock(c, strings)).join("\n") +
               photoGroup(gridPhotos.slice(mid), `${i}b`, stop.heading, strings, editMode)
             );
           })()
@@ -170,7 +174,7 @@ export function renderStoryHtml(story, { editMode = false } = {}) {
       </div>
       ${stop.narrative ? `<div class="narrative">${paragraphs(stop.narrative)}</div>` : ""}
       ${stop.pullQuote ? `<blockquote class="pull-quote">${escapeHtml(stop.pullQuote)}</blockquote>` : ""}
-      ${topCards.map(infoCardBlock).join("\n")}
+      ${topCards.map((c) => infoCardBlock(c, strings)).join("\n")}
       ${
         featured
           ? `<figure class="featured-photo">
@@ -186,7 +190,7 @@ export function renderStoryHtml(story, { editMode = false } = {}) {
       ${stop.research ? `<aside class="research"><p>${escapeHtml(stop.research)}</p></aside>` : ""}
       ${(stop.embeds || []).map((e) => embedBlock(e, strings)).join("\n")}
       ${photosHtml}
-      ${endCards.map(infoCardBlock).join("\n")}
+      ${endCards.map((c) => infoCardBlock(c, strings)).join("\n")}
     </section>`;
     })
     .join("\n");
@@ -283,6 +287,14 @@ export function renderStoryHtml(story, { editMode = false } = {}) {
   }
   .info-card-header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
   .info-card-header h3 { margin: 0; font-family: var(--heading-font); }
+  .info-card-link {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.6rem; height: 1.6rem; margin-left: 0.3rem;
+    border-radius: 50%; border: 1px solid var(--accent2);
+    color: var(--accent2); text-decoration: none; font-size: 0.85rem;
+    vertical-align: middle;
+  }
+  .info-card-link:hover { background: var(--accent2); color: var(--paper); }
   .info-card-subtitle { margin: 0; font-style: italic; color: var(--accent2); font-size: 0.9rem; }
   .info-card-summary { margin: 0.6rem 0; }
   .info-card-facts {

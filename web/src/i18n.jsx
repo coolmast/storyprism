@@ -111,6 +111,7 @@ const DICT = {
     addHeroPhoto: "Add hero photo",
     changeHeroPhoto: "Change hero photo",
     noMatchingPhotos: "No matching photos found for this place.",
+    visitWebsite: "Visit official website",
 
     narrativeLabel: "Narrative",
     enrichLabel: "✨ Enrich this stop",
@@ -238,6 +239,7 @@ const DICT = {
     addHeroPhoto: "Titelbild hinzufügen",
     changeHeroPhoto: "Titelbild ändern",
     noMatchingPhotos: "Keine passenden Fotos für diesen Ort gefunden.",
+    visitWebsite: "Offizielle Website besuchen",
 
     narrativeLabel: "Erzählung",
     enrichLabel: "✨ Diesen Stopp anreichern",
@@ -366,6 +368,7 @@ const DICT = {
     addHeroPhoto: "Tilføj hovedbillede",
     changeHeroPhoto: "Skift hovedbillede",
     noMatchingPhotos: "Ingen matchende billeder fundet for dette sted.",
+    visitWebsite: "Besøg officiel hjemmeside",
 
     narrativeLabel: "Fortælling",
     enrichLabel: "✨ Berig dette stop",

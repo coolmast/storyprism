@@ -29,6 +29,7 @@ const STRINGS = {
     morePhotos: (n) => `${n} more photos from this stop`,
     viewOn: (title, provider) => `🏔 View "${title}" on ${provider} ↗`,
     pageOf: "Page",
+    visitWebsite: "Visit official website",
   },
   de: {
     dateLocale: "de-DE",
@@ -37,6 +38,7 @@ const STRINGS = {
     morePhotos: (n) => `${n} weitere Fotos von diesem Stopp`,
     viewOn: (title, provider) => `🏔 "${title}" auf ${provider} ansehen ↗`,
     pageOf: "Seite",
+    visitWebsite: "Offizielle Website besuchen",
   },
   da: {
     dateLocale: "da-DK",
@@ -45,6 +47,7 @@ const STRINGS = {
     morePhotos: (n) => `${n} flere billeder fra dette stop`,
     viewOn: (title, provider) => `🏔 Se "${title}" på ${provider} ↗`,
     pageOf: "Side",
+    visitWebsite: "Besøg officiel hjemmeside",
   },
 };
 

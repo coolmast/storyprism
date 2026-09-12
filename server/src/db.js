@@ -63,7 +63,8 @@ db.exec(`
     facts TEXT NOT NULL DEFAULT '[]',
     position INTEGER NOT NULL,
     placement TEXT NOT NULL DEFAULT 'top',
-    hero_photo_hash TEXT
+    hero_photo_hash TEXT,
+    website_url TEXT NOT NULL DEFAULT ''
   );
 
   CREATE TABLE IF NOT EXISTS stop_embeds (
@@ -80,3 +81,19 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_stop_embeds_stop ON stop_embeds(stop_id);
   CREATE INDEX IF NOT EXISTS idx_stop_info_cards_stop ON stop_info_cards(stop_id);
 `);
+
+// "CREATE TABLE IF NOT EXISTS" above only helps on a brand-new database -
+// once real stories exist (as they now do), adding a column to that
+// statement is a no-op against the already-created table, and every insert
+// referencing the new column would start failing with "no such column".
+// This is the lightweight alternative to a real migration framework: add
+// any new column that's missing from an existing table. Idempotent, so
+// it's safe to call unconditionally on every startup.
+function ensureColumn(table, column, definition) {
+  const existing = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!existing.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+ensureColumn("stop_info_cards", "website_url", "TEXT NOT NULL DEFAULT ''");

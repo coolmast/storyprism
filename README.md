@@ -68,7 +68,12 @@ view, a reveal.js presentation, or a printable PDF (either format).
     to the stop's photos) and an optional `heroPhotoHash`, picked from the
     stop's photos that matched the same place name/label used to generate
     the card (`getMatchingPhotosForPlace` in `stories.js`, reusing the
-    exact place-matching logic from suggestion detection).
+    exact place-matching logic from suggestion detection). It also tries
+    to find the place's own official website (via the same web search),
+    shown as a small icon-only external link next to the place name —
+    validated as URL-shaped both when the AI returns it and again on
+    save, since it's the one AI-generated field that becomes a clickable
+    link.
   - Internationalization is two independent settings
     (`server/src/i18n.js`): the story's `contentLanguage` (English/German/
     Danish so far) drives everything AI-generated — captions, research,
@@ -157,6 +162,33 @@ useful for a second person to use the editor from their own device.
 
 ## Notes
 
+- **The database has no migration framework** (`db.js` is just
+  `CREATE TABLE IF NOT EXISTS`, a no-op against an already-created
+  table) — that was fine while every schema change happened before any
+  real story existed, but stopped being fine once real stories did.
+  Adding `stop_info_cards.website_url` while the user already had real
+  trip data in the table would have silently broken every info-card
+  insert ("no such column") without an actual migration step. Added a
+  small `ensureColumn(table, column, definition)` helper in `db.js`
+  (checks `PRAGMA table_info`, `ALTER TABLE ... ADD COLUMN` if missing)
+  — idempotent, safe to call unconditionally on every startup, and this
+  is now the pattern for any future column addition rather than editing
+  the `CREATE TABLE` statement and hoping. Verified by checking the
+  live database before and after: both real stories and their existing
+  info cards were untouched, and the new column appeared with the
+  right default for old rows.
+- **The web-search tool leaks citations into prose as markdown links**
+  if you let it — testing `generateInfoCard` surfaced a summary ending
+  in `... 100,000 visitors. ([site.com](https://site.com/...))`, which
+  would render as literal, unrendered markdown in the HTML output since
+  `escapeHtml` doesn't interpret it. Fixed at the prompt level (told
+  explicitly that the summary is prose-only and the separate
+  `websiteUrl` field is the only place a link belongs) and again
+  defensively server-side (`stripCitations` strips the pattern from
+  subtitle/summary/fact text regardless of whether the prompt actually
+  worked) — the fact that a documented instruction still needed a
+  code-level backstop is the general lesson here, not specific to this
+  one field.
 - **PhotoPrism has no photo-count for "moment" albums**: manually-curated
   albums (`type=album`) have a real `PhotoCount`, but moments (`type=moment`)
   are a saved search filter (e.g. `country:au year:2019`), not a static

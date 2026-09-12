@@ -98,6 +98,20 @@ function extractJson(text) {
   return JSON.parse(cleaned);
 }
 
+// Belt-and-suspenders: the web-search tool leads the model to occasionally
+// leak its citations straight into prose as markdown links (observed in
+// testing, e.g. "...100,000 visitors. ([site.com](https://site.com/...))")
+// despite being told not to - those would render as literal unrendered
+// markdown in the HTML output. Strips the pattern regardless of whether the
+// prompt succeeded in preventing it.
+function stripCitations(text) {
+  if (!text) return text;
+  return text
+    .replace(/\(?\[[^\]]*\]\([^)]*\)\)?/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
 export async function generateInfoCard({ placeName, context, language }) {
   const res = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -117,11 +131,17 @@ export async function generateInfoCard({ placeName, context, language }) {
         "standout piece, a waterfall might get height/water source. Don't force facts that don't fit. " +
         "Use only facts you can verify from search; omit a fact rather than guess. Write a one-sentence " +
         "subtitle (what kind of place, in a few words) and a short 2-3 sentence summary in plain, " +
-        `specific prose (no travel-brochure language).${languageInstruction(language)} The JSON field ` +
-        "names themselves must stay in English; only the subtitle/summary/fact label/fact value text " +
-        "should be in the requested language.\n\n" +
+        "specific prose (no travel-brochure language). The summary is prose only - never include " +
+        "markdown links, citation markers, or source URLs inline in the subtitle/summary/fact text " +
+        `itself; the separate websiteUrl field below is the only place a link belongs.${languageInstruction(language)} Also try to find ` +
+        "this place's own official website (the park/museum/attraction's own site - not a travel blog, " +
+        "review site, or Wikipedia) so a reader can click through for more information. Only include one " +
+        "if you found a real URL you're confident is the place's own official site; leave it an empty " +
+        "string rather than guess or fabricate one. The JSON field names themselves must stay in " +
+        "English; only the subtitle/summary/fact label/fact value text should be in the requested " +
+        "language.\n\n" +
         'Respond with ONLY this JSON, no other text: {"subtitle": string, "summary": string, ' +
-        '"facts": [{"label": string, "value": string}]}',
+        '"facts": [{"label": string, "value": string}], "websiteUrl": string}',
     }),
   });
 
@@ -130,10 +150,18 @@ export async function generateInfoCard({ placeName, context, language }) {
   }
   const data = await res.json();
   const parsed = extractJson(extractResponseText(data));
+  const websiteUrl = typeof parsed.websiteUrl === "string" ? parsed.websiteUrl.trim() : "";
   return {
-    subtitle: parsed.subtitle || "",
-    summary: parsed.summary || "",
-    facts: Array.isArray(parsed.facts) ? parsed.facts.slice(0, 6) : [],
+    subtitle: stripCitations(parsed.subtitle || ""),
+    summary: stripCitations(parsed.summary || ""),
+    facts: Array.isArray(parsed.facts)
+      ? parsed.facts
+          .slice(0, 6)
+          .map((f) => ({ label: stripCitations(f.label || ""), value: stripCitations(f.value || "") }))
+      : [],
+    // Only trust it if it's actually URL-shaped - never render arbitrary
+    // model output as a clickable link without at least this much of a check.
+    websiteUrl: /^https?:\/\//i.test(websiteUrl) ? websiteUrl : "",
   };
 }
 

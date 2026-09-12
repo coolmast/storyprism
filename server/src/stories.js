@@ -203,6 +203,7 @@ export function getStory(id) {
           facts: JSON.parse(c.facts || "[]"),
           placement: c.placement || "top",
           heroPhotoUrl: c.hero_photo_hash ? thumbUrl(c.hero_photo_hash, "fit_1280") : null,
+          websiteUrl: c.website_url || "",
         })),
       };
     }),
@@ -228,8 +229,8 @@ const insertEmbedStmt = db.prepare(`
 `);
 const deleteInfoCardsStmt = db.prepare("DELETE FROM stop_info_cards WHERE stop_id = @stopId");
 const insertInfoCardStmt = db.prepare(`
-  INSERT INTO stop_info_cards (id, stop_id, place_name, subtitle, summary, facts, position, placement, hero_photo_hash)
-  VALUES (@id, @stopId, @placeName, @subtitle, @summary, @facts, @position, @placement, @heroPhotoHash)
+  INSERT INTO stop_info_cards (id, stop_id, place_name, subtitle, summary, facts, position, placement, hero_photo_hash, website_url)
+  VALUES (@id, @stopId, @placeName, @subtitle, @summary, @facts, @position, @placement, @heroPhotoHash, @websiteUrl)
 `);
 const touchStoryStmt = db.prepare("UPDATE stories SET updated_at = @now WHERE id = @id");
 
@@ -303,6 +304,9 @@ export function updateStory(id, data) {
           position: index,
           placement: ["top", "middle", "end"].includes(card.placement) ? card.placement : "top",
           heroPhotoHash: card.heroPhotoHash || null,
+          // Re-validated here too, not just at generation time - never trust
+          // a client-supplied string as a safe link target without a check.
+          websiteUrl: /^https?:\/\//i.test(card.websiteUrl || "") ? card.websiteUrl : "",
         });
       });
     }

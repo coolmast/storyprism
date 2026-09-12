@@ -75,7 +75,21 @@ export default function InfoCards({ storyId, stopId, suggestedPlaces, infoCards,
           {card.heroPhotoUrl && <img className="info-card-hero-preview" src={card.heroPhotoUrl} alt="" />}
           <div className="info-card-header">
             <div>
-              <h4>{card.placeName}</h4>
+              <h4>
+                {card.placeName}
+                {card.websiteUrl && (
+                  <a
+                    className="info-card-link"
+                    href={card.websiteUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={t("visitWebsite")}
+                    aria-label={t("visitWebsite")}
+                  >
+                    ↗
+                  </a>
+                )}
+              </h4>
               {card.subtitle && <p className="info-card-subtitle">{card.subtitle}</p>}
             </div>
             <button className="link-btn danger" onClick={() => remove(card.id)}>

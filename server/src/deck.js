@@ -38,11 +38,15 @@ const PHOTOS_PER_SLIDE = 6;
 // rest - while left/right moves between stops. No map here; reveal.js's
 // fixed-size slides don't suit an interactive Leaflet map, and the web
 // view already covers that.
-function infoCardSlide(card) {
+function infoCardSlide(card, strings) {
   return `
       <section>
         ${card.heroPhotoUrl ? `<img class="deck-card-hero" src="${escapeHtml(card.heroPhotoUrl)}" alt="${escapeHtml(card.placeName)}">` : ""}
-        <h2>${escapeHtml(card.placeName)}</h2>
+        <h2>${escapeHtml(card.placeName)}${
+          card.websiteUrl
+            ? ` <a class="info-card-link" href="${escapeHtml(card.websiteUrl)}" target="_blank" rel="noreferrer" title="${escapeHtml(strings.visitWebsite)}" aria-label="${escapeHtml(strings.visitWebsite)}">↗</a>`
+            : ""
+        }</h2>
         ${card.subtitle ? `<p class="deck-dates">${escapeHtml(card.subtitle)}</p>` : ""}
         ${card.summary ? `<p class="deck-narrative">${escapeHtml(card.summary)}</p>` : ""}
         ${
@@ -87,11 +91,11 @@ export function renderStoryDeck(story) {
       const cards = stop.infoCards || [];
       const topCardSlides = cards
         .filter((c) => (c.placement || "top") === "top")
-        .map(infoCardSlide)
+        .map((c) => infoCardSlide(c, strings))
         .join("\n");
       const laterCardSlides = cards
         .filter((c) => c.placement === "middle" || c.placement === "end")
-        .map(infoCardSlide)
+        .map((c) => infoCardSlide(c, strings))
         .join("\n");
 
       // Only embeddable (allowlisted + a real /embed link) routes get their
@@ -217,6 +221,12 @@ export function renderStoryDeck(story) {
   }
   .deck-embed-title { margin: 0 0 0.4em 0; }
   .deck-card-hero { width: 100%; max-height: 32vh; object-fit: cover; border-radius: 8px; margin-bottom: 0.5em; display: block; }
+  .info-card-link {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 0.9em; height: 0.9em; margin-left: 0.2em; font-size: 0.55em;
+    border-radius: 50%; border: 0.08em solid var(--accent2);
+    color: var(--accent2); text-decoration: none; vertical-align: middle;
+  }
   .deck-facts {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: 0.5em 1em; margin-top: 0.8em; font-size: 0.6em;
