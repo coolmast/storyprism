@@ -7,8 +7,8 @@ async function json(res) {
 }
 
 export const fetchAlbums = () => fetch("/api/albums").then(json);
-export const fetchItinerary = (albumUid) =>
-  fetch(`/api/albums/${albumUid}/itinerary`).then(json);
+export const fetchItinerary = (albumUids) =>
+  fetch(`/api/albums/itinerary?uids=${albumUids.map(encodeURIComponent).join(",")}`).then(json);
 export const fetchItineraryByDate = (from, to) =>
   fetch(`/api/itinerary/by-date?from=${from}&to=${to}`).then(json);
 

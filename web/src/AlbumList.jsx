@@ -35,7 +35,9 @@ function groupByYear(albums) {
   }));
 }
 
-export default function AlbumList({ albums, selectedUid, onSelect }) {
+// selectedUids: a Set of album UIDs - more than one may be selected at
+// once, merged into a single itinerary (see App.jsx's handling).
+export default function AlbumList({ albums, selectedUids, onToggle }) {
   const { t } = useI18n();
   const groups = useMemo(() => groupByYear(albums), [albums]);
   const [openYears, setOpenYears] = useState(() => new Set());
@@ -49,10 +51,13 @@ export default function AlbumList({ albums, selectedUid, onSelect }) {
     if (initialized.current || groups.length === 0) return;
     initialized.current = true;
     const initial = new Set([groups[0].year]);
-    const selectedGroup = groups.find((g) => g.albums.some((a) => a.uid === selectedUid));
+    const selectedGroup = groups.find((g) => g.albums.some((a) => selectedUids.has(a.uid)));
     if (selectedGroup) initial.add(selectedGroup.year);
     setOpenYears(initial);
-  }, [groups, selectedUid]);
+    // Only ever runs once, when the album list first arrives - deliberately
+    // not re-running when the selection changes afterward.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups]);
 
   function toggleYear(year, open) {
     setOpenYears((prev) => {
@@ -77,19 +82,29 @@ export default function AlbumList({ albums, selectedUid, onSelect }) {
             <span className="album-year-count">{group.albums.length}</span>
           </summary>
           <ul className="album-list">
-            {group.albums.map((a) => (
-              <li key={a.uid}>
-                <button className={a.uid === selectedUid ? "active" : ""} onClick={() => onSelect(a.uid)}>
-                  <span className="album-title">{a.title}</span>
-                  {/* PhotoPrism doesn't precompute a photo count for "moment"
-                      albums (they're a saved search filter, not a static
-                      list, so PhotoCount always comes back 0) - showing "0"
-                      there would read as "this album is empty", which is
-                      misleading. */}
-                  {a.type !== "moment" && <span className="album-count">{a.photoCount}</span>}
-                </button>
-              </li>
-            ))}
+            {group.albums.map((a) => {
+              const selected = selectedUids.has(a.uid);
+              return (
+                <li key={a.uid}>
+                  <button
+                    className={selected ? "active" : ""}
+                    aria-pressed={selected}
+                    onClick={() => onToggle(a.uid)}
+                  >
+                    <span className="album-check" aria-hidden="true">
+                      {selected ? "✓" : ""}
+                    </span>
+                    <span className="album-title">{a.title}</span>
+                    {/* PhotoPrism doesn't precompute a photo count for "moment"
+                        albums (they're a saved search filter, not a static
+                        list, so PhotoCount always comes back 0) - showing "0"
+                        there would read as "this album is empty", which is
+                        misleading. */}
+                    {a.type !== "moment" && <span className="album-count">{a.photoCount}</span>}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </details>
       ))}

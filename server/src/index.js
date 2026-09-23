@@ -14,7 +14,7 @@ import {
 } from "./photoprism.js";
 import { buildItinerary } from "./itinerary.js";
 import {
-  createStoryFromAlbum,
+  createStoryFromAlbums,
   createStoryFromDateRange,
   listStories,
   getStory,
@@ -151,9 +151,28 @@ app.get("/api/albums", async (req, res) => {
   }
 });
 
-app.get("/api/albums/:uid/itinerary", async (req, res) => {
+// One or several albums/moments, merged - the New Story picker's live
+// preview (map + stop list) for the current selection, before a story is
+// actually created. Dedupes by photo UID so a photo present in more than
+// one selected album isn't clustered twice.
+app.get("/api/albums/itinerary", async (req, res) => {
   try {
-    const photos = await getAlbumPhotos(req.params.uid);
+    const uids = String(req.query.uids || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (uids.length === 0) return res.json([]);
+
+    const photoLists = await Promise.all(uids.map((uid) => getAlbumPhotos(uid)));
+    const seen = new Set();
+    const photos = [];
+    for (const list of photoLists) {
+      for (const p of list) {
+        if (seen.has(p.uid)) continue;
+        seen.add(p.uid);
+        photos.push(p);
+      }
+    }
     const withThumbs = photos.map((p) => ({
       ...p,
       thumbUrl: p.thumbHash ? thumbUrl(p.thumbHash) : null,
@@ -189,16 +208,16 @@ app.get("/api/stories", (req, res) => {
 
 app.post("/api/stories", async (req, res) => {
   try {
-    const { albumUid, dateFrom, dateTo, title, contentLanguage } = req.body;
-    if (albumUid) {
-      return res.status(201).json(await createStoryFromAlbum(albumUid, contentLanguage));
+    const { albumUids, dateFrom, dateTo, title, contentLanguage } = req.body;
+    if (Array.isArray(albumUids) && albumUids.length > 0) {
+      return res.status(201).json(await createStoryFromAlbums(albumUids, title, contentLanguage));
     }
     if (dateFrom && dateTo) {
       return res
         .status(201)
         .json(await createStoryFromDateRange(dateFrom, dateTo, title, contentLanguage));
     }
-    return res.status(400).json({ error: "albumUid or dateFrom/dateTo is required" });
+    return res.status(400).json({ error: "albumUids or dateFrom/dateTo is required" });
   } catch (err) {
     console.error(err);
     res.status(502).json({ error: err.message });

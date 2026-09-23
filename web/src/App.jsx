@@ -52,7 +52,7 @@ export default function App() {
   const [source, setSource] = useState("album"); // "album" | "dateRange"
 
   const [albums, setAlbums] = useState([]);
-  const [selectedUid, setSelectedUid] = useState(null);
+  const [selectedUids, setSelectedUids] = useState(() => new Set());
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [rangeTitle, setRangeTitle] = useState("");
@@ -115,13 +115,13 @@ export default function App() {
 
   useEffect(() => {
     if (source === "album") {
-      if (!selectedUid) {
+      if (selectedUids.size === 0) {
         setStops([]);
         return;
       }
       setLoading(true);
       setError(null);
-      fetchItinerary(selectedUid)
+      fetchItinerary([...selectedUids])
         .then(setStops)
         .catch((e) => setError(e.message))
         .finally(() => setLoading(false));
@@ -137,7 +137,16 @@ export default function App() {
         .catch((e) => setError(e.message))
         .finally(() => setLoading(false));
     }
-  }, [source, selectedUid, dateFrom, dateTo]);
+  }, [source, selectedUids, dateFrom, dateTo]);
+
+  function toggleAlbum(uid) {
+    setSelectedUids((prev) => {
+      const next = new Set(prev);
+      if (next.has(uid)) next.delete(uid);
+      else next.add(uid);
+      return next;
+    });
+  }
 
   function refreshStories() {
     fetchStories().then(setStories).catch((e) => setError(e.message));
@@ -153,7 +162,7 @@ export default function App() {
     try {
       const payload =
         source === "album"
-          ? { albumUid: selectedUid, contentLanguage: lang }
+          ? { albumUids: [...selectedUids], contentLanguage: lang }
           : { dateFrom, dateTo, title: rangeTitle, contentLanguage: lang };
       const story = await createStory(payload);
       goTo("editor", story);
@@ -188,7 +197,10 @@ export default function App() {
     }
   }
 
-  const selectedAlbum = albums.find((a) => a.uid === selectedUid);
+  const selectedAlbumsTitle = albums
+    .filter((a) => selectedUids.has(a.uid))
+    .map((a) => a.title)
+    .join(" + ");
   const libraryActive = tab === "stories" || tab === "editor";
   const pageTitle =
     tab === "editor" ? activeStory?.title || t("tabMyStories") : tab === "stories" ? t("tabMyStories") : t("tabNewStory");
@@ -266,7 +278,7 @@ export default function App() {
             </div>
             {error && <p className="error">{error}</p>}
             {source === "album" && (
-              <AlbumList albums={albums} selectedUid={selectedUid} onSelect={setSelectedUid} />
+              <AlbumList albums={albums} selectedUids={selectedUids} onToggle={toggleAlbum} />
             )}
             {source === "dateRange" && (
               <Card className="date-range-picker">
@@ -289,21 +301,21 @@ export default function App() {
             )}
           </aside>
           <main className="content">
-            {source === "album" && !selectedUid && <p className="hint">{t("pickAlbumHint")}</p>}
+            {source === "album" && selectedUids.size === 0 && <p className="hint">{t("pickAlbumHint")}</p>}
             {source === "dateRange" && !(dateFrom && dateTo) && (
               <p className="hint">{t("pickDateRangeHint")}</p>
             )}
-            {((source === "album" && selectedUid) || (source === "dateRange" && dateFrom && dateTo)) && (
+            {((source === "album" && selectedUids.size > 0) || (source === "dateRange" && dateFrom && dateTo)) && (
               <>
                 <div className="content-header">
                   <h2>
-                    {source === "album" ? selectedAlbum?.title : rangeTitle || `${dateFrom} – ${dateTo}`}
+                    {source === "album" ? selectedAlbumsTitle : rangeTitle || `${dateFrom} – ${dateTo}`}
                   </h2>
                   <button className="save-btn" onClick={handleCreateStory} disabled={creating}>
                     {creating
                       ? t("creating")
                       : source === "album"
-                      ? t("createStoryBtn")
+                      ? t("createStoryBtn", selectedUids.size)
                       : t("createStoryFromRangeBtn")}
                   </button>
                 </div>

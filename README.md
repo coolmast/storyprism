@@ -16,12 +16,15 @@ view, a reveal.js presentation, or a printable PDF (either format).
     pre-obtained `PHOTOPRISM_API_TOKEN`) let it talk to someone else's
     PhotoPrism that requires login instead, so the same app can be pointed
     at a different instance per deployment purely via `.env` — see
-    `server/.env.example`. A story's source photos can come from a
-    manually-curated album, one of PhotoPrism's auto-generated "moment"
-    albums (country+year groupings), or an arbitrary date range across the
-    whole library (`getPhotosByDateRange`) for a trip that doesn't fit
-    either - crossing New Year's (splits across two yearly moments) or
-    spanning several countries.
+    `server/.env.example`. A story's source photos can come from one or
+    several manually-curated albums and/or PhotoPrism auto-generated
+    "moment" albums (country+year groupings) at once - merged and
+    deduplicated by photo UID before itinerary-clustering, since the same
+    photo can easily appear in more than one selected album/moment - or
+    from an arbitrary date range across the whole library
+    (`getPhotosByDateRange`) for a trip that doesn't fit either - crossing
+    New Year's (splits across two yearly moments) or spanning several
+    countries.
   - **The browser never talks to PhotoPrism directly.** Every photo URL this
     app hands out (`thumbUrl`/`fullUrl` on a story's photos, info-card hero
     photos, ...) is a path on this server, `/api/photo/t/:hash/:size` or
@@ -494,6 +497,12 @@ pick up `server.allowedHosts` changes on the fly.
       card
 - [x] UI smoke test (`npm run smoke-test --workspace server`) - see
       "Running locally" above
+- [x] Multi-select album/moment picker for a new story: pick any number of
+      albums and/or moments (a checkbox per row, not exclusive selection),
+      merged and deduplicated by photo UID into one itinerary before
+      clustering. `POST /api/stories` takes `albumUids` (an array, replacing
+      the old singular `albumUid`) and defaults an unselected title to the
+      selected albums' titles joined with " + "
 
 ## Notes
 

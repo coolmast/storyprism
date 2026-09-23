@@ -86,6 +86,25 @@ async function runChecksAtBreakpoint(browser, story, width, tag) {
     check(`[${tag}] only the newest year is expanded by default`, secondGroupOpen === false);
   }
 
+  // --- Multi-select album picker: two albums merge into one itinerary ---
+  const albumButtons = yearGroups.first().locator(".album-list button");
+  const albumButtonCount = await albumButtons.count();
+  if (albumButtonCount >= 2) {
+    await albumButtons.nth(0).click();
+    await page.waitForTimeout(400);
+    await albumButtons.nth(1).click();
+    await page.waitForTimeout(600);
+    const bothSelected =
+      (await albumButtons.nth(0).evaluate((el) => el.classList.contains("active"))) &&
+      (await albumButtons.nth(1).evaluate((el) => el.classList.contains("active")));
+    check(`[${tag}] selecting a second album keeps the first selected`, bothSelected);
+    const heading = await page.locator(".content-header h2").innerText();
+    check(`[${tag}] combined title joins both album names`, heading.includes("+"), heading);
+    await albumButtons.nth(1).click(); // deselect, so later screens start clean
+    await albumButtons.nth(0).click();
+    await page.waitForTimeout(200);
+  }
+
   // --- Open the disposable test story's editor ---
   await page.locator(nav).nth(1).click();
   await page.waitForTimeout(200);
@@ -149,7 +168,7 @@ async function main() {
   const story = await jsonFetch(`${BACKEND_URL}/api/stories`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ albumUid: album.uid, contentLanguage: "en" }),
+    body: JSON.stringify({ albumUids: [album.uid], contentLanguage: "en" }),
   });
   console.log(`Created disposable test story "${story.title}" (${story.id}) from album "${album.title}" (${album.photoCount} photos)\n`);
 

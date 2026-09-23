@@ -107,23 +107,43 @@ function insertStops(storyId, stops) {
   });
 }
 
-export async function createStoryFromAlbum(albumUid, contentLanguage = DEFAULT_LANGUAGE) {
+// One or several source albums/moments merged into one itinerary - photos
+// appearing in more than one selected album (not unusual for PhotoPrism's
+// auto "moment" albums, which can overlap a manually-curated one covering
+// the same trip) are deduplicated by photo UID before clustering, so a
+// shared photo doesn't show up as two stops' worth of the same moment.
+export async function createStoryFromAlbums(albumUids, title, contentLanguage = DEFAULT_LANGUAGE) {
   const albums = await listAlbums();
-  const album = albums.find((a) => a.uid === albumUid);
-  if (!album) throw new Error("Album not found");
+  const selected = albumUids.map((uid) => albums.find((a) => a.uid === uid)).filter(Boolean);
+  if (selected.length === 0) throw new Error("Album not found");
 
-  const photos = await getAlbumPhotos(albumUid);
+  const photoLists = await Promise.all(selected.map((a) => getAlbumPhotos(a.uid)));
+  const seen = new Set();
+  const photos = [];
+  for (const list of photoLists) {
+    for (const p of list) {
+      if (seen.has(p.uid)) continue;
+      seen.add(p.uid);
+      photos.push(p);
+    }
+  }
   const stops = buildItinerary(photos);
 
   const storyId = randomUUID();
   const now = new Date().toISOString();
+  const defaultTitle = selected.map((a) => a.title).join(" + ");
+  const storyTitle = (title || "").trim() || defaultTitle;
 
   const tx = db.transaction(() => {
     insertStory.run({
       id: storyId,
-      albumUid,
-      albumTitle: album.title,
-      title: album.title,
+      // Only meaningful (and only ever used) as a "look the album back up"
+      // reference, which stops making sense once a story merges more than
+      // one - see createStoryFromDateRange's album_uid below for the same
+      // "no single source album" sentinel.
+      albumUid: selected.length === 1 ? selected[0].uid : "",
+      albumTitle: storyTitle,
+      title: storyTitle,
       theme: DEFAULT_THEME,
       contentLanguage,
       now,
