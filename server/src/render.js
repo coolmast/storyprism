@@ -2,7 +2,7 @@ import { getTheme } from "./themes.js";
 import { isEmbeddable } from "./embeds.js";
 import { getStrings } from "./i18n.js";
 
-function escapeHtml(str = "") {
+export function escapeHtml(str = "") {
   return String(str).replace(/[&<>"']/g, (c) => ({
     "&": "&amp;",
     "<": "&lt;",
@@ -12,7 +12,7 @@ function escapeHtml(str = "") {
   }[c]));
 }
 
-function paragraphs(text) {
+export function paragraphs(text) {
   return escapeHtml(text)
     .split(/\n{2,}/)
     .filter(Boolean)
@@ -20,7 +20,7 @@ function paragraphs(text) {
     .join("\n");
 }
 
-function dateRange(start, end, locale) {
+export function dateRange(start, end, locale) {
   const opts = { day: "numeric", month: "long", year: "numeric" };
   const s = new Date(start).toLocaleDateString(locale, opts);
   const e = new Date(end).toLocaleDateString(locale, opts);
@@ -32,7 +32,7 @@ function tripDateRange(stops, locale) {
   return dateRange(stops[0].startedAt, stops[stops.length - 1].endedAt, locale);
 }
 
-function chunk(arr, size) {
+export function chunk(arr, size) {
   const out = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
@@ -94,15 +94,18 @@ function infoCardBlock(card, strings) {
     </div>`;
 }
 
-// More than this on one printed page and photos get too small to be worth
-// looking at (this only forces a page break in print/PDF - on screen the
-// gallery still scrolls as one continuous masonry). The featured photo, if
-// any, doesn't count against this - it gets its own full-width treatment.
-const PHOTOS_PER_PRINTED_PAGE = 6;
+// Chunks a stop's photos into independent masonry groups, each with its own
+// shuffle button - a single giant masonry only ever gets one shuffle, which
+// stops being useful once a stop has 30+ photos. (This no longer has
+// anything to do with print/PDF - that now has its own dedicated page
+// templates in pdfTemplates.js, unrelated to this on-screen grouping.) The
+// featured photo, if any, doesn't count against this - it gets its own
+// full-width treatment.
+const PHOTOS_PER_SHUFFLE_GROUP = 6;
 
 function photoGroup(photos, groupKey, stopHeading, strings, editMode) {
   if (!photos.length) return "";
-  return chunk(photos, PHOTOS_PER_PRINTED_PAGE)
+  return chunk(photos, PHOTOS_PER_SHUFFLE_GROUP)
     .map((pagePhotos, ci) => {
       const mosaicId = `mosaic-${groupKey}-${ci}`;
       return `
@@ -112,7 +115,7 @@ function photoGroup(photos, groupKey, stopHeading, strings, editMode) {
         </div>
         ${
           editMode
-            ? `<button class="shuffle-btn no-print" onclick="shuffleMosaic('${mosaicId}')">${strings.shuffleLayout}</button>`
+            ? `<button class="shuffle-btn" onclick="shuffleMosaic('${mosaicId}')">${strings.shuffleLayout}</button>`
             : ""
         }
       </div>`;
@@ -272,7 +275,7 @@ export function renderStoryHtml(story, { editMode = false } = {}) {
   .intro, .outro { font-size: 1.15rem; }
   .intro, .outro, .stop-dates, footer { color: var(--ink); opacity: 0.75; }
   #map { height: 420px; border-radius: 10px; margin: 2rem 0; border: 1px solid var(--line); }
-  .stop { border-top: 2px solid var(--sand); padding-top: 2rem; margin-top: 2rem; page-break-inside: avoid; }
+  .stop { border-top: 2px solid var(--sand); padding-top: 2rem; margin-top: 2rem; }
   .stop-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
   .stop-head h2 { margin: 0; font-size: 1.8rem; display: flex; align-items: center; gap: 0.6rem; }
   .stop-number {
@@ -353,16 +356,6 @@ export function renderStoryHtml(story, { editMode = false } = {}) {
     color: var(--accent); border-radius: 999px; cursor: pointer;
   }
   footer { text-align: center; font-size: 0.8rem; padding: 2rem; }
-  @media print {
-    .hero { min-height: 90vh; break-after: page; }
-    #map { break-inside: avoid; }
-    .stop { break-before: page; }
-    .no-print { display: none; }
-    .photo-mosaic { column-count: 3; }
-    .photo-mosaic-page { break-after: page; }
-    .photo-mosaic-page:last-of-type { break-after: auto; }
-    .featured-photo img { max-height: 320px; }
-  }
 </style>
 </head>
 <body>

@@ -1191,6 +1191,23 @@ textarea {
   color: #6b5d4d;
 }
 
+.pdf-override-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.pdf-override-picker select {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: white;
+  color: var(--ink);
+}
+
 .info-card-placement select {
   font: inherit;
   font-size: 0.85rem;

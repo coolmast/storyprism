@@ -19,6 +19,10 @@ import { getProvider } from "./ai/index.js";
 import { renderStoryHtml } from "./render.js";
 import { renderStoryDeck } from "./deck.js";
 import { renderStoryPdf, renderDeckPdf } from "./pdf.js";
+import { buildPdfHtml } from "./pdfDocument.js";
+import { PDF_TEMPLATES } from "./pdfTemplates.js";
+import { PDF_LAYOUT_PACKS } from "./pdfLayoutPacks.js";
+import { PDF_PAPER_SIZES } from "./pdfPaperSizes.js";
 import { THEMES } from "./themes.js";
 import { fetchArticleText } from "./article.js";
 
@@ -51,6 +55,19 @@ app.get("/api/themes", (req, res) => {
 
 app.get("/api/languages", (req, res) => {
   res.json(LANGUAGES.map((code) => ({ code, label: NATIVE_LANGUAGE_NAMES[code] })));
+});
+
+app.get("/api/pdf-layouts", (req, res) => {
+  res.json({
+    templates: Object.entries(PDF_TEMPLATES).map(([id, t]) => ({
+      id,
+      label: t.label,
+      photoSlots: t.photoSlots,
+      hasText: t.hasText,
+    })),
+    packs: Object.entries(PDF_LAYOUT_PACKS).map(([id, p]) => ({ id, label: p.label })),
+    paperSizes: Object.entries(PDF_PAPER_SIZES).map(([id, p]) => ({ id, label: p.label })),
+  });
 });
 
 app.get("/api/albums", async (req, res) => {
@@ -299,12 +316,23 @@ app.get("/story/:id/present", (req, res) => {
   res.type("html").send(renderStoryDeck(story));
 });
 
+// Serves the exact HTML that export/pdf below converts to a PDF - lets the
+// user (or the editor's "Preview PDF layout" link) eyeball the page
+// templates in an ordinary browser tab, including trying a different pack/
+// paper size via query params before committing to it, without generating
+// an actual PDF file each time.
+app.get("/story/:id/pdf-preview", (req, res) => {
+  const story = getStory(req.params.id);
+  if (!story) return res.status(404).send("Story not found");
+  res.type("html").send(buildPdfHtml(story, { pack: req.query.pack, paperSize: req.query.paperSize }));
+});
+
 app.get("/api/stories/:id/export/pdf", async (req, res) => {
   const story = getStory(req.params.id);
   if (!story) return res.status(404).json({ error: "Not found" });
 
   try {
-    const pdf = await renderStoryPdf(`http://localhost:${port}/story/${story.id}`, story.contentLanguage);
+    const pdf = await renderStoryPdf(story, { pack: req.query.pack, paperSize: req.query.paperSize });
     res
       .type("application/pdf")
       .set("Content-Disposition", `attachment; filename="${story.title.replace(/[^\w -]/g, "")}.pdf"`)

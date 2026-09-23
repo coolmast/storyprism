@@ -44,10 +44,27 @@ view, a reveal.js presentation, or a printable PDF (either format).
     slide, then per-stop nested slides (text+quote → featured photo
     full-bleed → photo grids), then an outro. No map here; reveal's
     fixed-size slides don't suit an interactive Leaflet map.
-  - Exports both to PDF via headless Chrome (`server/src/pdf.js`): the web
-    view at `/api/stories/:id/export/pdf` (cover page, page numbers, 6
-    photos/page cap) and the deck at `/api/stories/:id/export/deck-pdf`
-    (reveal.js's own built-in print-pdf mode, one slide per page).
+  - **The story PDF (`/api/stories/:id/export/pdf`) is a real print-design
+    system, not a screenshot of the web view.** A library of 8 page
+    templates (`server/src/pdfTemplates.js`) — single full-bleed photo,
+    2/3/4/6-photo layouts with or without a caption zone, a text-only
+    chapter page, an opening page (featured photo + narrative/pull quote),
+    and a dedicated info-card page — each a CSS Grid layout for one
+    physical page. A pure planner (`server/src/pdfPlanner.js`) walks each
+    stop's actual content and assigns templates page by page, cycling
+    through a chosen "layout pack" (`server/src/pdfLayoutPacks.js`) without
+    repeating a template twice in a row; a per-stop manual override can pin
+    one template for that stop's photos instead. Paper size/aspect ratio
+    (`server/src/pdfPaperSizes.js`: A4 portrait/landscape, US Letter,
+    square) is a separate, orthogonal choice applied via a real `@page`
+    CSS rule. `server/src/pdfDocument.js` builds the whole document from
+    these three pieces, shared by both the actual PDF export
+    (`server/src/pdf.js`, headless Chrome, `preferCSSPageSize: true` so
+    Chromium honors the exact paper size) and a live preview route
+    (`GET /story/:id/pdf-preview`) that serves the identical HTML directly
+    in a browser — no PDF conversion, for fast template iteration.
+  - The deck's own PDF (`/api/stories/:id/export/deck-pdf`, reveal.js's
+    built-in print-pdf mode) is unrelated and untouched by the above.
   - A stop can carry route/activity embeds (Strava, Komoot, Garmin Connect)
     — `server/src/embeds.js` allowlists hosts and decides iframe vs. a
     link-out card, stored in the `stop_embeds` table.
@@ -170,16 +187,65 @@ useful for a second person to use the editor from their own device.
 - [ ] Containerize (Dockerfiles + docker-compose) to run alongside PhotoPrism
       — deferred until this has been used for real and the deployment shape
       (same host as PhotoPrism? synced elsewhere?) is clearer
-- [ ] Table of contents / running chapter markers in the PDF — the cover
-      page and page numbers cover the basics; a real TOC needs a
-      multi-pass render (page numbers aren't known until the first pass
-      completes) and wasn't worth it yet
+- [x] Rebuilt the PDF export as a real print-design system: 8 page
+      templates, 3 layout packs, 4 paper sizes/aspect ratios, automatic
+      page-planning with a per-stop manual override, and a live
+      `/pdf-preview` route for iterating on templates without generating an
+      actual PDF each time — see the Architecture section above
+- [ ] Page numbers and a table of contents in the PDF — the old pipeline
+      had page numbers via Chromium's header/footer templates, but those
+      need a page margin to render into, which conflicts with the new
+      templates' full-bleed photo pages (zero `@page` margin). Dropped for
+      now; worth a per-template opt-in (only the text-heavy templates
+      reserve footer space) if this is missed in practice. A real TOC
+      still needs a multi-pass render regardless (page numbers aren't
+      known until the first pass completes)
+- [ ] The new PDF pipeline embeds full-resolution (`fit_2048`) photos on
+      every page, same as the old one - a full story PDF is routinely
+      80-90MB. Worth trying a smaller size (`fit_1600`?) now that there
+      are dedicated full-bleed single-photo templates that would show the
+      difference most, but wasn't tested this pass
 - [ ] Sharing a story off the PhotoPrism LAN — the view/PDF/deck all embed
       PhotoPrism image URLs directly; taking a story off-network would need
       downloading and re-embedding the images
 
 ## Notes
 
+- **Two photo-and-caption templates (`duo-caption`, `photo-strip`) were
+  wasting nearly half the page as blank white space** whenever the
+  specific photos assigned to that page didn't happen to have a caption
+  set - caught immediately by actually looking at rendered screenshots
+  rather than trusting the code once it ran without errors. Captions are
+  optional per photo, so "these particular 2 or 3 photos have none" is the
+  common case, not an edge case. Fixed by having the template itself
+  detect empty content and collapse its text zone to zero height via a
+  `pdf-notext` modifier class, letting the photos expand to fill the page
+  instead - the honest fallback is "this becomes a full-bleed photo
+  layout," not "half the page is empty."
+- **The per-stop manual-override `<select>` only offers templates with
+  `photoSlots.min > 0`** — excluding `hero-pullquote`/`text-chapter`
+  (opening-page-only, capacity 0) and `info-card-page` (renders an info
+  card's fields, not raw photos). Turned out this didn't even need a
+  server-side guard: `chunkPhotosWithPack`'s own candidate filter already
+  requires `min > 0`, so a stray/manually-crafted override value outside
+  that set just falls through to its existing `single-full-bleed` fallback
+  rather than crashing - confirmed by tracing the fallback logic rather
+  than assuming a client-side filter was the only thing preventing a
+  runtime error accessing `card.placeName` on an undefined `infoCard`.
+- **A featured photo (or narrative/pull quote) always gets its own opening
+  page, independent of a stop's manual template override** - the override
+  only steers the *rest* of the stop's photos. Otherwise pinning a stop to
+  e.g. "4-Photo Grid" would have silently discarded whatever the user
+  wrote for that stop, since none of the photo-grid templates have a text
+  zone. Never let a layout choice silently drop content the user wrote.
+- **The print-specific CSS this replaced (`@media print` in `render.js`)
+  turned out to share a home with code that's still very much alive**:
+  `PHOTOS_PER_PRINTED_PAGE`/`photoGroup()`'s chunking-into-groups-of-6 was
+  originally written for both print pagination and the on-screen
+  "each group gets its own shuffle button" feature - only the print half
+  was dead after this rewrite. Renamed to `PHOTOS_PER_SHUFFLE_GROUP` and
+  kept; only the actual `@media print` block and the now-pointless
+  `no-print` class on the shuffle button were removed.
 - **Splitting/adding sections needed `stops` to become upsertable, which
   they never were.** `updateStopStmt` was a plain `UPDATE ... WHERE id =
   @id`, silently affecting 0 rows for a client-generated stop id that

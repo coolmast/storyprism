@@ -97,3 +97,8 @@ function ensureColumn(table, column, definition) {
 }
 
 ensureColumn("stop_info_cards", "website_url", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("stories", "pdf_layout_pack", "TEXT NOT NULL DEFAULT 'classic'");
+ensureColumn("stories", "pdf_paper_size", "TEXT NOT NULL DEFAULT 'a4-portrait'");
+// NULL means "automatic" - the story's pack decides this stop's photo
+// layout. Non-NULL pins every photo page for this stop to one template.
+ensureColumn("stops", "pdf_template_override", "TEXT");

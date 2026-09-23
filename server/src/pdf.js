@@ -1,12 +1,29 @@
 import { chromium } from "playwright-core";
-import { getStrings } from "./i18n.js";
+import { buildPdfHtml } from "./pdfDocument.js";
 
-export async function renderStoryPdf(url, language) {
-  const strings = getStrings(language);
+// Builds the whole document from the story's own content and templates
+// (see pdfDocument.js/pdfPlanner.js/pdfTemplates.js) and hands it to
+// Chromium directly via setContent - no more navigating to the live
+// /story/:id page and relying on a @media print override of its on-screen
+// CSS. `preferCSSPageSize: true` is what makes Chromium actually honor the
+// document's own `@page { size: ...; margin: 0; }` rule (set per the
+// story's chosen paper size) instead of forcing a fixed A4 with margins -
+// that, plus every page being a deterministic CSS Grid rather than
+// reflowed content, is what makes the output the same every time.
+//
+// No page-number footer here (the old pipeline had one): a zero-margin
+// @page is required for the templates' full-bleed photo pages to actually
+// reach the edge, and Chromium's header/footer templates render inside
+// whatever margin the page declares - there's no room left for one without
+// either giving every template a permanent margin (defeating full-bleed)
+// or overlaying text on top of photos. Worth revisiting with a per-template
+// opt-in if this is missed in practice.
+export async function renderStoryPdf(story, { pack, paperSize } = {}) {
+  const html = buildPdfHtml(story, { pack, paperSize });
   const browser = await chromium.launch({ channel: "chrome", headless: true });
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: "networkidle" });
+    await page.setContent(html, { waitUntil: "networkidle" });
     await page.evaluate(() =>
       Promise.all(
         Array.from(document.images)
@@ -17,19 +34,7 @@ export async function renderStoryPdf(url, language) {
           }))
       )
     );
-    // Let map tiles + Leaflet's fitBounds settle before printing.
-    await page.waitForTimeout(800);
-    return await page.pdf({
-      format: "A4",
-      printBackground: true,
-      margin: { top: "0", bottom: "0.5in", left: "0", right: "0" },
-      displayHeaderFooter: true,
-      headerTemplate: "<div></div>",
-      footerTemplate: `
-        <div style="width:100%; font-size:9px; text-align:center; color:#999; font-family:Georgia,serif;">
-          ${strings.pageOf} <span class="pageNumber"></span> / <span class="totalPages"></span>
-        </div>`,
-    });
+    return await page.pdf({ printBackground: true, preferCSSPageSize: true });
   } finally {
     await browser.close();
   }

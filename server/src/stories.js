@@ -6,6 +6,9 @@ import { DEFAULT_THEME } from "./themes.js";
 import { isAllowedEmbedHost } from "./embeds.js";
 import { suggestPlacesForStop, photosMatchingPlace } from "./places.js";
 import { DEFAULT_LANGUAGE } from "./i18n.js";
+import { PDF_TEMPLATE_IDS } from "./pdfTemplates.js";
+import { PDF_LAYOUT_PACKS, DEFAULT_LAYOUT_PACK } from "./pdfLayoutPacks.js";
+import { PDF_PAPER_SIZES, DEFAULT_PAPER_SIZE } from "./pdfPaperSizes.js";
 
 // The AI always returns a full https:// URL when it includes one at all, but
 // a human editing/adding this field by hand will often just type
@@ -169,6 +172,8 @@ export function getStory(id) {
     outro: story.outro,
     theme: story.theme,
     contentLanguage: story.content_language,
+    pdfLayoutPack: story.pdf_layout_pack,
+    pdfPaperSize: story.pdf_paper_size,
     createdAt: story.created_at,
     updatedAt: story.updated_at,
     stops: stops.map((s) => {
@@ -187,6 +192,7 @@ export function getStory(id) {
         narrative: s.narrative,
         research: s.research,
         pullQuote: s.pull_quote,
+        pdfTemplateOverride: s.pdf_template_override || null,
         suggestedPlaces: suggestPlacesForStop(
           includedRows.map((p) => ({ title: p.title, placeLabel: p.place_label }))
         ),
@@ -230,7 +236,7 @@ export function getStory(id) {
 }
 
 const updateStoryStmt = db.prepare(
-  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, content_language = @contentLanguage, updated_at = @now WHERE id = @id"
+  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, content_language = @contentLanguage, pdf_layout_pack = @pdfLayoutPack, pdf_paper_size = @pdfPaperSize, updated_at = @now WHERE id = @id"
 );
 // Upsert, not a plain UPDATE: the editor can now create brand-new stops
 // client-side (splitting one stop into two, or adding a blank section) and
@@ -239,8 +245,8 @@ const updateStoryStmt = db.prepare(
 // Position is included so inserting a stop in the middle (or reordering)
 // is reflected, same as photos already work.
 const upsertStopStmt = db.prepare(`
-  INSERT INTO stops (id, story_id, position, lat, lng, place_label, started_at, ended_at, heading, narrative, research, pull_quote)
-  VALUES (@id, @storyId, @position, @lat, @lng, @placeLabel, @startedAt, @endedAt, @heading, @narrative, @research, @pullQuote)
+  INSERT INTO stops (id, story_id, position, lat, lng, place_label, started_at, ended_at, heading, narrative, research, pull_quote, pdf_template_override)
+  VALUES (@id, @storyId, @position, @lat, @lng, @placeLabel, @startedAt, @endedAt, @heading, @narrative, @research, @pullQuote, @pdfTemplateOverride)
   ON CONFLICT(id) DO UPDATE SET
     position = excluded.position,
     lat = excluded.lat,
@@ -251,7 +257,8 @@ const upsertStopStmt = db.prepare(`
     heading = excluded.heading,
     narrative = excluded.narrative,
     research = excluded.research,
-    pull_quote = excluded.pull_quote
+    pull_quote = excluded.pull_quote,
+    pdf_template_override = excluded.pdf_template_override
 `);
 // Matched by id alone (a photo's id is globally unique, not just within its
 // stop) and stop_id is now part of the SET clause, not the WHERE - splitting
@@ -290,6 +297,12 @@ export function updateStory(id, data) {
       outro: data.outro ?? existing.outro,
       theme: data.theme ?? existing.theme,
       contentLanguage: data.contentLanguage ?? existing.contentLanguage,
+      pdfLayoutPack:
+        data.pdfLayoutPack in PDF_LAYOUT_PACKS
+          ? data.pdfLayoutPack
+          : existing.pdfLayoutPack || DEFAULT_LAYOUT_PACK,
+      pdfPaperSize:
+        data.pdfPaperSize in PDF_PAPER_SIZES ? data.pdfPaperSize : existing.pdfPaperSize || DEFAULT_PAPER_SIZE,
       now,
     });
 
@@ -304,6 +317,7 @@ export function updateStory(id, data) {
         placeLabel: stop.placeLabel ?? null,
         startedAt: stop.startedAt ?? null,
         endedAt: stop.endedAt ?? null,
+        pdfTemplateOverride: PDF_TEMPLATE_IDS.includes(stop.pdfTemplateOverride) ? stop.pdfTemplateOverride : null,
         heading: stop.heading ?? "",
         narrative: stop.narrative ?? "",
         research: stop.research ?? "",

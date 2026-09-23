@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { saveStory, draftCaption, researchPlace, fetchThemes, fetchLanguages } from "./api.js";
+import { saveStory, draftCaption, researchPlace, fetchThemes, fetchLanguages, fetchPdfLayouts } from "./api.js";
 import IncludedPhotoGrid from "./IncludedPhotoGrid.jsx";
 import InterviewPanel from "./InterviewPanel.jsx";
 import RouteEmbeds from "./RouteEmbeds.jsx";
@@ -37,6 +37,7 @@ export default function StoryEditor({ story, onBack, onSaved }) {
   const [aiError, setAiError] = useState(null);
   const [themes, setThemes] = useState([]);
   const [languages, setLanguages] = useState([]);
+  const [pdfLayouts, setPdfLayouts] = useState({ templates: [], packs: [], paperSizes: [] });
   const [collapsedStops, setCollapsedStops] = useState(() => new Set());
   const [copied, setCopied] = useState(false);
 
@@ -75,6 +76,7 @@ export default function StoryEditor({ story, onBack, onSaved }) {
   useEffect(() => {
     fetchThemes().then(setThemes).catch(() => {});
     fetchLanguages().then(setLanguages).catch(() => {});
+    fetchPdfLayouts().then(setPdfLayouts).catch(() => {});
   }, []);
 
   function markDirty(updater) {
@@ -284,6 +286,16 @@ export default function StoryEditor({ story, onBack, onSaved }) {
             <span aria-hidden="true">🎬</span>
             <span className="toolbar-btn-label">{t("present")}</span>
           </a>
+          <a
+            className="toolbar-btn"
+            href={`/story/${draft.id}/pdf-preview`}
+            target="_blank"
+            rel="noreferrer"
+            title={t("previewPdfLayout")}
+          >
+            <span aria-hidden="true">🔍</span>
+            <span className="toolbar-btn-label">{t("previewPdfLayout")}</span>
+          </a>
           <a className="toolbar-btn" href={`/api/stories/${draft.id}/export/pdf`} title={t("downloadPdf")}>
             <span aria-hidden="true">📄</span>
             <span className="toolbar-btn-label">{t("downloadPdf")}</span>
@@ -337,6 +349,32 @@ export default function StoryEditor({ story, onBack, onSaved }) {
             onClick={() => markDirty((d) => ({ ...d, contentLanguage: l.code }))}
           >
             {l.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="lang-picker">
+        <span className="lang-picker-label">{t("pdfLayoutPackLabel")}</span>
+        {pdfLayouts.packs.map((p) => (
+          <button
+            key={p.id}
+            className={`lang-picker-btn ${(draft.pdfLayoutPack || "classic") === p.id ? "active" : ""}`}
+            onClick={() => markDirty((d) => ({ ...d, pdfLayoutPack: p.id }))}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="lang-picker">
+        <span className="lang-picker-label">{t("pdfPaperSizeLabel")}</span>
+        {pdfLayouts.paperSizes.map((p) => (
+          <button
+            key={p.id}
+            className={`lang-picker-btn ${(draft.pdfPaperSize || "a4-portrait") === p.id ? "active" : ""}`}
+            onClick={() => markDirty((d) => ({ ...d, pdfPaperSize: p.id }))}
+          >
+            {p.label}
           </button>
         ))}
       </div>
@@ -481,6 +519,23 @@ export default function StoryEditor({ story, onBack, onSaved }) {
                   <p className="photo-count-hint">
                     {t("photoCountHint", includedPhotos.length, stop.photos.length)}
                   </p>
+
+                  <label className="pdf-override-picker">
+                    <span className="control-label">{t("pdfLayoutOverrideLabel")}</span>
+                    <select
+                      value={stop.pdfTemplateOverride || ""}
+                      onChange={(e) => updateStop(stop.id, { pdfTemplateOverride: e.target.value || null })}
+                    >
+                      <option value="">{t("pdfLayoutAutomatic")}</option>
+                      {pdfLayouts.templates
+                        .filter((tpl) => tpl.photoSlots.min > 0)
+                        .map((tpl) => (
+                          <option key={tpl.id} value={tpl.id}>
+                            {tpl.label}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
 
                   <IncludedPhotoGrid
                     stopId={stop.id}
