@@ -18,6 +18,7 @@ import {
   createStoryFromAlbums,
   createStoryFromDateRange,
   createStoryFromThemePlan,
+  planThemeStops,
   listStories,
   getStory,
   updateStory,
@@ -224,6 +225,29 @@ app.get("/api/theme-candidates", async (req, res) => {
       peopleThemes,
       tripThemes: detectTripClusters(rangePhotos),
     });
+  } catch (err) {
+    console.error(err);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// Live preview for the currently-selected/added themes in "Nach Themen",
+// mirroring the map + stop-list preview the "Aus Album"/"Eigener Zeitraum"
+// sources already show before a story is created. Reuses the exact same
+// planThemeStops() that creation itself calls, so the preview is never a
+// guess at what creating the story will actually produce.
+app.post("/api/theme-plan-preview", async (req, res) => {
+  try {
+    const { from, to, themes } = req.body;
+    if (!from || !to) {
+      return res.status(400).json({ error: "from and to are required (YYYY-MM-DD)" });
+    }
+    const stops = await planThemeStops({ from, to, themes: themes || [] });
+    const withThumbs = stops.map((s) => ({
+      ...s,
+      photos: s.photos.map((p) => ({ ...p, thumbUrl: p.thumbHash ? thumbUrl(p.thumbHash) : null })),
+    }));
+    res.json(withThumbs);
   } catch (err) {
     console.error(err);
     res.status(502).json({ error: err.message });

@@ -1,8 +1,10 @@
-import { useState } from "react";
-import { fetchThemeCandidates, createStory } from "./api.js";
+import { useEffect, useState } from "react";
+import { fetchThemeCandidates, fetchThemePlanPreview, createStory } from "./api.js";
 import { useI18n } from "./i18n.jsx";
 import { uid } from "./uid.js";
 import { Card, Chip } from "./ui/index.js";
+import ItineraryMap from "./ItineraryMap.jsx";
+import StopList from "./StopList.jsx";
 
 // "Nach Themen" (yearbook) source: pick a date range, discover candidate
 // sections from PhotoPrism's own Labels/Subjects plus a detected-trip
@@ -51,6 +53,39 @@ export default function ThemeStoryPicker({ lang, onCreated }) {
   const [discovering, setDiscovering] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState(null);
+  const [previewStops, setPreviewStops] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  function chosenThemes() {
+    const all = [...candidates.tripThemes, ...candidates.contentThemes, ...candidates.peopleThemes];
+    return [...all.filter((c) => selected.has(c.id)), ...customThemes];
+  }
+
+  // Live preview (map + stop list, same as the other two sources already
+  // show before creating a story) - re-fetched from the exact same
+  // planThemeStops the backend uses to actually create the story, so it's
+  // never a guess. Debounced slightly since toggling several chips in a
+  // row would otherwise fire one request per click.
+  useEffect(() => {
+    if (!candidates) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setPreviewLoading(true);
+      try {
+        const stops = await fetchThemePlanPreview(from, to, chosenThemes());
+        if (!cancelled) setPreviewStops(stops);
+      } catch (e) {
+        if (!cancelled) setError(e.message);
+      } finally {
+        if (!cancelled) setPreviewLoading(false);
+      }
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidates, selected, customThemes]);
 
   async function handleDiscover() {
     setDiscovering(true);
@@ -60,6 +95,7 @@ export default function ThemeStoryPicker({ lang, onCreated }) {
       setCandidates(data);
       setSelected(new Set());
       setCustomThemes([]);
+      setPreviewStops(null);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -101,10 +137,8 @@ export default function ThemeStoryPicker({ lang, onCreated }) {
     setCreating(true);
     setError(null);
     try {
-      const all = [...candidates.tripThemes, ...candidates.contentThemes, ...candidates.peopleThemes];
-      const themes = [...all.filter((c) => selected.has(c.id)), ...customThemes];
       const story = await createStory({
-        themePlan: { from, to, title, themes },
+        themePlan: { from, to, title, themes: chosenThemes() },
         contentLanguage: lang,
       });
       onCreated(story);
@@ -204,6 +238,16 @@ export default function ThemeStoryPicker({ lang, onCreated }) {
           </div>
 
           <p className="theme-leftover-hint">{t("themeLeftoverHint")}</p>
+
+          {previewStops && (
+            <div className="theme-preview">
+              <span className="control-label">{t("themePreviewLabel")}</span>
+              {previewLoading && <p className="hint">{t("themePreviewUpdating")}</p>}
+              <ItineraryMap stops={previewStops} />
+              <StopList stops={previewStops} />
+            </div>
+          )}
+
           <button className="save-btn" onClick={handleCreate} disabled={creating}>
             {creating ? t("creating") : t("createThemeStoryBtn")}
           </button>

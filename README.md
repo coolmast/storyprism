@@ -53,7 +53,11 @@ view, a reveal.js presentation, or a printable PDF (either format).
     during a vacation can be both the trip and a "Beach" theme); whatever no
     selected theme claims still gets an ordinary chronological tail section,
     via the exact same `buildItinerary` the default flow uses, so nothing is
-    ever silently dropped.
+    ever silently dropped. Live preview (map + stop list, matching what the
+    "Aus Album"/"Eigener Zeitraum" sources already show) re-fetches
+    `POST /api/theme-plan-preview` on every selection change - this and
+    actual story creation both call the same extracted `planThemeStops()`,
+    so the preview is never a guess at what creating the story will do.
   - **The browser never talks to PhotoPrism directly.** Every photo URL this
     app hands out (`thumbUrl`/`fullUrl` on a story's photos, info-card hero
     photos, ...) is a path on this server, `/api/photo/t/:hash/:size` or
@@ -540,7 +544,9 @@ pick up `server.allowedHosts` changes on the fly.
       across an overlap on purpose) followed by a normal chronological tail
       for everything else, plus any number of hand-defined custom date
       sub-ranges (a title + from/to date, e.g. "3 days around a birthday")
-      alongside the suggested candidates. See the Architecture section above
+      alongside the suggested candidates, and a live map/stop-list preview
+      that updates as themes are picked - matching the preview the other
+      two sources already had. See the Architecture section above
       (`server/src/photoThemes.js`)
 
 ## Notes

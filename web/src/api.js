@@ -15,6 +15,13 @@ export const fetchItineraryByDate = (from, to) =>
 export const fetchThemeCandidates = (from, to) =>
   fetch(`/api/theme-candidates?from=${from}&to=${to}`).then(json);
 
+export const fetchThemePlanPreview = (from, to, themes) =>
+  fetch("/api/theme-plan-preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ from, to, themes }),
+  }).then(json);
+
 export const fetchThemes = () => fetch("/api/themes").then(json);
 export const fetchLanguages = () => fetch("/api/languages").then(json);
 export const fetchPdfLayouts = () => fetch("/api/pdf-layouts").then(json);

@@ -196,14 +196,19 @@ export async function createStoryFromDateRange(from, to, title, contentLanguage 
 
 // "Yearbook" mode: instead of one chronological itinerary, a date range's
 // photos are split into theme sections the user picked from suggested
-// candidates (see photoThemes.js), in the order trip -> content -> person,
-// followed by one ordinary chronological tail for whatever no theme
-// claimed. A photo can belong to more than one selected theme (an "airport"
-// beach-vacation shot can be both the trip and a "Beach" content theme) -
-// intentional per-theme duplication, not deduped against other themes -
-// but only ever appears once more, in the chronological tail, if no theme
-// claimed it at all.
-export async function createStoryFromThemePlan({ from, to, title, contentLanguage = DEFAULT_LANGUAGE, themes }) {
+// candidates (see photoThemes.js) - or hand-defined custom date sub-ranges,
+// which are just a type: "trip" theme whose from/to came from the user
+// instead of detection - in the order trip -> content -> person, followed
+// by one ordinary chronological tail for whatever no theme claimed. A photo
+// can belong to more than one selected theme (an "airport" beach-vacation
+// shot can be both the trip and a "Beach" content theme) - intentional
+// per-theme duplication, not deduped against other themes - but only ever
+// appears once more, in the chronological tail, if no theme claimed it at
+// all. Split out from story creation so the exact same planning logic
+// backs both the live preview (GET /api/theme-plan-preview) and actually
+// creating the story - the preview is never a guess at what creation will
+// do, it's a dry run of the same code.
+export async function planThemeStops({ from, to, themes }) {
   const rangePhotos = await getPhotosByDateRange(from, to);
   const claimed = new Set();
   const themeStops = [];
@@ -245,6 +250,24 @@ export async function createStoryFromThemePlan({ from, to, title, contentLanguag
   const leftoverPhotos = rangePhotos.filter((p) => !claimed.has(p.uid));
   const leftoverStops = buildItinerary(leftoverPhotos);
   const allStops = [...themeStops, ...leftoverStops];
+
+  // Same shape buildItinerary itself returns, so the New Story preview
+  // (ItineraryMap/StopList) can render theme-plan stops with zero changes.
+  return allStops.map((s, i) => ({
+    index: i,
+    lat: s.lat,
+    lng: s.lng,
+    placeLabel: s.placeLabel,
+    placeCity: s.placeCity,
+    startedAt: s.startedAt,
+    endedAt: s.endedAt,
+    photoCount: s.photos.length,
+    photos: s.photos,
+  }));
+}
+
+export async function createStoryFromThemePlan({ from, to, title, contentLanguage = DEFAULT_LANGUAGE, themes }) {
+  const allStops = await planThemeStops({ from, to, themes });
 
   const storyId = randomUUID();
   const now = new Date().toISOString();

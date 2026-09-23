@@ -119,10 +119,29 @@ async function runChecksAtBreakpoint(browser, story, width, tag) {
   const themeChips = page.locator(".theme-chip");
   const themeChipCount = await themeChips.count();
   check(`[${tag}] theme discovery returns candidates`, themeChipCount > 0);
+  await page.locator(".theme-preview .stop-list li").first().waitFor({ state: "visible", timeout: 10000 });
+  const stopCountBefore = await page.locator(".theme-preview .stop-list li").count();
+  check(`[${tag}] live preview shows the chronological plan before selecting anything`, stopCountBefore > 0);
   if (themeChipCount > 0) {
+    // The chip's title sits as a plain text node between its check-mark and
+    // photo-count <span> children - read that node directly rather than
+    // innerText, which would concatenate all three with no separator.
+    const firstChipTitle = await themeChips.first().evaluate((el) => {
+      const textNode = [...el.childNodes].find((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
+      return textNode ? textNode.textContent.trim() : null;
+    });
     await themeChips.nth(0).click();
     await page.waitForTimeout(150);
     check(`[${tag}] selecting a theme chip marks it active`, await themeChips.nth(0).evaluate((el) => el.classList.contains("active")));
+    await page.waitForTimeout(600); // debounce + refetch
+    const headingsAfter = await page.locator(".theme-preview .stop-list h3").allInnerTexts();
+    // Over a huge (multi-year) range, splitting one small theme off the
+    // leftover doesn't reliably change its own cluster *count* (buildItinerary
+    // groups by time gaps, and removing one day's photos rarely creates or
+    // removes a gap boundary elsewhere) - so check for the concrete, actually-
+    // claimed behavior instead: the selected theme's own title appears as a
+    // section.
+    check(`[${tag}] live preview gets a section for the selected theme`, headingsAfter.includes(firstChipTitle), firstChipTitle);
   }
 
   // Custom date sub-range (e.g. "a few days around a birthday") - not a
