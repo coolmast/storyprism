@@ -82,6 +82,10 @@ const DICT = {
 
     uiLanguageLabel: "Interface",
     contentLanguageLabel: "Story language",
+    themeModeLabel: "Color theme",
+    themeModeSystem: "Match system",
+    themeModeLight: "Light",
+    themeModeDark: "Dark",
 
     introPlaceholder: "Write an intro for this story…",
     outroPlaceholder: "Write an outro for this story…",
@@ -258,6 +262,10 @@ const DICT = {
 
     uiLanguageLabel: "Oberfläche",
     contentLanguageLabel: "Sprache der Geschichte",
+    themeModeLabel: "Farbschema",
+    themeModeSystem: "Systemeinstellung",
+    themeModeLight: "Hell",
+    themeModeDark: "Dunkel",
 
     introPlaceholder: "Schreibe eine Einleitung für diese Geschichte…",
     outroPlaceholder: "Schreibe einen Abschluss für diese Geschichte…",
@@ -434,6 +442,10 @@ const DICT = {
     done: "Færdig",
 
     uiLanguageLabel: "Grænseflade",
+    themeModeLabel: "Farvetema",
+    themeModeSystem: "Følg system",
+    themeModeLight: "Lys",
+    themeModeDark: "Mørk",
     contentLanguageLabel: "Historiens sprog",
 
     introPlaceholder: "Skriv en introduktion til historien…",

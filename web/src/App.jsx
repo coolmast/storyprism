@@ -13,6 +13,7 @@ import ItineraryMap from "./ItineraryMap.jsx";
 import StopList from "./StopList.jsx";
 import StoryList from "./StoryList.jsx";
 import StoryEditor from "./StoryEditor.jsx";
+import ThemeToggle from "./ThemeToggle.jsx";
 import { useI18n, UI_LANGUAGES } from "./i18n.jsx";
 import { Modal, useToast } from "./ui/index.js";
 import "./App.css";
@@ -231,6 +232,7 @@ export default function App() {
           )}
           <h2 className="topbar-title">{pageTitle}</h2>
           <div className="topbar-actions">
+            <ThemeToggle />
             <div className="lang-switcher" role="tablist" aria-label={t("uiLanguageLabel")}>
               {UI_LANGUAGES.map((code) => (
                 <button
