@@ -75,6 +75,10 @@ const DICT = {
     saving: "Saving…",
     saveChanges: "Save changes",
     saved: "Saved",
+    storySettings: "Story settings",
+    themeLabel: "Theme",
+    shareExport: "Share & Export",
+    done: "Done",
 
     uiLanguageLabel: "Interface",
     contentLanguageLabel: "Story language",
@@ -247,6 +251,10 @@ const DICT = {
     saving: "Wird gespeichert…",
     saveChanges: "Änderungen speichern",
     saved: "Gespeichert",
+    storySettings: "Story-Einstellungen",
+    themeLabel: "Design",
+    shareExport: "Teilen & Export",
+    done: "Fertig",
 
     uiLanguageLabel: "Oberfläche",
     contentLanguageLabel: "Sprache der Geschichte",
@@ -420,6 +428,10 @@ const DICT = {
     saving: "Gemmer…",
     saveChanges: "Gem ændringer",
     saved: "Gemt",
+    storySettings: "Historieindstillinger",
+    themeLabel: "Tema",
+    shareExport: "Del & eksporter",
+    done: "Færdig",
 
     uiLanguageLabel: "Grænseflade",
     contentLanguageLabel: "Historiens sprog",

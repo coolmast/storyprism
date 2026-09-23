@@ -8,7 +8,7 @@ import NotesImportPanel from "./NotesImportPanel.jsx";
 import InfoCards from "./InfoCards.jsx";
 import { useI18n } from "./i18n.jsx";
 import { uid } from "./uid.js";
-import { Modal, useToast } from "./ui/index.js";
+import { Modal, SegmentedControl, useToast } from "./ui/index.js";
 
 const THEME_LABEL_KEY = {
   coastal: "themeCoastal",
@@ -43,6 +43,8 @@ export default function StoryEditor({ story, onSaved }) {
   const [pdfLayouts, setPdfLayouts] = useState({ templates: [], packs: [], paperSizes: [] });
   const [collapsedStops, setCollapsedStops] = useState(() => new Set());
   const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [pendingRemoveStopId, setPendingRemoveStopId] = useState(null);
 
   async function handleCopyShareLink() {
@@ -315,30 +317,6 @@ export default function StoryEditor({ story, onSaved }) {
       )}
       <div className="editor-toolbar">
         <div className="toolbar-actions">
-          <a
-            className="toolbar-btn"
-            href={`/story/${draft.id}?preview=1`}
-            target="_blank"
-            rel="noreferrer"
-            title={t("viewStory")}
-          >
-            <span aria-hidden="true">👁️</span>
-            <span className="toolbar-btn-label">{t("viewStory")}</span>
-          </a>
-          <button className="toolbar-btn" onClick={handleCopyShareLink} title={t("copyShareLink")}>
-            <span aria-hidden="true">🔗</span>
-            <span className="toolbar-btn-label">{t("copyShareLink")}</span>
-          </button>
-          <a
-            className="toolbar-btn"
-            href={`/story/${draft.id}/present`}
-            target="_blank"
-            rel="noreferrer"
-            title={t("present")}
-          >
-            <span aria-hidden="true">🎬</span>
-            <span className="toolbar-btn-label">{t("present")}</span>
-          </a>
           <button
             className={`toolbar-btn ${showPdfPreview ? "active" : ""}`}
             onClick={() => setShowPdfPreview((v) => !v)}
@@ -347,18 +325,10 @@ export default function StoryEditor({ story, onSaved }) {
             <span aria-hidden="true">🔍</span>
             <span className="toolbar-btn-label">{t("previewPdfLayout")}</span>
           </button>
-          <a className="toolbar-btn" href={`/api/stories/${draft.id}/export/pdf`} title={t("downloadPdf")}>
-            <span aria-hidden="true">📄</span>
-            <span className="toolbar-btn-label">{t("downloadPdf")}</span>
-          </a>
-          <a
-            className="toolbar-btn"
-            href={`/api/stories/${draft.id}/export/deck-pdf`}
-            title={t("downloadSlides")}
-          >
-            <span aria-hidden="true">🖼️</span>
-            <span className="toolbar-btn-label">{t("downloadSlides")}</span>
-          </a>
+          <button className="toolbar-btn" onClick={() => setShowExportMenu(true)} title={t("shareExport")}>
+            <span aria-hidden="true">⤴</span>
+            <span className="toolbar-btn-label">{t("shareExport")}</span>
+          </button>
           <button className="save-btn" onClick={handleSave} disabled={saving || !dirty}>
             {saving ? t("saving") : dirty ? t("saveChanges") : t("saved")}
           </button>
@@ -367,67 +337,15 @@ export default function StoryEditor({ story, onSaved }) {
 
       {aiError && <p className="error">{aiError}</p>}
 
-      <input
-        className="story-title-input"
-        value={draft.title}
-        onChange={(e) => markDirty((d) => ({ ...d, title: e.target.value }))}
-      />
-
-      <div className="theme-picker">
-        {themes.map((theme) => (
-          <button
-            key={theme.id}
-            className={`theme-swatch ${draft.theme === theme.id ? "active" : ""}`}
-            title={THEME_LABEL_KEY[theme.id] ? t(THEME_LABEL_KEY[theme.id]) : theme.label}
-            onClick={() => markDirty((d) => ({ ...d, theme: theme.id }))}
-          >
-            <span className="theme-swatch-colors">
-              {theme.swatch.map((c, i) => (
-                <span key={i} style={{ background: c }} />
-              ))}
-            </span>
-            {THEME_LABEL_KEY[theme.id] ? t(THEME_LABEL_KEY[theme.id]) : theme.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="lang-picker">
-        <span className="lang-picker-label">{t("contentLanguageLabel")}</span>
-        {languages.map((l) => (
-          <button
-            key={l.code}
-            className={`lang-picker-btn ${draft.contentLanguage === l.code ? "active" : ""}`}
-            onClick={() => markDirty((d) => ({ ...d, contentLanguage: l.code }))}
-          >
-            {l.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="lang-picker">
-        <span className="lang-picker-label">{t("pdfLayoutPackLabel")}</span>
-        {pdfLayouts.packs.map((p) => (
-          <button
-            key={p.id}
-            className={`lang-picker-btn ${(draft.pdfLayoutPack || "photobook") === p.id ? "active" : ""}`}
-            onClick={() => markDirty((d) => ({ ...d, pdfLayoutPack: p.id }))}
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="lang-picker">
-        <span className="lang-picker-label">{t("pdfPaperSizeLabel")}</span>
-        {pdfLayouts.paperSizes.map((p) => (
-          <button
-            key={p.id}
-            className={`lang-picker-btn ${(draft.pdfPaperSize || "a4-portrait") === p.id ? "active" : ""}`}
-            onClick={() => markDirty((d) => ({ ...d, pdfPaperSize: p.id }))}
-          >
-            {p.label}
-          </button>
-        ))}
+      <div className="story-title-row">
+        <input
+          className="story-title-input"
+          value={draft.title}
+          onChange={(e) => markDirty((d) => ({ ...d, title: e.target.value }))}
+        />
+        <button type="button" className="settings-btn" onClick={() => setShowSettings(true)}>
+          <span aria-hidden="true">⚙</span> {t("storySettings")}
+        </button>
       </div>
 
       <textarea
@@ -656,6 +574,112 @@ export default function StoryEditor({ story, onSaved }) {
         }
       >
         <p>{t("removeSectionConfirm")}</p>
+      </Modal>
+
+      <Modal
+        open={showSettings}
+        onClose={() => setShowSettings(false)}
+        title={t("storySettings")}
+        footer={
+          <button type="button" className="save-btn" onClick={() => setShowSettings(false)}>
+            {t("done")}
+          </button>
+        }
+      >
+        <div className="settings-section">
+          <span className="control-label">{t("themeLabel")}</span>
+          <div className="theme-picker">
+            {themes.map((theme) => (
+              <button
+                key={theme.id}
+                className={`theme-swatch ${draft.theme === theme.id ? "active" : ""}`}
+                onClick={() => markDirty((d) => ({ ...d, theme: theme.id }))}
+              >
+                <span className="theme-swatch-colors">
+                  {theme.swatch.map((c, i) => (
+                    <span key={i} style={{ background: c }} />
+                  ))}
+                </span>
+                {THEME_LABEL_KEY[theme.id] ? t(THEME_LABEL_KEY[theme.id]) : theme.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="settings-section">
+          <span className="control-label">{t("contentLanguageLabel")}</span>
+          <SegmentedControl
+            ariaLabel={t("contentLanguageLabel")}
+            value={draft.contentLanguage}
+            onChange={(v) => markDirty((d) => ({ ...d, contentLanguage: v }))}
+            options={languages.map((l) => ({ value: l.code, label: l.label }))}
+          />
+        </div>
+
+        <div className="settings-section">
+          <span className="control-label">{t("pdfLayoutPackLabel")}</span>
+          <SegmentedControl
+            ariaLabel={t("pdfLayoutPackLabel")}
+            value={draft.pdfLayoutPack || "photobook"}
+            onChange={(v) => markDirty((d) => ({ ...d, pdfLayoutPack: v }))}
+            options={pdfLayouts.packs.map((p) => ({ value: p.id, label: p.label }))}
+          />
+        </div>
+
+        <div className="settings-section">
+          <label className="control-label" htmlFor="pdf-paper-size-select">
+            {t("pdfPaperSizeLabel")}
+          </label>
+          <select
+            id="pdf-paper-size-select"
+            className="settings-select"
+            value={draft.pdfPaperSize || "a4-portrait"}
+            onChange={(e) => markDirty((d) => ({ ...d, pdfPaperSize: e.target.value }))}
+          >
+            {pdfLayouts.paperSizes.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </Modal>
+
+      <Modal open={showExportMenu} onClose={() => setShowExportMenu(false)} title={t("shareExport")}>
+        <div className="export-menu">
+          <a
+            className="export-menu-item"
+            href={`/story/${draft.id}?preview=1`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span className="export-menu-icon" aria-hidden="true">👁️</span>
+            {t("viewStory")}
+          </a>
+          <button
+            type="button"
+            className="export-menu-item"
+            onClick={() => {
+              handleCopyShareLink();
+              setShowExportMenu(false);
+            }}
+          >
+            <span className="export-menu-icon" aria-hidden="true">🔗</span>
+            {t("copyShareLink")}
+          </button>
+          <a className="export-menu-item" href={`/story/${draft.id}/present`} target="_blank" rel="noreferrer">
+            <span className="export-menu-icon" aria-hidden="true">🎬</span>
+            {t("present")}
+          </a>
+          <a className="export-menu-item" href={`/api/stories/${draft.id}/export/pdf`}>
+            <span className="export-menu-icon" aria-hidden="true">📄</span>
+            {t("downloadPdf")}
+          </a>
+          <a className="export-menu-item" href={`/api/stories/${draft.id}/export/deck-pdf`}>
+            <span className="export-menu-icon" aria-hidden="true">🖼️</span>
+            {t("downloadSlides")}
+          </a>
+        </div>
       </Modal>
     </div>
   );
