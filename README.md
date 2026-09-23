@@ -189,6 +189,18 @@ the real software.
     in the user's books: `Architects DaughterEmbedded`
   - translucent box: a Saal shape `rect` with `ws:color`, `opacity` and a
     rounded-rect `mask`
+  - **text metrics** (measured with a calibration import): Saal lays text
+    out with a fixed ~44 mm (440 units) inner margin on every side of the
+    text element, so element boxes are written 440 units larger than the
+    intended text area; a TLF `fontSize` unit renders as 4.15 units (~18 %
+    bigger than a point); Architects Daughter averages ~0.59 em per
+    character; line height 1.2 em; no paragraph spacing. Only
+    `ws:textAreaMode="1"` keeps the box width - without it Saal widens the
+    box into a single line off the page
+  - **one background per spread**: `ws:inBackground="1"` images are always
+    the whole-spread background; page-sized photos must be plain images
+  - cover (spine) width isn't validated on import - Saal accepts and fixes
+    it - but the page count's `childArticleID` is
 - **Page counts are catalog articles.** Every page count of a book is its
   own `childArticleID`; a project whose child article doesn't match its
   `numPages` is rejected on import ("Projekt konnte nicht importiert

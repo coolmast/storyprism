@@ -24,6 +24,16 @@ import { photoAspect, coverRetention, collage, pickBackdrop, cardLayout } from "
 // typeScale }.
 
 export const TITLE_FONT = "Architects DaughterEmbedded";
+
+// Saal's text metrics, measured from a calibration project imported into
+// Saal Design Software 4.7: a TLF fontSize unit renders as 4.15 Saal units
+// (0.415 mm, ~18 % larger than a typographic point), Architects Daughter
+// averages 0.59 em per character, lines are 1.2 em apart and paragraphs get
+// no extra spacing. (The ~44 mm inner margin Saal adds around every text
+// element is compensated in saalSvg.js; frames here are the text area.)
+export const FONT_UNIT = 4.15;
+const CHAR_EM = 0.62; // slightly above the measured 0.59: word wrap wastes some width
+const LINE_EM = 1.2;
 export const BODY_FONT = "Architects DaughterEmbedded";
 
 const image = (photo, frame, opts = {}) => ({ kind: "image", photo, frame, background: false, shadow: false, rotation: 0, ...opts });
@@ -58,8 +68,8 @@ function collageOn(photos, box, { gap, fill = 0.9, variant = 0 }) {
 
 // Stop title in a page corner, handwritten, white on photos / accent on paper.
 export function titleElement(title, page, corner, ctx, { dark = false } = {}) {
-  const size = 40 * ctx.typeScale;
-  const lineH = size * 3.528 * 1.25;
+  const size = 34 * ctx.typeScale;
+  const lineH = size * FONT_UNIT * LINE_EM;
   const w = page.w * 0.5;
   const h = lineH * 2.2;
   const m = page.w * 0.07;
@@ -305,7 +315,7 @@ export const DEFAULT_SPREAD_WEIGHTS = {
 // --- Text-led spreads (not part of the automatic photo rotation) ----------
 
 function estimateLines(text, widthUnits, sizePt) {
-  const charW = sizePt * 3.528 * 0.47;
+  const charW = sizePt * FONT_UNIT * CHAR_EM;
   const perLine = Math.max(8, Math.floor(widthUnits / charW));
   return String(text || "")
     .split(/\n+/)
@@ -314,23 +324,34 @@ function estimateLines(text, widthUnits, sizePt) {
 
 // Fits title + body paragraphs into `frame`, shrinking the body size until
 // the estimated height fits (down to a floor).
-export function textBlock(frame, { title, subtitle, body = [], quote, color, accent, typeScale, titleSize = 34 }) {
-  let size = 12.5 * typeScale;
+export function textBlock(frame, { title, subtitle, body = [], quote, color, accent, typeScale, titleSize = 30 }) {
+  let size = 10.5 * typeScale;
   const tSize = titleSize * typeScale;
   const measure = (s) => {
     let h = 0;
-    if (title) h += estimateLines(title, frame.w, tSize) * tSize * 3.528 * 1.25;
-    if (subtitle) h += estimateLines(subtitle, frame.w, s * 1.1) * s * 1.1 * 3.528 * 1.4;
-    body.forEach((b) => (h += estimateLines(b, frame.w, s) * s * 3.528 * 1.2 + s * 3.528 * 0.45));
-    if (quote) h += estimateLines(quote, frame.w, s * 1.35) * s * 1.35 * 3.528 * 1.35;
-    return h;
+    const lines = (text, sz) => estimateLines(text, frame.w, sz) * sz * FONT_UNIT * LINE_EM;
+    if (title) h += lines(title, tSize);
+    if (subtitle) h += lines(subtitle, s * 1.1);
+    // Half-line gap between paragraphs: Saal adds no paragraph spacing, so
+    // small spacer paragraphs are inserted below.
+    body.forEach((b, i) => (h += lines(b, s) + (i < body.length - 1 ? s * FONT_UNIT * LINE_EM * 0.5 : 0)));
+    if (quote) h += lines(quote, s * 1.35) + s * FONT_UNIT * LINE_EM * 0.5;
+    // One spare line of slack against estimate error.
+    return h + s * FONT_UNIT * LINE_EM;
   };
   while (size > 7.5 * typeScale && measure(size) > frame.h) size -= 0.5 * typeScale;
   const paragraphs = [];
   if (title) paragraphs.push({ text: title, role: "title", size: tSize, color: accent || color, align: "left" });
   if (subtitle) paragraphs.push({ text: subtitle, role: "subtitle", size: size * 1.1, color: accent || color, align: "left" });
-  body.forEach((b) => paragraphs.push({ text: b, role: "body", size, color, align: "left" }));
-  if (quote) paragraphs.push({ text: quote, role: "quote", size: size * 1.35, color: accent || color, align: "left" });
+  const gap = () => paragraphs.push({ text: " ", role: "body", size: size * 0.5, color, align: "left" });
+  body.forEach((b, i) => {
+    if (i > 0) gap();
+    paragraphs.push({ text: b, role: "body", size, color, align: "left" });
+  });
+  if (quote) {
+    gap();
+    paragraphs.push({ text: quote, role: "quote", size: size * 1.35, color: accent || color, align: "left" });
+  }
   return { kind: "text", frame, paragraphs, estimatedHeight: measure(size) };
 }
 
@@ -346,7 +367,7 @@ function splitParagraphs(text) {
 export function chapterSpread(spread, ctx, { backdrop, title, narrative, pullQuote, card }) {
   const R = pageBox(spread, "right");
   const L = pageBox(spread, "left");
-  const pad = 110;
+  const pad = 130;
   const panelFrame = { x: R.x + R.w * 0.1, y: R.h * 0.1, w: R.w * 0.8, h: R.h * 0.8 };
   const block = textBlock(
     { x: panelFrame.x + pad, y: panelFrame.y + pad, w: panelFrame.w - 2 * pad, h: panelFrame.h - 2 * pad },
@@ -405,14 +426,16 @@ export function coverSpread(cover, ctx, { backdrop, cards, title, subtitle }) {
   if (backdrop) elements.push(image(backdrop, { x: 0, y: 0, w: cover.w, h: cover.h }, { background: true }));
   const bandY = cover.h * 0.6;
   const bandH = cover.h * 0.2;
-  elements.push({ kind: "panel", frame: { x: -4, y: bandY, w: cover.w + 8, h: bandH }, color: "#101018", opacity: 0.38 });
-  const tSize = 52 * ctx.typeScale;
+  // Dark band at 50 %: the calibration import showed 38 % disappears on
+  // darker cover photos.
+  elements.push({ kind: "panel", frame: { x: -4, y: bandY, w: cover.w + 8, h: bandH }, color: "#101018", opacity: 0.5 });
+  const tSize = 40 * ctx.typeScale;
   elements.push({
     kind: "text",
     frame: { x: frontX + frontW * 0.05, y: bandY + bandH * 0.12, w: frontW * 0.9, h: bandH * 0.8 },
     paragraphs: [
       { text: title, role: "title", size: tSize, color: "#ffffff", align: "center" },
-      ...(subtitle ? [{ text: subtitle, role: "subtitle", size: 16 * ctx.typeScale, color: "#ffffff", align: "center" }] : []),
+      ...(subtitle ? [{ text: subtitle, role: "subtitle", size: 13 * ctx.typeScale, color: "#ffffff", align: "center" }] : []),
     ],
   });
   const tilts = [-6, 5];
