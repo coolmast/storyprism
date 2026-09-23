@@ -197,6 +197,25 @@
     display: flex;
   }
 
+  /* The back button, theme toggle and language switcher already take up
+     most of a phone-width topbar - drop the redundant language code text
+     (the flag alone is enough) rather than let the row overflow. */
+  .lang-switcher-code {
+    display: none;
+  }
+
+  .topbar-actions {
+    gap: 0.35rem;
+  }
+
+  .lang-switcher button {
+    padding: 0.3rem 0.5rem;
+  }
+
+  .topbar-actions .ui-segmented button {
+    padding: 0.3rem 0.5rem;
+  }
+
   .app-shell {
     flex-direction: column;
   }

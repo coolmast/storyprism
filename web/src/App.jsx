@@ -242,7 +242,7 @@ export default function App() {
                   className={lang === code ? "active" : ""}
                   onClick={() => setLang(code)}
                 >
-                  {LANG_FLAG[code]} {code.toUpperCase()}
+                  {LANG_FLAG[code]} <span className="lang-switcher-code">{code.toUpperCase()}</span>
                 </button>
               ))}
             </div>
