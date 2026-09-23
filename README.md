@@ -155,9 +155,10 @@ view, a reveal.js presentation, or a printable PDF (either format).
     time in `render.js`/`deck.js`/`pdf.js`, entirely separate from the
     UI's own display language.
 - `web/` — React (Vite) frontend: album picker + map (M1), story list +
-  editor (M2/M3) with theme picker, drag-to-reorder photo grid,
-  featured-photo/pull-quote controls, a per-stop AI interview panel
-  (`InterviewPanel.jsx`), a per-stop route-embed manager
+  editor (M2/M3) with a theme/content-language/PDF-layout picker (now
+  behind a "Story settings" modal, not inline - see below), drag-to-reorder
+  photo grid, featured-photo/pull-quote controls, a per-stop AI interview
+  panel (`InterviewPanel.jsx`), a per-stop route-embed manager
   (`RouteEmbeds.jsx`), a per-stop info-card manager (`InfoCards.jsx`,
   including the placement selector and hero-photo picker), and a
   story-level notes-import panel (`NotesImportPanel.jsx`), links out to
@@ -166,10 +167,41 @@ view, a reveal.js presentation, or a printable PDF (either format).
     `web/src/i18n.jsx` is a small dictionary + React context
     (`LanguageProvider`/`useI18n`) covering every UI string, persisted to
     `localStorage` and defaulting from `navigator.language` when it
-    matches a supported code. The content-language picker lives in
-    `StoryEditor.jsx` next to the theme picker and is per-story, so (per
-    the original ask) the UI can be in English while a story's AI text and
-    exported output come out in German.
+    matches a supported code. The content-language picker lives in the
+    editor's "Story settings" modal and is per-story, so (per the original
+    ask) the UI can be in English while a story's AI text and exported
+    output come out in German.
+  - Design tokens + dark mode (`web/src/theme.css`): every color/radius/
+    shadow this app's own UI uses (not the exported story/deck/PDF output,
+    which has its own separate `server/src/themes.js` system) is a CSS
+    custom property. Dark mode follows `prefers-color-scheme` by default,
+    with a manual System/Light/Dark override (`ThemeToggle.jsx`, a
+    `data-theme` attribute on `<html>`, `localStorage`, applied
+    synchronously in `index.html` before the stylesheet loads so there's
+    no flash of the wrong theme).
+  - App shell (`App.jsx`/`App.css`): a fixed sidebar (branding + nav) and
+    sticky topbar on desktop, collapsing below 860px into a bottom tab bar
+    with the topbar gaining a back button on routes with a parent (the
+    editor, back to the library) - one breakpoint for the whole shell.
+  - Shared component kit (`web/src/ui/`): Card, StatusPill, Chip,
+    SegmentedControl, Toggle, ProgressBar, Modal (native `<dialog>`,
+    bottom sheet on mobile / centered on desktop), Toast (+
+    `ToastProvider`/`useToast`, `aria-live`), Skeleton, EmptyState,
+    ErrorState - used to move rarely-changed settings (theme, content
+    language, PDF layout pack/paper size) and export actions (view,
+    share link, present, download PDF/slides) out of the editor's
+    always-visible toolbar into "Story settings" and "Share & Export"
+    modals, and to replace native `confirm()` dialogs (deleting a story,
+    removing a section) and ad hoc inline feedback (a toolbar button
+    relabeling itself for 2 seconds after copying a link) with Modal/Toast.
+  - The New Story album picker groups albums by year (newest first,
+    collapsed except the most recent year) rather than one flat
+    alphabetical list of every album/PhotoPrism "moment" at once -
+    `AlbumList.jsx`. PhotoPrism only fills in `Year` for its own
+    auto-generated "moment" albums, so manually-curated albums fall back
+    to a year-shaped substring in the title (matches this library's
+    "`<Place> <Year>`" naming almost everywhere); anything with neither
+    lands in a trailing "No date" group instead of being dropped.
 
 ## Saal project format
 
@@ -429,6 +461,23 @@ pick up `server.allowedHosts` changes on the fly.
       cover what's documented across PhotoPrism versions, but worth
       verifying against whichever version a real login-required instance
       turns out to run
+- [x] Editor app UI overhaul: design tokens + dark mode, a responsive
+      sidebar/topbar-on-desktop + bottom-tab-bar-on-mobile app shell, a
+      shared component kit (Card/StatusPill/Chip/SegmentedControl/Toggle/
+      ProgressBar/Modal/Toast/Skeleton/EmptyState/ErrorState), and using
+      it to move the editor's rarely-touched settings and export actions
+      into modals instead of an always-visible wall of buttons/pickers -
+      see the Architecture section above. In progress; further
+      decluttering of the New Story/Library screens and an accessibility
+      pass may follow
+- [x] Album picker grouped by year (newest first, collapsed except the
+      current year) instead of one flat alphabetical list of every
+      album/moment
+- [x] Info card hero-photo picker falls back to every photo in the section
+      when a manually-typed place name (as opposed to one picked from a
+      suggestion chip) doesn't exactly match any photo's place metadata -
+      previously left the picker permanently empty for any manually-added
+      card
 
 ## Notes
 
