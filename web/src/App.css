@@ -369,23 +369,58 @@
   color: var(--bad);
 }
 
-.album-group-label {
-  display: block;
-  font-size: 0.75rem;
-  font-weight: bold;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  padding: 0.8rem 0.6rem 0.3rem;
+/* Year groups - roughly chronological (newest first), collapsed by
+   default except the most recent one, so opening the New Story page
+   doesn't dump every album from every year on screen at once. */
+.album-year-group {
+  border-bottom: 1px solid var(--border);
 }
 
-.album-group-label:first-child {
-  padding-top: 0.2rem;
+.album-year-group:first-of-type {
+  border-top: 1px solid var(--border);
+}
+
+.album-year-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.6rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  list-style: none;
+}
+
+.album-year-header::-webkit-details-marker {
+  display: none;
+}
+
+.album-year-header::before {
+  content: "";
+  width: 0;
+  height: 0;
+  flex: none;
+  margin-right: 0.3rem;
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent var(--muted);
+  transition: transform var(--duration) ease;
+}
+
+.album-year-group[open] > .album-year-header::before {
+  transform: rotate(90deg);
+}
+
+.album-year-count {
+  font-weight: normal;
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 
 .album-list {
   list-style: none;
-  margin: 0;
+  margin: 0 0 0.4rem;
   padding: 0;
 }
 
@@ -394,7 +429,7 @@
   display: flex;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.5rem 0.6rem;
+  padding: 0.5rem 0.6rem 0.5rem 1.4rem;
   background: none;
   border: none;
   border-radius: 6px;
