@@ -15,7 +15,7 @@ import StoryList from "./StoryList.jsx";
 import StoryEditor from "./StoryEditor.jsx";
 import ThemeToggle from "./ThemeToggle.jsx";
 import { useI18n, UI_LANGUAGES } from "./i18n.jsx";
-import { Modal, useToast } from "./ui/index.js";
+import { Card, Modal, useToast } from "./ui/index.js";
 import "./App.css";
 
 const LANG_FLAG = { en: "🇬🇧", de: "🇩🇪", da: "🇩🇰" };
@@ -269,7 +269,7 @@ export default function App() {
               <AlbumList albums={albums} selectedUid={selectedUid} onSelect={setSelectedUid} />
             )}
             {source === "dateRange" && (
-              <div className="date-range-picker">
+              <Card className="date-range-picker">
                 <p className="route-embed-hint">{t("dateRangeHint")}</p>
                 <label className="date-range-field">
                   {t("dateFromLabel")}
@@ -285,7 +285,7 @@ export default function App() {
                   value={rangeTitle}
                   onChange={(e) => setRangeTitle(e.target.value)}
                 />
-              </div>
+              </Card>
             )}
           </aside>
           <main className="content">
