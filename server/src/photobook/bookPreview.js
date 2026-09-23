@@ -95,9 +95,7 @@ export function buildBookPreviewHtml(story) {
       `The book needs ${plan.contentPages} pages, but the largest page count known for this product is ${plan.numPages} - condense some spreads (−) or remove photos before exporting`
     );
   } else if (plan.blankSpreads) {
-    warn.push(
-      `${plan.blankSpreads} blank spread(s) added: Saal only accepts certain page counts for this product (known: ${plan.knownPageCounts.join(", ")})`
-    );
+    warn.push(`${plan.blankSpreads} blank spread(s) added to reach the ${plan.knownPageCounts[0]}-page minimum`);
   }
 
   return `<!doctype html>

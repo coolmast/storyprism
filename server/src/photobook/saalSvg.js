@@ -55,8 +55,17 @@ function placeImage(frame, pxW, pxH) {
   return { x: frame.x + (frame.w - w) / 2, y: frame.y + (frame.h - h) / 2, w, h, s };
 }
 
-function imageSvg(el, id, ref, mode, defs) {
+// Saal has exactly one background slot per spread (always clipped to the
+// whole canvas) - flagging a page-sized photo as background makes Saal
+// stretch it across both pages. So only photos that really cover the whole
+// canvas get the flag; page-sized ones are ordinary images.
+function coversCanvas(f, size) {
+  return f.x <= 1 && f.y <= 1 && f.x + f.w >= size.w - 1 && f.y + f.h >= size.h - 1;
+}
+
+function imageSvg(el, id, ref, mode, defs, size) {
   const f = el.frame;
+  const inBackground = el.background && coversCanvas(f, size);
   defs.push(`<clipPath id="clip_${id}">
       <rect x="${n(f.x)}" y="${n(f.y)}" width="${n(f.w)}" height="${n(f.h)}"/>
     </clipPath>`);
@@ -65,7 +74,7 @@ function imageSvg(el, id, ref, mode, defs) {
   const rot = el.rotation ? ` transform="rotate(${n(el.rotation)}, ${n(f.x)}, ${n(f.y)})"` : "";
   const attrs =
     mode === "saal"
-      ? ` ws:imageID="${ref.imageID}" ws:imageWidth="${ref.width}" ws:imageHeight="${ref.height}" xlink:href="${xmlEscape(ref.href)}" ws:enhance="0" ImSo:autoenhance="0" ws:baseURL="${xmlEscape(ref.fileName)}"${el.shadow ? ' ws:filterType="shadow"' : ""} ws:imageUID="${ref.uid}"${el.background ? ' ws:inBackground="1"' : ""} ws:initalContentScaleX="${n(p.s)}" ws:initalContentScaleY="${n(p.s)}"`
+      ? ` ws:imageID="${ref.imageID}" ws:imageWidth="${ref.width}" ws:imageHeight="${ref.height}" xlink:href="${xmlEscape(ref.href)}" ws:enhance="0" ImSo:autoenhance="0" ws:baseURL="${xmlEscape(ref.fileName)}"${el.shadow ? ' ws:filterType="shadow"' : ""} ws:imageUID="${ref.uid}"${inBackground ? ' ws:inBackground="1"' : ""} ws:initalContentScaleX="${n(p.s)}" ws:initalContentScaleY="${n(p.s)}"`
       : ` xlink:href="${xmlEscape(ref.href)}" preserveAspectRatio="none"`;
   const tag = `<image ws:uid="${id}" x="${n(p.x)}" y="${n(p.y)}" width="${n(p.w)}" height="${n(p.h)}"${attrs}${rot} clip-path="url(#clip_${id})"/>`;
   return el.shadow ? `<g filter="url(#filter_${id})">\n      ${tag}\n    </g>` : tag;
@@ -129,7 +138,7 @@ export function renderSpreadSvg(spread, size, { mode, resolveImage, key, isCover
     const id = saalUid(key, i, el.kind, el.photo?.id || "");
     if (el.kind === "image") {
       const ref = resolveImage(el.photo);
-      if (ref) body.push(imageSvg(el, id, ref, mode, defs));
+      if (ref) body.push(imageSvg(el, id, ref, mode, defs, size));
     } else if (el.kind === "text") {
       body.push(textSvg(el, id, mode));
     } else if (el.kind === "panel") {

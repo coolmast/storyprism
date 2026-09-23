@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 // Saal Digital photobook products, reverse-engineered from real projects
 // written by Saal Design Software 4.7 (see README "Saal project format").
 //
@@ -8,11 +10,11 @@
 // Page counts are NOT free: every page count of a book is its own article in
 // Saal's catalog (`childArticleID`), and the importer rejects a project whose
 // child article doesn't match its page count ("Projekt konnte nicht
-// importiert werden"). The spine - and so the cover width - also grows in
-// steps, not per page. Both are therefore recorded per page count, taken from
-// projects Saal itself saved at that count (the user's 2018/2019 books and
-// re-saved test projects). Only these counts can be exported; the planner
-// pads a book up to the next one.
+// importiert werden"). The full table (26-160 pages, step 2, per product) is
+// in saalPageArticles.json, derived from Saal's local catalog cache. The
+// spine - and so the cover width - grows in steps of 1 mm per 6 pages;
+// `coverAnchors` are widths Saal itself wrote, other counts are stepped from
+// the nearest anchor.
 //
 // The remaining article/configurator IDs identify the product and are the
 // same for every page count: the square book from the user's ordered 2018
@@ -22,14 +24,9 @@ export const BOOK_PRODUCTS = {
     label: "Saal Photobook 28 × 28 cm (square)",
     spread: { w: 5460, h: 2760 },
     coverHeight: 2880,
-    pageVariants: {
-      64: { childArticleID: "b9a6f503-2859-4ac5-82fc-5e88fc3cd791", coverWidth: 5844 },
-      68: { childArticleID: "43bb455f-95c6-4a1a-b929-9ba7397f69d1", coverWidth: 5844 },
-      70: { childArticleID: "a4dcfc7e-2ae6-4433-96f4-1bdb536ba1a7", coverWidth: 5854 },
-      72: { childArticleID: "2073d0e6-2095-4862-93f9-9a41743d8a74", coverWidth: 5854 },
-      74: { childArticleID: "1ebc4760-a4bd-4294-9108-8e39d7f3ebe7", coverWidth: 5854 },
-      76: { childArticleID: "6ca4d1af-a2f8-446d-8444-a42d69341475", coverWidth: 5864 },
-    },
+    // Cover widths Saal wrote at these page counts (the spine grows 1 mm
+    // per 6-page bracket, see coverSize()).
+    coverAnchors: { 64: 5844, 68: 5844, 70: 5854, 72: 5854, 74: 5854, 76: 5864 },
     ids: {
       configuratorArticleID: "5c010f57-4eb6-4bb5-91cf-7576da966ae8",
       coverArticleID: "b2d7cc82-8cf8-45c9-9e10-35db20e70aee",
@@ -42,9 +39,7 @@ export const BOOK_PRODUCTS = {
     label: "Saal Photobook A4 portrait",
     spread: { w: 4260, h: 2760 },
     coverHeight: 2880,
-    pageVariants: {
-      30: { childArticleID: "5eb84f4e-599a-4f1a-a801-3f2c944a9147", coverWidth: 4585 },
-    },
+    coverAnchors: { 30: 4585 },
     ids: {
       configuratorArticleID: "b5dee056-0504-46d1-9bb9-f5a14e3aee53",
       coverArticleID: "af902c9c-deea-4b88-bd91-d645b770518d",
@@ -57,9 +52,7 @@ export const BOOK_PRODUCTS = {
     label: "Saal Photobook A4 landscape",
     spread: { w: 5660, h: 1940 },
     coverHeight: 2060,
-    pageVariants: {
-      30: { childArticleID: "f681ca8b-ff45-42f3-80d2-b0a6d62281db", coverWidth: 5984 },
-    },
+    coverAnchors: { 30: 5984 },
     ids: {
       configuratorArticleID: "7327a717-f93e-42f8-bea6-7c0178c3a926",
       coverArticleID: "fe40d445-38f7-4cd7-a516-f1715b9bac79",
@@ -80,8 +73,16 @@ export function getBookProduct(id) {
   return BOOK_PRODUCTS[id] || BOOK_PRODUCTS[DEFAULT_BOOK_PRODUCT];
 }
 
+const PAGE_ARTICLES = JSON.parse(
+  readFileSync(new URL("./saalPageArticles.json", import.meta.url), "utf8")
+);
+
+function productId(product) {
+  return Object.keys(BOOK_PRODUCTS).find((id) => BOOK_PRODUCTS[id] === product);
+}
+
 export function knownPageCounts(product) {
-  return Object.keys(product.pageVariants)
+  return Object.keys(PAGE_ARTICLES[productId(product)] || {})
     .map(Number)
     .sort((a, b) => a - b);
 }
@@ -95,12 +96,21 @@ export function resolvePageCount(product, neededPages) {
   return { pages: fit ?? counts.at(-1), overflow: fit === undefined };
 }
 
-export function pageVariant(product, numPages) {
-  return product.pageVariants[numPages];
+export function childArticleIdFor(product, numPages) {
+  return PAGE_ARTICLES[productId(product)]?.[String(numPages)] || null;
 }
 
+// Spine brackets: square books measured 64-68 -> one width, 70-74 -> +1 mm,
+// 76 -> +2 mm, i.e. brackets of 6 pages starting at 4 (mod 6).
+const bracket = (pages) => Math.floor((pages - 4) / 6);
+
 export function coverSize(product, numPages) {
-  return { w: pageVariant(product, numPages).coverWidth, h: product.coverHeight };
+  const anchors = Object.entries(product.coverAnchors).map(([p, w]) => [Number(p), w]);
+  if (product.coverAnchors[numPages]) return { w: product.coverAnchors[numPages], h: product.coverHeight };
+  const [refPages, refWidth] = anchors.reduce((best, a) =>
+    Math.abs(a[0] - numPages) < Math.abs(best[0] - numPages) ? a : best
+  );
+  return { w: refWidth + 10 * (bracket(numPages) - bracket(refPages)), h: product.coverHeight };
 }
 
 // Bleed on every outer edge (the thin red trim line in the Saal editor sits

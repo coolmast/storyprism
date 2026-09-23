@@ -1,4 +1,4 @@
-import { getBookProduct, coverSize, resolvePageCount, knownPageCounts, pageVariant } from "./products.js";
+import { getBookProduct, coverSize, resolvePageCount, knownPageCounts, childArticleIdFor } from "./products.js";
 import {
   SPREAD_LAYOUTS,
   DEFAULT_SPREAD_WEIGHTS,
@@ -259,7 +259,7 @@ export function planBook(story, { product: productId, strings } = {}) {
     contentPages,
     overflow,
     knownPageCounts: knownPageCounts(product),
-    childArticleID: pageVariant(product, numPages).childArticleID,
+    childArticleID: childArticleIdFor(product, numPages),
     blankSpreads: blanks,
   };
 }
