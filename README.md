@@ -45,24 +45,37 @@ view, a reveal.js presentation, or a printable PDF (either format).
     full-bleed → photo grids), then an outro. No map here; reveal's
     fixed-size slides don't suit an interactive Leaflet map.
   - **The story PDF (`/api/stories/:id/export/pdf`) is a real print-design
-    system, not a screenshot of the web view.** A library of 8 page
-    templates (`server/src/pdfTemplates.js`) — single full-bleed photo,
-    2/3/4/6-photo layouts with or without a caption zone, a text-only
-    chapter page, an opening page (featured photo + narrative/pull quote),
-    and a dedicated info-card page — each a CSS Grid layout for one
-    physical page. A pure planner (`server/src/pdfPlanner.js`) walks each
-    stop's actual content and assigns templates page by page, cycling
-    through a chosen "layout pack" (`server/src/pdfLayoutPacks.js`) without
-    repeating a template twice in a row; a per-stop manual override can pin
-    one template for that stop's photos instead. Paper size/aspect ratio
-    (`server/src/pdfPaperSizes.js`: A4 portrait/landscape, US Letter,
-    square) is a separate, orthogonal choice applied via a real `@page`
-    CSS rule. `server/src/pdfDocument.js` builds the whole document from
-    these three pieces, shared by both the actual PDF export
-    (`server/src/pdf.js`, headless Chrome, `preferCSSPageSize: true` so
-    Chromium honors the exact paper size) and a live preview route
-    (`GET /story/:id/pdf-preview`) that serves the identical HTML directly
-    in a browser — no PDF conversion, for fast template iteration.
+    system, not a screenshot of the web view**, modeled on a hand-made
+    square photobook. Photo placement is **aspect-ratio aware**
+    (`server/src/pdfLayoutEngine.js`): a "guillotine" collage enumerates
+    every way to split a page's photos side by side / stacked (in story
+    order) and picks the arrangement whose combined aspect ratio best
+    matches the page, so each photo is shown at its own proportions instead
+    of being cropped into a fixed grid cell; a card layout places 1-3
+    shadowed "prints" at native aspect over a full-bleed background photo.
+    Page templates (`server/src/pdfTemplates.js`) build on that: background
+    + photo cards, mosaic on a blurred backdrop, scattered prints on paper,
+    clean gallery grid, dense edge-to-edge mosaic, 2/3 photos + caption,
+    adaptive single photo (full-bleed if the shape fits the page, otherwise
+    whole photo on a blurred copy of itself), cover collage, opening page
+    with a translucent text band, text/chapter page and info-card page.
+    Each template has a `fit(photos, pageShape)` score; the planner
+    (`server/src/pdfPlanner.js`) chooses template *and* photo count page by
+    page from those scores, weighted by the chosen layout pack
+    (`server/src/pdfLayoutPacks.js`: Photobook, Classic, Gallery/airy,
+    Mosaic/dense — each with its own cover, stop opening, template mix and
+    title font; Photobook uses a handwritten font), with variety penalties
+    so the same look doesn't repeat. A per-stop manual override pins one
+    template. Paper sizes (`server/src/pdfPaperSizes.js`: A4 portrait/
+    landscape, US Letter, 21 cm square, 30 cm square) set a real `@page`
+    size and the page box; type is in `rem` scaled to the page.
+    `server/src/pdfDocument.js` builds the document for the PDF export
+    (`server/src/pdf.js`, headless Chrome, `preferCSSPageSize: true`), the
+    standalone `GET /story/:id/pdf-preview` and the editor's **live PDF
+    preview** (`POST /api/stories/:id/pdf-preview` renders the *unsaved*
+    draft; `web/src/PdfLivePreview.jsx` shows it in a side drawer / full
+    screen on a phone, re-rendering ~0.5 s after any edit, with pack/paper
+    switches and per-stop layout pickers right inside the preview).
   - The deck's own PDF (`/api/stories/:id/export/deck-pdf`, reveal.js's
     built-in print-pdf mode) is unrelated and untouched by the above.
   - A stop can carry route/activity embeds (Strava, Komoot, Garmin Connect)
@@ -192,7 +205,17 @@ useful for a second person to use the editor from their own device.
       page-planning with a per-stop manual override, and a live
       `/pdf-preview` route for iterating on templates without generating an
       actual PDF each time — see the Architecture section above
-- [ ] Page numbers and a table of contents in the PDF — the old pipeline
+- [x] PDF v3, photobook style: aspect-ratio-aware layout engine (no more
+      landscape photos cropped into portrait cells), background + photo
+      card / blurred-mosaic / scattered-prints templates, 4 clearly
+      different packs (Photobook is the new default for new stories), 30 cm
+      square paper, and a live PDF preview drawer in the editor that
+      renders the unsaved draft
+- [ ] Per-page control in the live preview (e.g. "shuffle this page",
+      choose the background photo, move a photo to the next page) — today
+      control is per stop (layout override) plus photo order/featured
+- [ ] Page numbers and a table of contents in the PDF (user feedback: not
+      missed so far, no page numbers looks cleaner) — the old pipeline
       had page numbers via Chromium's header/footer templates, but those
       need a page margin to render into, which conflicts with the new
       templates' full-bleed photo pages (zero `@page` margin). Dropped for
@@ -200,9 +223,12 @@ useful for a second person to use the editor from their own device.
       reserve footer space) if this is missed in practice. A real TOC
       still needs a multi-pass render regardless (page numbers aren't
       known until the first pass completes)
-- [ ] The new PDF pipeline embeds full-resolution (`fit_2048`) photos on
-      every page, same as the old one - a full story PDF is routinely
-      80-90MB. Worth trying a smaller size (`fit_1600`?) now that there
+- [ ] The PDF pipeline embeds full-resolution (`fit_2048`) photos on
+      every page - a full story PDF is routinely 80-120MB (the photobook
+      pack's blurred backdrops are rasterized by Chromium at print
+      resolution, which adds to it even though they load the small
+      thumbnails). A post-processing pass (Ghostscript/qpdf image
+      recompression) is probably the real fix. Worth trying a smaller size (`fit_1600`?) now that there
       are dedicated full-bleed single-photo templates that would show the
       difference most, but wasn't tested this pass
 - [ ] Sharing a story off the PhotoPrism LAN — the view/PDF/deck all embed
@@ -502,17 +528,25 @@ useful for a second person to use the editor from their own device.
   proxy config; confirmed by reproducing the failure first (0 `/vendor`
   requests succeeding, `ReferenceError: L is not defined`) and then
   re-running the identical check clean after the fix.
-- The PDF caps each printed page at 6 photos (`PHOTOS_PER_PRINTED_PAGE` in
-  `render.js`) so they stay a legible size — more than that on an A4 page
-  and they get too small to be worth printing. A stop's featured photo
-  doesn't count against this cap; it gets its own full-width treatment.
-  This only affects print/PDF; the on-screen story view still scrolls as
-  one continuous masonry.
-- The PDF's cover page is just the hero section forced onto its own page
-  in print (`break-after: page`); page numbers come from Chromium's
-  print `footerTemplate`, which is why they appear on the cover too —
-  Chromium's header/footer templates apply uniformly to every page, there
-  is no per-page opt-out.
+- PDF photo boxes still use `object-fit: cover`, but only to absorb the
+  sliver of difference when a collage is stretched to fill its box (the
+  engine only stretches when the arrangement already matches the box to
+  within ~7-10%); otherwise the collage is centered at its native aspect
+  and the backdrop/paper shows around it. The only intentionally cropped
+  photos are full-bleed backgrounds, and those are chosen as the photo that
+  survives a full-page crop best (a featured photo is preferred when its
+  shape allows).
+- Photo cards on a background photo are placed in page corners without
+  knowing what's in the background, so a card can cover a face in it.
+  Featured photos are preferred as backgrounds, so marking a scenic shot as
+  featured is the lever for now.
+- Stops without narrative get no separate opening page: their featured
+  photo leads the first photo page, which carries the stop title (in the
+  photobook pack, handwritten on the background, like the reference book).
+  "Top" info cards come right after that title page.
+- Live preview uses the 720px thumbnails for speed; the exported PDF uses
+  the 2048px versions. Layout is identical because it depends only on the
+  stored photo width/height.
 - The deck's featured-photo slide renders as a plain `<img>`, not
   reveal.js's `data-background-image`: reveal's background layer for
   *nested* (vertical-stack) slides didn't reliably composite under

@@ -1,95 +1,136 @@
 import { PDF_TEMPLATES } from "./pdfTemplates.js";
 import { getLayoutPack } from "./pdfLayoutPacks.js";
 import { getPaperSize } from "./pdfPaperSizes.js";
+import { photoAspect, coverRetention } from "./pdfLayoutEngine.js";
+import { dateRange } from "./render.js";
 
-// Greedily assigns `photos` across `templateIds` (a layout pack's rotation,
-// or a single-element array for a per-stop manual override): picks whichever
-// candidate template's max capacity uses the most of what's left (so a
-// photo-heavy stop doesn't end with an awkward string of near-empty pages),
-// avoids repeating the same template twice in a row when an alternative
-// fits, and falls back to single-full-bleed for a straggler count too small
-// for anything else in the pack (its min/max of 1 always fits).
-function chunkPhotosWithPack(photos, templateIds) {
+// Narratives longer than this don't fit on a translucent band over a photo;
+// they get the photo page (title only) plus their own text page instead.
+const OVERLAY_TEXT_LIMIT = 700;
+
+// Splits a stop's photos into pages, in order, choosing template and photo
+// count per page by score: how well these specific photo shapes suit the
+// template on this page shape (`fit`, the orientation awareness), weighted
+// by how much the pack likes that template, nudged toward the template's
+// ideal photo count, away from repeating the previous page's template and
+// away from leaving a straggler no template in the pack can take.
+function chunkPhotos(photos, weights, ctx, nextVariant) {
+  const entries = Object.entries(weights).filter(([id]) => PDF_TEMPLATES[id]);
+  const minTake = Math.max(1, Math.min(...entries.map(([id]) => PDF_TEMPLATES[id].photoSlots.min)));
   const pages = [];
-  let remaining = [...photos];
-  let lastId = null;
+  let i = 0;
+  const recent = [];
 
-  while (remaining.length > 0) {
-    const fits = templateIds.filter((id) => {
+  while (i < photos.length) {
+    const remaining = photos.length - i;
+    let best = null;
+    for (const [id, weight] of entries) {
       const t = PDF_TEMPLATES[id];
-      return t && t.photoSlots.min > 0 && t.photoSlots.min <= remaining.length;
-    });
-    const nonRepeat = fits.filter((id) => id !== lastId);
-    let pool = nonRepeat.length ? nonRepeat : fits;
-    if (!pool.length) pool = ["single-full-bleed"];
+      const { min, max, ideal } = t.photoSlots;
+      for (let k = Math.max(1, min); k <= Math.min(max, remaining); k++) {
+        const group = photos.slice(i, i + k);
+        const fit = t.fit(group, ctx);
+        if (fit <= 0) continue;
+        const left = remaining - k;
+        let score = fit * weight - Math.abs(k - ideal) * 0.06;
+        // Variety: never the same look twice in a row if avoidable, and
+        // mildly discouraged within the last three pages.
+        if (recent.at(-1) === id) score -= 0.45;
+        else if (recent.includes(id)) score -= 0.12;
+        if (left > 0 && left < minTake) score -= 0.3;
+        if (!best || score > best.score) best = { id, k, score };
+      }
+    }
+    if (!best) best = { id: "single-full-bleed", k: 1 };
 
-    const chosenId = pool.reduce((bestId, id) => {
-      const take = Math.min(PDF_TEMPLATES[id].photoSlots.max, remaining.length);
-      const bestTake = Math.min(PDF_TEMPLATES[bestId].photoSlots.max, remaining.length);
-      return take > bestTake ? id : bestId;
-    }, pool[0]);
-
-    const take = Math.min(PDF_TEMPLATES[chosenId].photoSlots.max, remaining.length);
-    pages.push({ templateId: chosenId, photos: remaining.slice(0, take) });
-    remaining = remaining.slice(take);
-    lastId = chosenId;
+    pages.push({ templateId: best.id, photos: photos.slice(i, i + best.k), variant: nextVariant() });
+    i += best.k;
+    recent.push(best.id);
+    if (recent.length > 3) recent.shift();
   }
-
   return pages;
 }
 
-// A featured photo (or narrative/pull quote) always gets its own opening
-// page, same as the web view's "featured photo gets full-width treatment"
-// convention - independent of any per-stop layout override, so a manual pin
-// to e.g. "4-Photo Grid" affects the rest of the stop's photos, not whether
-// its narrative gets shown at all. Never silently drop text content.
-function planStopPages(stop, pack) {
+function textLength(stop) {
+  return (stop.narrative || "").length + (stop.pullQuote || "").length;
+}
+
+function planStopPages(stop, pack, ctx, nextVariant) {
   const included = stop.photos.filter((p) => p.included);
   const featured = included.find((p) => p.featured);
-  const remaining = featured ? included.filter((p) => p.id !== featured.id) : included;
   const hasText = Boolean(stop.narrative || stop.pullQuote);
+  const base = { stopId: stop.id, stopHeading: stop.heading };
 
+  // Opening: a stop with text opens with the pack's opening page (featured
+  // photo + narrative). A stop without text doesn't need a separate
+  // opening - its featured photo leads the first photo page instead, and
+  // that page carries the stop's title.
   const openingPages = [];
-  if (featured && hasText) {
+  let photoPool = included;
+  if (hasText && featured) {
+    photoPool = included.filter((p) => p.id !== featured.id);
+    const tooLong = pack.opening === "hero-overlay" && textLength(stop) > OVERLAY_TEXT_LIMIT;
     openingPages.push({
-      templateId: "hero-pullquote",
+      ...base,
+      templateId: pack.opening,
       photos: [featured],
-      stopHeading: stop.heading,
-      narrative: stop.narrative,
-      pullQuote: stop.pullQuote,
+      narrative: tooLong ? null : stop.narrative,
+      pullQuote: tooLong ? null : stop.pullQuote,
     });
-  } else if (featured) {
-    openingPages.push({ templateId: "single-full-bleed", photos: [featured], stopHeading: stop.heading });
+    if (tooLong) {
+      openingPages.push({
+        ...base,
+        templateId: "text-chapter",
+        photos: [],
+        stopHeading: null,
+        narrative: stop.narrative,
+        pullQuote: stop.pullQuote,
+        backdrop: pack.chapterBackdrop ? featured : null,
+      });
+    }
   } else if (hasText) {
     openingPages.push({
+      ...base,
       templateId: "text-chapter",
       photos: [],
-      stopHeading: stop.heading,
       narrative: stop.narrative,
       pullQuote: stop.pullQuote,
+      backdrop: pack.chapterBackdrop ? included[0] : null,
     });
+  } else if (featured) {
+    photoPool = [featured, ...included.filter((p) => p.id !== featured.id)];
   }
 
-  const templateIds =
+  const weights =
     stop.pdfTemplateOverride && PDF_TEMPLATES[stop.pdfTemplateOverride]
-      ? [stop.pdfTemplateOverride]
+      ? { [stop.pdfTemplateOverride]: 1 }
       : pack.templates;
-  const photoPages = chunkPhotosWithPack(remaining, templateIds).map((p) => ({
-    ...p,
-    stopHeading: stop.heading,
-  }));
+  const photoPages = chunkPhotos(photoPool, weights, ctx, nextVariant).map((p) => ({ ...base, ...p }));
+  if (!openingPages.length && photoPages.length) photoPages[0].showTitle = true;
 
-  // Info cards become their own dedicated page, positioned by the same
-  // top/middle/end placement already established for the (continuous-
-  // scroll) web view, reinterpreted for a paginated medium: top -> right
-  // after the opening page, middle -> partway through the photo pages,
-  // end -> after all of them.
+  // Info cards become their own page, positioned by the same top/middle/end
+  // placement the web view uses, reinterpreted for a paginated medium.
   const cards = stop.infoCards || [];
+  const infoPage = (card) => ({ ...base, templateId: "info-card-page", photos: [], infoCard: card });
   const topCards = cards.filter((c) => (c.placement || "top") === "top");
   const middleCards = cards.filter((c) => c.placement === "middle");
   const endCards = cards.filter((c) => c.placement === "end");
-  const infoPage = (card) => ({ templateId: "info-card-page", photos: [], infoCard: card });
   const mid = Math.ceil(photoPages.length / 2);
+
+  // Without an opening page the first photo page carries the stop title, so
+  // it has to come before any "top" info cards.
+  if (!openingPages.length && photoPages.length) {
+    const [titlePage, ...rest] = photoPages;
+    const restMid = Math.max(0, mid - 1);
+    return [
+      titlePage,
+      ...topCards.map(infoPage),
+      ...rest.slice(0, restMid),
+      ...middleCards.map(infoPage),
+      ...rest.slice(restMid),
+      ...endCards.map(infoPage),
+    ];
+  }
 
   return [
     ...openingPages,
@@ -101,8 +142,8 @@ function planStopPages(stop, pack) {
   ];
 }
 
-// A stop with nothing in it at all (matches the same rule render.js's web
-// view uses to hide it) contributes zero pages rather than a blank one.
+// A stop with nothing in it at all (same rule render.js's web view uses to
+// hide it) contributes zero pages rather than a blank one.
 function isStopEmpty(stop) {
   const included = stop.photos.filter((p) => p.included);
   return (
@@ -114,35 +155,72 @@ function isStopEmpty(stop) {
   );
 }
 
-export function planPdfPages(story, { pack: packOverride, paperSize: paperSizeOverride } = {}) {
+function tripDates(story, strings) {
+  const dated = story.stops.filter((s) => s.startedAt);
+  if (!dated.length) return "";
+  return dateRange(dated[0].startedAt, dated[dated.length - 1].endedAt || dated[dated.length - 1].startedAt, strings?.dateLocale);
+}
+
+function coverPages(story, pack, ctx, strings) {
+  const included = story.stops.flatMap((s) => s.photos.filter((p) => p.included));
+  const featured = story.stops.map((s) => s.photos.find((p) => p.included && p.featured)).filter(Boolean);
+  const candidates = featured.length ? featured : included;
+  if (!candidates.length && !story.intro) return [];
+
+  const subtitle = tripDates(story, strings);
+
+  if (pack.cover === "cover-collage" && candidates.length) {
+    // Backdrop: the featured photo that survives a full-page crop best.
+    const bg = [...candidates].sort(
+      (a, b) => coverRetention(photoAspect(b), ctx.pageAspect) - coverRetention(photoAspect(a), ctx.pageAspect)
+    )[0];
+    const others = [...candidates, ...included].filter((p, i, arr) => p.id !== bg.id && arr.findIndex((q) => q.id === p.id) === i);
+    const pages = [{ templateId: "cover-collage", photos: [bg, ...others.slice(0, 2)], stopHeading: story.title, subtitle }];
+    if (story.intro) {
+      pages.push({
+        templateId: "text-chapter",
+        photos: [],
+        narrative: story.intro,
+        backdrop: pack.chapterBackdrop ? others[2] || bg : null,
+      });
+    }
+    return pages;
+  }
+
+  return [
+    {
+      templateId: "hero-pullquote",
+      photos: candidates.length ? [candidates[0]] : [],
+      stopHeading: story.title,
+      subtitle,
+      narrative: story.intro,
+    },
+  ];
+}
+
+export function planPdfPages(story, { pack: packOverride, paperSize: paperSizeOverride, strings } = {}) {
   const pack = getLayoutPack(packOverride || story.pdfLayoutPack);
   const paperSize = getPaperSize(paperSizeOverride || story.pdfPaperSize);
+  const ctx = { pageAspect: paperSize.widthMm / paperSize.heightMm };
+  let variant = 0;
+  const nextVariant = () => variant++;
 
-  const includedByStop = story.stops.map((s) => s.photos.filter((p) => p.included));
-  const featuredByStop = includedByStop.map((photos) => photos.find((p) => p.featured));
-  const coverPhoto = (featuredByStop.find(Boolean) || includedByStop.flat()[0])?.fullUrl
-    || (featuredByStop.find(Boolean) || includedByStop.flat()[0])?.thumbUrl;
-
-  const pages = [];
-
-  if (coverPhoto || story.intro) {
-    pages.push({
-      templateId: "hero-pullquote",
-      photos: coverPhoto ? [{ fullUrl: coverPhoto, thumbUrl: coverPhoto }] : [],
-      stopHeading: story.title,
-      narrative: story.intro,
-      pullQuote: null,
-    });
-  }
+  const pages = [...coverPages(story, pack, ctx, strings)];
 
   story.stops.forEach((stop) => {
     if (isStopEmpty(stop)) return;
-    pages.push(...planStopPages(stop, pack));
+    pages.push(...planStopPages(stop, pack, ctx, nextVariant));
   });
 
   if (story.outro) {
-    pages.push({ templateId: "text-chapter", photos: [], stopHeading: null, narrative: story.outro, pullQuote: null });
+    const lastPhoto = story.stops.flatMap((s) => s.photos.filter((p) => p.included)).at(-1);
+    pages.push({
+      templateId: "text-chapter",
+      photos: [],
+      narrative: story.outro,
+      backdrop: pack.chapterBackdrop ? lastPhoto : null,
+    });
   }
 
-  return { pages, paperSize };
+  return { pages, paperSize, pack, ctx };
 }

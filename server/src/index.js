@@ -64,6 +64,7 @@ app.get("/api/pdf-layouts", (req, res) => {
       label: t.label,
       photoSlots: t.photoSlots,
       hasText: t.hasText,
+      selectable: t.selectable,
     })),
     packs: Object.entries(PDF_LAYOUT_PACKS).map(([id, p]) => ({ id, label: p.label })),
     paperSizes: Object.entries(PDF_PAPER_SIZES).map(([id, p]) => ({ id, label: p.label })),
@@ -324,7 +325,28 @@ app.get("/story/:id/present", (req, res) => {
 app.get("/story/:id/pdf-preview", (req, res) => {
   const story = getStory(req.params.id);
   if (!story) return res.status(404).send("Story not found");
-  res.type("html").send(buildPdfHtml(story, { pack: req.query.pack, paperSize: req.query.paperSize }));
+  res.type("html").send(buildPdfHtml(story, { pack: req.query.pack, paperSize: req.query.paperSize, preview: true }));
+});
+
+// Live preview for the editor: renders the *unsaved* draft the editor
+// posts, so changing the pack, paper size or a stop's layout shows up
+// immediately instead of after a save + PDF export round trip. Nothing is
+// persisted here.
+app.post("/api/stories/:id/pdf-preview", (req, res) => {
+  const draft = req.body?.story;
+  if (!draft || !Array.isArray(draft.stops)) return res.status(400).send("Missing story draft");
+  const stops = draft.stops.map((s) => ({
+    ...s,
+    photos: Array.isArray(s.photos) ? s.photos : [],
+    infoCards: Array.isArray(s.infoCards) ? s.infoCards : [],
+    embeds: Array.isArray(s.embeds) ? s.embeds : [],
+  }));
+  try {
+    res.type("html").send(buildPdfHtml({ ...draft, stops }, { editor: true }));
+  } catch (err) {
+    console.error(err);
+    res.status(500).send(String(err.message || err));
+  }
 });
 
 app.get("/api/stories/:id/export/pdf", async (req, res) => {

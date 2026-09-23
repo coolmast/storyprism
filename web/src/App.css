@@ -1470,3 +1470,96 @@ textarea {
   padding: 0;
   white-space: nowrap;
 }
+
+/* Live PDF preview: a drawer beside the editor on wide screens (the editor
+   column shifts left to stay fully usable), full screen on a phone. */
+:root {
+  --pdf-drawer-w: min(48vw, 780px);
+}
+
+.toolbar-btn.active {
+  background: var(--teal);
+  color: white;
+}
+
+.pdf-live-preview {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--pdf-drawer-w);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  background: #2e2e2e;
+  box-shadow: -4px 0 18px rgba(0, 0, 0, 0.25);
+}
+
+@media (min-width: 1000px) {
+  .app-body.single:has(.with-pdf-preview) {
+    padding-right: var(--pdf-drawer-w);
+  }
+}
+
+@media (max-width: 999px) {
+  .pdf-live-preview {
+    width: auto;
+    left: 0;
+  }
+}
+
+.pdf-live-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  color: #eee;
+}
+
+.pdf-live-status {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.pdf-live-close {
+  margin-left: auto;
+  background: none;
+  border: 1px solid #777;
+  color: #eee;
+  border-radius: 999px;
+  width: 2rem;
+  height: 2rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.pdf-live-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.9rem 0.6rem;
+}
+
+.pdf-live-packs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.pdf-live-controls select {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid #666;
+  background: #444;
+  color: #eee;
+}
+
+.pdf-live-frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: #2e2e2e;
+}

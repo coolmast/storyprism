@@ -24,8 +24,8 @@ function normalizeWebsiteUrl(url) {
 }
 
 const insertStory = db.prepare(`
-  INSERT INTO stories (id, album_uid, album_title, title, intro, outro, theme, content_language, created_at, updated_at)
-  VALUES (@id, @albumUid, @albumTitle, @title, '', '', @theme, @contentLanguage, @now, @now)
+  INSERT INTO stories (id, album_uid, album_title, title, intro, outro, theme, content_language, pdf_layout_pack, created_at, updated_at)
+  VALUES (@id, @albumUid, @albumTitle, @title, '', '', @theme, @contentLanguage, '${DEFAULT_LAYOUT_PACK}', @now, @now)
 `);
 const insertStop = db.prepare(`
   INSERT INTO stops (id, story_id, position, lat, lng, place_label, started_at, ended_at, heading, narrative)

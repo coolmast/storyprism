@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { saveStory, draftCaption, researchPlace, fetchThemes, fetchLanguages, fetchPdfLayouts } from "./api.js";
 import IncludedPhotoGrid from "./IncludedPhotoGrid.jsx";
+import PdfLivePreview from "./PdfLivePreview.jsx";
 import InterviewPanel from "./InterviewPanel.jsx";
 import RouteEmbeds from "./RouteEmbeds.jsx";
 import NotesImportPanel from "./NotesImportPanel.jsx";
@@ -40,6 +41,7 @@ export default function StoryEditor({ story, onBack, onSaved }) {
   const [pdfLayouts, setPdfLayouts] = useState({ templates: [], packs: [], paperSizes: [] });
   const [collapsedStops, setCollapsedStops] = useState(() => new Set());
   const [copied, setCopied] = useState(false);
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
 
   async function handleCopyShareLink() {
     // No ?preview=1 here on purpose: that flag only exists to show the
@@ -217,6 +219,13 @@ export default function StoryEditor({ story, onBack, onSaved }) {
     markDirty((d) => ({ ...d, stops: d.stops.filter((s) => s.id !== stopId) }));
   }
 
+  // Stable identity so the preview's message listener isn't re-bound on
+  // every render; `updateStop` only touches state setters.
+  const handlePdfOverride = useCallback((stopId, templateId) => {
+    updateStop(stopId, { pdfTemplateOverride: templateId || null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function handleSave() {
     setSaving(true);
     try {
@@ -258,7 +267,16 @@ export default function StoryEditor({ story, onBack, onSaved }) {
   }
 
   return (
-    <div className="story-editor">
+    <div className={`story-editor ${showPdfPreview ? "with-pdf-preview" : ""}`}>
+      {showPdfPreview && (
+        <PdfLivePreview
+          draft={draft}
+          pdfLayouts={pdfLayouts}
+          onChange={(patch) => markDirty((d) => ({ ...d, ...patch }))}
+          onOverride={handlePdfOverride}
+          onClose={() => setShowPdfPreview(false)}
+        />
+      )}
       <div className="editor-toolbar">
         <button className="link-btn" onClick={onBack}>{t("backToStories")}</button>
         <div className="toolbar-actions">
@@ -286,16 +304,14 @@ export default function StoryEditor({ story, onBack, onSaved }) {
             <span aria-hidden="true">🎬</span>
             <span className="toolbar-btn-label">{t("present")}</span>
           </a>
-          <a
-            className="toolbar-btn"
-            href={`/story/${draft.id}/pdf-preview`}
-            target="_blank"
-            rel="noreferrer"
+          <button
+            className={`toolbar-btn ${showPdfPreview ? "active" : ""}`}
+            onClick={() => setShowPdfPreview((v) => !v)}
             title={t("previewPdfLayout")}
           >
             <span aria-hidden="true">🔍</span>
             <span className="toolbar-btn-label">{t("previewPdfLayout")}</span>
-          </a>
+          </button>
           <a className="toolbar-btn" href={`/api/stories/${draft.id}/export/pdf`} title={t("downloadPdf")}>
             <span aria-hidden="true">📄</span>
             <span className="toolbar-btn-label">{t("downloadPdf")}</span>
@@ -358,7 +374,7 @@ export default function StoryEditor({ story, onBack, onSaved }) {
         {pdfLayouts.packs.map((p) => (
           <button
             key={p.id}
-            className={`lang-picker-btn ${(draft.pdfLayoutPack || "classic") === p.id ? "active" : ""}`}
+            className={`lang-picker-btn ${(draft.pdfLayoutPack || "photobook") === p.id ? "active" : ""}`}
             onClick={() => markDirty((d) => ({ ...d, pdfLayoutPack: p.id }))}
           >
             {p.label}
@@ -528,7 +544,7 @@ export default function StoryEditor({ story, onBack, onSaved }) {
                     >
                       <option value="">{t("pdfLayoutAutomatic")}</option>
                       {pdfLayouts.templates
-                        .filter((tpl) => tpl.photoSlots.min > 0)
+                        .filter((tpl) => tpl.selectable)
                         .map((tpl) => (
                           <option key={tpl.id} value={tpl.id}>
                             {tpl.label}

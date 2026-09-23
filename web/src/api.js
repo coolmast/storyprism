@@ -15,6 +15,15 @@ export const fetchItineraryByDate = (from, to) =>
 export const fetchThemes = () => fetch("/api/themes").then(json);
 export const fetchLanguages = () => fetch("/api/languages").then(json);
 export const fetchPdfLayouts = () => fetch("/api/pdf-layouts").then(json);
+export const fetchPdfPreviewHtml = (id, story) =>
+  fetch(`/api/stories/${id}/pdf-preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ story }),
+  }).then(async (res) => {
+    if (!res.ok) throw new Error((await res.text()) || `Request failed (${res.status})`);
+    return res.text();
+  });
 
 export const fetchStories = () => fetch("/api/stories").then(json);
 export const fetchStory = (id) => fetch(`/api/stories/${id}`).then(json);
