@@ -241,7 +241,13 @@
     inset: auto 0 0 0;
     margin: 0;
     width: 100%;
+    /* dvh (falls back to vh where unsupported) rather than vh: a mobile
+       browser's address bar showing/hiding changes the *visible* height
+       without changing 100vh, so a vh-based max-height here would leave a
+       gap between the sheet and the screen's actual bottom edge whenever
+       the bar is showing - the whole reason dvh exists. */
     max-height: min(80vh, calc(100vh - 2rem));
+    max-height: min(80dvh, calc(100dvh - 2rem));
     border-radius: var(--radius) var(--radius) 0 0;
     padding-bottom: env(safe-area-inset-bottom);
   }

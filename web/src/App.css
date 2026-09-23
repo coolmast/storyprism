@@ -725,13 +725,19 @@
   font-family: inherit;
   font-weight: bold;
   border: none;
+  border-bottom: 1px dashed var(--border);
   background: none;
-  padding: 0;
+  padding: 0 0 0.15rem;
   color: var(--ink);
+}
+
+.story-title-input:hover {
+  border-bottom-color: var(--accent-2);
 }
 
 .story-title-input:focus {
   outline: 1px dashed var(--terracotta);
+  border-bottom-color: var(--terracotta);
 }
 
 .settings-btn {
@@ -1032,15 +1038,24 @@ textarea {
   font-family: inherit;
   font-weight: bold;
   border: none;
+  /* Always-visible dashed underline - not just an outline that only
+     appears once you're already focused inside it - so it reads as
+     editable at a glance, including on touch devices with no hover. */
+  border-bottom: 1px dashed var(--border);
   background: none;
-  padding: 0;
+  padding: 0 0 0.1rem;
   color: var(--teal);
   flex: 1;
   min-width: 8rem;
 }
 
+.stop-heading-input:hover {
+  border-bottom-color: var(--accent-2);
+}
+
 .stop-heading-input:focus {
   outline: 1px dashed var(--terracotta);
+  border-bottom-color: var(--terracotta);
 }
 
 .stop-dates {
@@ -1759,9 +1774,10 @@ textarea {
 
 .photo-card-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.3rem 0.5rem;
 }
 
 .photo-include {
