@@ -104,3 +104,4 @@ ensureColumn("stories", "pdf_paper_size", "TEXT NOT NULL DEFAULT 'a4-portrait'")
 ensureColumn("stops", "pdf_template_override", "TEXT");
 ensureColumn("stories", "book_product", "TEXT NOT NULL DEFAULT 'saal-square-28'");
 ensureColumn("stops", "book_layout_override", "TEXT");
+ensureColumn("stops", "book_spread_counts", "TEXT");

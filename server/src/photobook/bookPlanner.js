@@ -24,30 +24,66 @@ import { getTheme } from "../themes.js";
 //     penalties so the book doesn't repeat itself
 //   - info cards: one spread each (place photo + facts), at their placement
 
-function chunkIntoSpreads(photos, weights, spread, nextVariant) {
+// Most photos a single spread can take (the densest layout's capacity).
+export const MAX_PHOTOS_PER_SPREAD = Math.max(...Object.values(SPREAD_LAYOUTS).map((l) => l.photos.max));
+
+// Best layout for exactly `group` (a fixed photo count): the pack's
+// preferred layouts first, any layout that can hold that many as fallback.
+function bestLayoutFor(group, weights, spread, recent) {
+  const k = group.length;
+  const pick = (entries, allowZero) => {
+    let best = null;
+    for (const [id, weight] of entries) {
+      const l = SPREAD_LAYOUTS[id];
+      if (!l || k < l.photos.min || k > l.photos.max) continue;
+      const fit = l.fit(group, spread);
+      if (fit <= 0 && !allowZero) continue;
+      let score = fit * weight;
+      if (recent.at(-1) === id) score -= 0.45;
+      else if (recent.includes(id)) score -= 0.12;
+      if (!best || score > best.score) best = { id, score };
+    }
+    return best;
+  };
+  const all = Object.keys(SPREAD_LAYOUTS).map((id) => [id, weights[id] ?? 0.8]);
+  return (pick(Object.entries(weights), false) || pick(all, false) || pick(all, true))?.id || "page-mosaics";
+}
+
+// Splits a stop's photos into spreads. `pinned` (the user's per-spread photo
+// counts for this stop, in order) fixes how many photos the first spreads
+// hold; everything after them is paced automatically: layout *and* count per
+// spread are chosen by how well the photos' shapes suit each layout, with
+// variety penalties so the book doesn't repeat itself.
+function chunkIntoSpreads(photos, weights, spread, nextVariant, pinned = []) {
   const entries = Object.entries(weights).filter(([id]) => SPREAD_LAYOUTS[id]);
   const spreads = [];
   const recent = [];
   let i = 0;
   while (i < photos.length) {
     const remaining = photos.length - i;
+    const pinnedCount = pinned[spreads.length];
     let best = null;
-    for (const [id, weight] of entries) {
-      const l = SPREAD_LAYOUTS[id];
-      for (let k = l.photos.min; k <= Math.min(l.photos.max, remaining); k++) {
-        const group = photos.slice(i, i + k);
-        const fit = l.fit(group, spread);
-        if (fit <= 0) continue;
-        const left = remaining - k;
-        let score = fit * weight - Math.abs(k - l.photos.ideal) * 0.05;
-        if (recent.at(-1) === id) score -= 0.45;
-        else if (recent.includes(id)) score -= 0.12;
-        if (left > 0 && left < 2) score -= 0.15;
-        if (!best || score > best.score) best = { id, k, score };
+    if (pinnedCount) {
+      const k = Math.min(pinnedCount, remaining, MAX_PHOTOS_PER_SPREAD);
+      best = { id: bestLayoutFor(photos.slice(i, i + k), weights, spread, recent), k, pinned: true };
+    } else {
+      for (const [id, weight] of entries) {
+        const l = SPREAD_LAYOUTS[id];
+        for (let k = l.photos.min; k <= Math.min(l.photos.max, remaining); k++) {
+          const group = photos.slice(i, i + k);
+          const fit = l.fit(group, spread);
+          if (fit <= 0) continue;
+          const left = remaining - k;
+          let score = fit * weight - Math.abs(k - l.photos.ideal) * 0.05;
+          if (recent.at(-1) === id) score -= 0.45;
+          else if (recent.includes(id)) score -= 0.12;
+          if (left > 0 && left < 2) score -= 0.15;
+          if (!best || score > best.score) best = { id, k, score };
+        }
       }
+      if (!best) best = { id: "panorama", k: 1 };
     }
-    if (!best) best = { id: "panorama", k: 1 };
-    spreads.push({ layoutId: best.id, photos: photos.slice(i, i + best.k), variant: nextVariant() });
+    spreads.push({ layoutId: best.id, photos: photos.slice(i, i + best.k), variant: nextVariant(), pinned: !!best.pinned });
     i += best.k;
     recent.push(best.id);
     if (recent.length > 3) recent.shift();
@@ -143,11 +179,16 @@ export function planBook(story, { product: productId, strings } = {}) {
       stop.bookLayoutOverride && SPREAD_LAYOUTS[stop.bookLayoutOverride]
         ? { [stop.bookLayoutOverride]: 1, panorama: 0.01 }
         : DEFAULT_SPREAD_WEIGHTS;
-    const photoSpreads = chunkIntoSpreads(pool, weights, spreadSize, nextVariant).map((s, idx) => ({
-      kind: "photos",
-      ...tag,
-      ...build(s.layoutId, s.photos, s.variant, { title: !hasText && idx === 0 ? stop.heading : null }),
-    }));
+    const photoSpreads = chunkIntoSpreads(pool, weights, spreadSize, nextVariant, stop.bookSpreadCounts || []).map(
+      (s, idx) => ({
+        kind: "photos",
+        ...tag,
+        photoIndex: idx,
+        photoCount: s.photos.length,
+        pinned: s.pinned,
+        ...build(s.layoutId, s.photos, s.variant, { title: !hasText && idx === 0 ? stop.heading : null }),
+      })
+    );
 
     const cards = stop.infoCards || [];
     const infoSpread = (card) => ({

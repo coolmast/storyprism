@@ -18,6 +18,24 @@ import { SPREAD_LAYOUT_IDS } from "./photobook/spreadLayouts.js";
 // would) defeats the entire point of letting them fix or add a link. Add
 // the protocol if it's missing rather than reject, but still refuse
 // anything that isn't at least domain-shaped.
+// Per-stop photobook pacing: how many photos each of the stop's photo
+// spreads holds, in order (the rest of the stop is laid out automatically).
+// Stored as a JSON array; anything malformed is treated as "automatic".
+function parseSpreadCounts(json) {
+  try {
+    const v = JSON.parse(json || "[]");
+    return Array.isArray(v) ? v.filter((n) => Number.isInteger(n) && n >= 1 && n <= 10) : [];
+  } catch {
+    return [];
+  }
+}
+
+function serializeSpreadCounts(counts) {
+  if (!Array.isArray(counts)) return null;
+  const clean = counts.filter((n) => Number.isInteger(n) && n >= 1 && n <= 10).slice(0, 60);
+  return clean.length ? JSON.stringify(clean) : null;
+}
+
 function normalizeWebsiteUrl(url) {
   const trimmed = (url || "").trim();
   if (!trimmed) return "";
@@ -197,6 +215,7 @@ export function getStory(id) {
         pullQuote: s.pull_quote,
         pdfTemplateOverride: s.pdf_template_override || null,
         bookLayoutOverride: s.book_layout_override || null,
+        bookSpreadCounts: parseSpreadCounts(s.book_spread_counts),
         suggestedPlaces: suggestPlacesForStop(
           includedRows.map((p) => ({ title: p.title, placeLabel: p.place_label }))
         ),
@@ -250,8 +269,8 @@ const updateStoryStmt = db.prepare(
 // Position is included so inserting a stop in the middle (or reordering)
 // is reflected, same as photos already work.
 const upsertStopStmt = db.prepare(`
-  INSERT INTO stops (id, story_id, position, lat, lng, place_label, started_at, ended_at, heading, narrative, research, pull_quote, pdf_template_override, book_layout_override)
-  VALUES (@id, @storyId, @position, @lat, @lng, @placeLabel, @startedAt, @endedAt, @heading, @narrative, @research, @pullQuote, @pdfTemplateOverride, @bookLayoutOverride)
+  INSERT INTO stops (id, story_id, position, lat, lng, place_label, started_at, ended_at, heading, narrative, research, pull_quote, pdf_template_override, book_layout_override, book_spread_counts)
+  VALUES (@id, @storyId, @position, @lat, @lng, @placeLabel, @startedAt, @endedAt, @heading, @narrative, @research, @pullQuote, @pdfTemplateOverride, @bookLayoutOverride, @bookSpreadCounts)
   ON CONFLICT(id) DO UPDATE SET
     position = excluded.position,
     lat = excluded.lat,
@@ -264,7 +283,8 @@ const upsertStopStmt = db.prepare(`
     research = excluded.research,
     pull_quote = excluded.pull_quote,
     pdf_template_override = excluded.pdf_template_override,
-    book_layout_override = excluded.book_layout_override
+    book_layout_override = excluded.book_layout_override,
+    book_spread_counts = excluded.book_spread_counts
 `);
 // Matched by id alone (a photo's id is globally unique, not just within its
 // stop) and stop_id is now part of the SET clause, not the WHERE - splitting
@@ -327,6 +347,7 @@ export function updateStory(id, data) {
         endedAt: stop.endedAt ?? null,
         pdfTemplateOverride: PDF_TEMPLATE_IDS.includes(stop.pdfTemplateOverride) ? stop.pdfTemplateOverride : null,
         bookLayoutOverride: SPREAD_LAYOUT_IDS.includes(stop.bookLayoutOverride) ? stop.bookLayoutOverride : null,
+        bookSpreadCounts: serializeSpreadCounts(stop.bookSpreadCounts),
         heading: stop.heading ?? "",
         narrative: stop.narrative ?? "",
         research: stop.research ?? "",

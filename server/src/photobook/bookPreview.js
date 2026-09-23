@@ -1,4 +1,4 @@
-import { planBook } from "./bookPlanner.js";
+import { planBook, MAX_PHOTOS_PER_SPREAD } from "./bookPlanner.js";
 import { renderSpreadSvg } from "./saalSvg.js";
 import { SPREAD_LAYOUTS } from "./spreadLayouts.js";
 import { getStrings } from "../i18n.js";
@@ -36,14 +36,34 @@ export function buildBookPreviewHtml(story) {
     else groups.push({ key, items: [{ s, i }] });
   });
 
+  // Current photo count of every photo spread per stop, in order - the
+  // -/+ buttons send an edited copy of this back as the stop's pacing.
+  const countsByStop = new Map();
+  plan.spreads.forEach((s) => {
+    if (s.kind !== "photos") return;
+    const list = countsByStop.get(s.stopId) || [];
+    list[s.photoIndex] = s.photoCount;
+    countsByStop.set(s.stopId, list);
+  });
+
+  const pacingControls = (s) => {
+    const counts = countsByStop.get(s.stopId) || [];
+    const isLast = s.photoIndex === counts.length - 1;
+    return `<span class="bp-pace" data-stop-id="${escapeHtml(s.stopId)}" data-index="${s.photoIndex}" data-counts="${escapeHtml(JSON.stringify(counts))}">
+        <button type="button" data-delta="-1" title="Fewer photos on this spread (they move to the next one)"${s.photoCount <= 1 ? " disabled" : ""}>−</button>
+        <b>${s.photoCount} 📷${s.pinned ? " 📌" : ""}</b>
+        <button type="button" data-delta="1" title="More photos on this spread (taken from the following ones)"${isLast || s.photoCount >= MAX_PHOTOS_PER_SPREAD ? " disabled" : ""}>+</button>
+      </span>`;
+  };
+
   const spreadCard = (s, i) => {
     const label =
       s.kind === "photos"
-        ? `${escapeHtml(SPREAD_LAYOUTS[s.layoutId]?.label || s.layoutId)} · ${s.elements.filter((e) => e.kind === "image").length} 📷`
+        ? escapeHtml(SPREAD_LAYOUTS[s.layoutId]?.label || s.layoutId)
         : KIND_LABEL[s.kind] || s.kind;
     return `<figure class="bp-spread">
       <div class="bp-canvas">${inlineSvg(s, plan.spreadSize, `spread-${i}`)}<span class="bp-fold"></span></div>
-      <figcaption>${i * 2 + 1}–${i * 2 + 2} · ${label}</figcaption>
+      <figcaption><span>${i * 2 + 1}–${i * 2 + 2} · ${label}</span>${s.kind === "photos" ? pacingControls(s) : ""}</figcaption>
     </figure>`;
   };
 
@@ -52,7 +72,11 @@ export function buildBookPreviewHtml(story) {
       const stop = stopsById.get(g.key);
       const head = stop
         ? `<div class="bp-group-head">
-            <span>${escapeHtml(stop.heading || "")}</span>
+            <span>${escapeHtml(stop.heading || "")}${
+              stop.bookSpreadCounts?.length
+                ? ` <button type="button" class="bp-reset" data-stop-id="${escapeHtml(stop.id)}" title="Let the photos of this stop be paced automatically again">↺ Auto</button>`
+                : ""
+            }</span>
             <select class="bp-override" data-stop-id="${escapeHtml(stop.id)}">
               <option value="">Automatic</option>
               ${layoutOptions
@@ -84,7 +108,15 @@ export function buildBookPreviewHtml(story) {
   .bp-canvas { position: relative; box-shadow: 0 2px 10px rgba(0,0,0,0.5); background: #fff; }
   .bp-fold { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; border-left: 1px dashed rgba(0,0,0,0.25); pointer-events: none; }
   .bp-cover .bp-fold { display: none; }
-  figcaption { color: #aaa; font-size: 11px; margin-top: 4px; }
+  figcaption { color: #aaa; font-size: 12px; margin-top: 5px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .bp-pace { display: inline-flex; align-items: center; gap: 6px; color: #eee; }
+  .bp-pace b { font-weight: 600; min-width: 3.2em; text-align: center; }
+  .bp-pace button, .bp-reset {
+    font: inherit; font-size: 15px; line-height: 1; width: 30px; height: 30px; border-radius: 50%;
+    border: 1px solid #777; background: #444; color: #fff; cursor: pointer;
+  }
+  .bp-pace button:disabled { opacity: 0.3; cursor: default; }
+  .bp-reset { width: auto; height: auto; border-radius: 999px; padding: 3px 9px; font-size: 12px; margin-left: 6px; font-weight: 400; }
 </style></head>
 <body>
   <p class="bp-summary"><b>${escapeHtml(plan.product.label)}</b> · ${plan.numPages} pages · ${plan.spreads.length} spreads${
@@ -99,6 +131,19 @@ export function buildBookPreviewHtml(story) {
   </section>
   ${groupsHtml}
 <script>
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest(".bp-pace button");
+    if (btn && !btn.disabled) {
+      var pace = btn.parentNode;
+      var index = Number(pace.dataset.index);
+      var counts = JSON.parse(pace.dataset.counts).slice(0, index + 1);
+      counts[index] = Math.max(1, counts[index] + Number(btn.dataset.delta));
+      parent.postMessage({ type: "book-spread-counts", stopId: pace.dataset.stopId, counts: counts }, "*");
+      return;
+    }
+    var reset = e.target.closest && e.target.closest(".bp-reset");
+    if (reset) parent.postMessage({ type: "book-spread-counts", stopId: reset.dataset.stopId, counts: [] }, "*");
+  });
   document.addEventListener("change", function (e) {
     var sel = e.target.closest && e.target.closest(".bp-override");
     if (!sel) return;

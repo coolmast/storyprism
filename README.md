@@ -273,6 +273,12 @@ useful for a second person to use the editor from their own device.
       one-click `.sswprm` export with all photos in print resolution that
       imports into Saal and stays fully editable there. Square 28×28, A4
       portrait and A4 landscape products
+- [x] Per-spread pacing in the Photobook preview: − / + on every photo
+      spread sets how many photos it holds (spreads before it keep their
+      current counts and get pinned 📌, the rest of the stop re-paces
+      automatically; "↺ Auto" per stop resets). Stored per stop as
+      `stops.book_spread_counts` (JSON array), up to 10 photos per spread
+      (max 6 per page)
 - [ ] Face-aware backgrounds: photo cards are placed in corners without
       knowing what's underneath and can cover faces. PhotoPrism has face
       markers per photo — using them to pick card corners (and crop

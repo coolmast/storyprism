@@ -14,7 +14,15 @@ import { useI18n } from "./i18n.jsx";
 //     Software (cover + spreads), with product choice, per-stop layout
 //     pickers inside the preview and the .sswprm export
 //   - PDF: the paginated PDF export with its layout packs / paper sizes
-export default function PdfLivePreview({ draft, pdfLayouts, onChange, onOverride, onBookOverride, onClose }) {
+export default function PdfLivePreview({
+  draft,
+  pdfLayouts,
+  onChange,
+  onOverride,
+  onBookOverride,
+  onBookSpreadCounts,
+  onClose,
+}) {
   const { t } = useI18n();
   const [mode, setMode] = useState(() => {
     try {
@@ -77,10 +85,13 @@ export default function PdfLivePreview({ draft, pdfLayouts, onChange, onOverride
       if (e.source !== iframeRef.current?.contentWindow) return;
       if (e.data?.type === "pdf-template-override") onOverride(e.data.stopId, e.data.templateId);
       if (e.data?.type === "book-layout-override") onBookOverride(e.data.stopId, e.data.layoutId);
+      if (e.data?.type === "book-spread-counts" && Array.isArray(e.data.counts)) {
+        onBookSpreadCounts(e.data.stopId, e.data.counts);
+      }
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [onOverride, onBookOverride]);
+  }, [onOverride, onBookOverride, onBookSpreadCounts]);
 
   function restoreScroll() {
     iframeRef.current?.contentWindow?.scrollTo(0, scrollRef.current[mode] || 0);

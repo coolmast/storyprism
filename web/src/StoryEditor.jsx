@@ -231,6 +231,11 @@ export default function StoryEditor({ story, onBack, onSaved }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleBookSpreadCounts = useCallback((stopId, counts) => {
+    updateStop(stopId, { bookSpreadCounts: counts });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function handleSave() {
     setSaving(true);
     try {
@@ -280,6 +285,7 @@ export default function StoryEditor({ story, onBack, onSaved }) {
           onChange={(patch) => markDirty((d) => ({ ...d, ...patch }))}
           onOverride={handlePdfOverride}
           onBookOverride={handleBookOverride}
+          onBookSpreadCounts={handleBookSpreadCounts}
           onClose={() => setShowPdfPreview(false)}
         />
       )}

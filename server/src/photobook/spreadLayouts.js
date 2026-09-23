@@ -84,7 +84,9 @@ export function titleElement(title, page, corner, ctx, { dark = false } = {}) {
 // well each page's collage fills its box.
 function bestSplit(photos, leftBox, rightBox, opts) {
   let best = null;
-  for (let k = 1; k < photos.length; k++) {
+  // At most 6 photos per page: beyond that the photos get too small to
+  // print well, and the collage search grows exponentially.
+  for (let k = Math.max(1, photos.length - 6); k <= Math.min(photos.length - 1, 6); k++) {
     const l = collage(photos.slice(0, k), leftBox, opts).coverage;
     const r = collage(photos.slice(k), rightBox, opts).coverage;
     const balance = 1 - Math.abs(k - photos.length / 2) / photos.length;
@@ -175,7 +177,7 @@ export const SPREAD_LAYOUTS = {
   // Aspect-true mosaic on each page, thin white gaps, running into the bleed.
   "page-mosaics": {
     label: "Mosaic on both pages",
-    photos: { min: 4, max: 8, ideal: 6 },
+    photos: { min: 4, max: 10, ideal: 6 },
     fit(photos, spread) {
       const L = pageBox(spread, "left");
       const R = pageBox(spread, "right");
