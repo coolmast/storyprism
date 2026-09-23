@@ -189,6 +189,15 @@ the real software.
     in the user's books: `Architects DaughterEmbedded`
   - translucent box: a Saal shape `rect` with `ws:color`, `opacity` and a
     rounded-rect `mask`
+- **Page counts are catalog articles.** Every page count of a book is its
+  own `childArticleID`; a project whose child article doesn't match its
+  `numPages` is rejected on import ("Projekt konnte nicht importiert
+  werden", and an "Ungültiges Projekt" entry is left behind). The spine
+  grows in steps (square: 64–68 pages → cover 5844, 70–74 → 5854, 76 →
+  5864). Both come from projects Saal saved at that count and are kept per
+  count in `products.js` (`pageVariants`); books are padded with blank
+  spreads to the next known count, and an export needing more pages than
+  the largest known count is refused. Found by bisecting ~20 test imports.
 - `images/<imageID>.jpg` inside `.sswprm`: Saal stores downscaled working
   copies (median long edge ~2760 px); a 2048 px background shows as "gut",
   2048 px prints as "sehr gut".
@@ -286,8 +295,10 @@ useful for a second person to use the editor from their own device.
 - [ ] More Saal fonts: only `Architects DaughterEmbedded` is confirmed to
       exist in Saal, so body text uses it too. Reading any other font name
       from a Saal project would unlock a separate body font
-- [ ] Saal minimum/maximum page counts assumed as 26/130; blank spreads pad
-      short books to the minimum (easy to delete in Saal)
+- [ ] Only some page counts are known (square 28×28: 64, 68, 70, 72, 74,
+      76; A4 portrait/landscape: 30). Each further count needs its
+      `childArticleID` + cover width from a project Saal saved at that count
+      (or from Saal's local product catalog, if it can be found)
 - [ ] Per-page control in the live preview (e.g. "shuffle this page",
       choose the background photo, move a photo to the next page) — today
       control is per stop (layout override) plus photo order/featured

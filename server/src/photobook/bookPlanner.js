@@ -1,4 +1,4 @@
-import { getBookProduct, coverSize } from "./products.js";
+import { getBookProduct, coverSize, resolvePageCount, knownPageCounts, pageVariant } from "./products.js";
 import {
   SPREAD_LAYOUTS,
   DEFAULT_SPREAD_WEIGHTS,
@@ -223,12 +223,14 @@ export function planBook(story, { product: productId, strings } = {}) {
     });
   }
 
-  // Saal books need an even page count within the product's range; pad
-  // with blank spreads (easy to delete in Saal) up to the minimum.
-  const minSpreads = Math.ceil(product.minPages / 2);
-  const blanks = Math.max(0, minSpreads - spreads.length);
+  // Saal only accepts page counts that exist as articles in its catalog
+  // (see products.js); pad with blank spreads (easy to delete in Saal) up to
+  // the next one. More content than the largest known count is an overflow
+  // the export refuses rather than silently dropping pages.
+  const contentPages = spreads.length * 2;
+  const { pages: numPages, overflow } = resolvePageCount(product, contentPages);
+  const blanks = Math.max(0, numPages / 2 - spreads.length);
   for (let b = 0; b < blanks; b++) spreads.push({ kind: "blank", layoutId: "blank", elements: [], paper: "#ffffff" });
-  const numPages = spreads.length * 2;
 
   // Cover: best-fitting featured photo as backdrop, two more as prints.
   const cSize = coverSize(product, numPages);
@@ -254,7 +256,10 @@ export function planBook(story, { product: productId, strings } = {}) {
     cover,
     spreads,
     numPages,
-    tooManyPages: numPages > product.maxPages,
+    contentPages,
+    overflow,
+    knownPageCounts: knownPageCounts(product),
+    childArticleID: pageVariant(product, numPages).childArticleID,
     blankSpreads: blanks,
   };
 }

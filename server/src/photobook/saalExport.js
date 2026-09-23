@@ -82,7 +82,7 @@ async function mapLimit(items, limit, fn) {
   await Promise.all(workers);
 }
 
-function projectXml({ uid, coverUid, innerUid, title, product, numPages, images, now }) {
+function projectXml({ uid, coverUid, innerUid, title, product, numPages, childArticleID, images, now }) {
   const ids = product.ids;
   const d = new Date(now);
   const group = `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getFullYear()).slice(2)}`;
@@ -126,7 +126,7 @@ ${common(ids.coverArticleID)}
     <numPages>2</numPages>
   </project>
   <project version="${SAAL_VERSION}" uid="${innerUid}">
-${common(ids.innerArticleID, `\n    <childArticleID>${ids.childArticleID}</childArticleID>`)}
+${common(ids.innerArticleID, `\n    <childArticleID>${childArticleID}</childArticleID>`)}
     <configuratorSelections>
       <configuratorSelection articleNumber="${ids.articleNumber}"/>
     </configuratorSelections>
@@ -163,6 +163,11 @@ async function runExport(job, story) {
   await mkdir(EXPORT_DIR, { recursive: true });
   await cleanupOldExports();
   const plan = planBook(story, { strings: getStrings(story.contentLanguage) });
+  if (plan.overflow) {
+    throw new Error(
+      `The book needs ${plan.contentPages} pages; the largest page count Saal is known to accept for ${plan.product.label} is ${plan.numPages}. Condense some spreads or remove photos.`
+    );
+  }
   const allSpreads = [plan.cover, ...plan.spreads];
 
   // Every photo the book uses, with the largest size any use needs.
@@ -217,6 +222,7 @@ async function runExport(job, story) {
       title: story.title,
       product: plan.product,
       numPages: plan.numPages,
+      childArticleID: plan.childArticleID,
       images: [...refs.values()],
       now,
     })

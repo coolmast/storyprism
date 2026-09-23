@@ -90,8 +90,15 @@ export function buildBookPreviewHtml(story) {
     .join("\n");
 
   const warn = [];
-  if (plan.blankSpreads) warn.push(`${plan.blankSpreads} blank spread(s) added to reach the ${plan.product.minPages}-page minimum`);
-  if (plan.tooManyPages) warn.push(`${plan.numPages} pages exceeds the ${plan.product.maxPages}-page maximum`);
+  if (plan.overflow) {
+    warn.push(
+      `The book needs ${plan.contentPages} pages, but the largest page count known for this product is ${plan.numPages} - condense some spreads (−) or remove photos before exporting`
+    );
+  } else if (plan.blankSpreads) {
+    warn.push(
+      `${plan.blankSpreads} blank spread(s) added: Saal only accepts certain page counts for this product (known: ${plan.knownPageCounts.join(", ")})`
+    );
+  }
 
   return `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -119,7 +126,7 @@ export function buildBookPreviewHtml(story) {
   .bp-reset { width: auto; height: auto; border-radius: 999px; padding: 3px 9px; font-size: 12px; margin-left: 6px; font-weight: 400; }
 </style></head>
 <body>
-  <p class="bp-summary"><b>${escapeHtml(plan.product.label)}</b> · ${plan.numPages} pages · ${plan.spreads.length} spreads${
+  <p class="bp-summary"><b>${escapeHtml(plan.product.label)}</b> · ${plan.overflow ? plan.contentPages : plan.numPages} pages · ${plan.spreads.length} spreads${
     warn.length ? `<br><span class="bp-warn">⚠ ${warn.map(escapeHtml).join(" · ")}</span>` : ""
   }</p>
   <section class="bp-group">
