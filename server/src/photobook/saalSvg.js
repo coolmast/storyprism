@@ -83,7 +83,7 @@ function tlf(paragraphs) {
   const ps = paragraphs
     .map((p) => {
       const font = (p.font || fontInfo()).saal;
-      return `<p color="${p.color}" fontFamily="${xmlEscape(font)}" fontSize="${p.size}" fontStyle="normal" fontWeight="normal" lineBreak="toFit" lineHeight="120%" textAlign="${p.align === "right" ? "end" : p.align === "center" ? "center" : "start"}" textAlpha="1" textDecoration="none" verticalAlign="top"><span>${xmlEscape(p.text)}</span></p>`;
+      return `<p color="${p.color}" fontFamily="${xmlEscape(font)}" fontSize="${p.size}" fontStyle="${p.italic ? "italic" : "normal"}" fontWeight="${p.bold ? "bold" : "normal"}" lineBreak="toFit" lineHeight="120%" textAlign="${p.align === "right" ? "end" : p.align === "center" ? "center" : "start"}" textAlpha="1" textDecoration="none" verticalAlign="top"><span>${xmlEscape(p.text)}</span></p>`;
     })
     .join("");
   return `<TextFlow verticalAlign="top" whiteSpaceCollapse="preserve" version="3.0.0" xmlns="http://ns.adobe.com/textLayout/2008">${ps}</TextFlow>`;
@@ -107,7 +107,7 @@ function textSvg(el, id, mode) {
       // see bookPreview.js), the Google Fonts version otherwise.
       const generic = font.kind === "serif" ? "serif" : font.kind === "mono" ? "monospace" : "cursive";
       const family = `'SB-${font.key}', '${font.name}', ${generic}`;
-      return `<p style="margin:0;font-family:${xmlEscape(family)};font-size:${n(p.size * SAAL_EM)}px;line-height:${n(p.size * SAAL_LINE)}px;color:${p.color};text-align:${p.align};white-space:pre-wrap">${xmlEscape(p.text)}</p>`;
+      return `<p style="margin:0;font-family:${xmlEscape(family)};font-weight:${p.bold ? 700 : 400};font-style:${p.italic ? "italic" : "normal"};font-size:${n(p.size * SAAL_EM)}px;line-height:${n(p.size * SAAL_LINE)}px;color:${p.color};text-align:${p.align};white-space:pre-wrap">${xmlEscape(p.text)}</p>`;
     })
     .join("");
   return `<foreignObject x="${n(f.x)}" y="${n(f.y)}" width="${n(f.w)}" height="${n(f.h)}"${rot}><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden">${html}</div></foreignObject>`;

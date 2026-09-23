@@ -18,8 +18,21 @@ function fontHead(fonts) {
   const used = [...new Map([fonts.title, fonts.body].map((f) => [f.key, f])).values()];
   const local = used.filter((f) => existsSync(join(SAAL_FONT_DIR, `${f.key}-Regular.otf`)));
   const google = used.filter((f) => !local.includes(f) && f.google);
+  const styles = [
+    ["Regular", 400, "normal"],
+    ["Bold", 700, "normal"],
+    ["Italic", 400, "italic"],
+    ["BoldItalic", 700, "italic"],
+  ];
   const faces = local
-    .map((f) => `@font-face { font-family: 'SB-${f.key}'; src: url('/api/saal-fonts/${f.key}-Regular.otf') format('opentype'); font-display: block; }`)
+    .flatMap((f) =>
+      styles
+        .filter(([style]) => existsSync(join(SAAL_FONT_DIR, `${f.key}-${style}.otf`)))
+        .map(
+          ([style, weight, fstyle]) =>
+            `@font-face { font-family: 'SB-${f.key}'; src: url('/api/saal-fonts/${f.key}-${style}.otf') format('opentype'); font-weight: ${weight}; font-style: ${fstyle}; font-display: block; }`
+        )
+    )
     .join("\n");
   return `${faces ? `<style>${faces}</style>` : ""}${
     google.length

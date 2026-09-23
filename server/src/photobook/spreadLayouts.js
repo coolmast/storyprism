@@ -51,9 +51,11 @@ export const SAAL_EM = 4.15;
 export const SAAL_LINE = SAAL_EM * 1.2;
 
 // Width of `text` in Saal units at `size`, from the font's advance table.
-export function textWidth(text, size, font) {
+export function textWidth(text, size, font, bold = false) {
+  const adv = bold && font.boldAdv ? font.boldAdv : font.adv;
+  const avg = bold && font.boldAvg ? font.boldAvg : font.avg;
   let w = 0;
-  for (const ch of text) w += font.adv[ch] ?? font.avg;
+  for (const ch of text) w += adv[ch] ?? avg;
   return (w / 1000) * size * SAAL_EM;
 }
 
@@ -70,13 +72,32 @@ const roleFont = (fonts, role) => (role === "title" || role === "quote" ? fonts.
 // Where a crop into a frame should center: the middle of all faces.
 function focusOf(photo) {
   const faces = photo?.insights?.faces || [];
-  if (!faces.length) return null;
+  if (!faces.length) return importanceCentroid(photo);
   const x0 = Math.min(...faces.map((f) => f.x));
   const y0 = Math.min(...faces.map((f) => f.y));
   const x1 = Math.max(...faces.map((f) => f.x + f.w));
   const y1 = Math.max(...faces.map((f) => f.y + f.h));
   // Faces sit in the upper part of a head-and-shoulders box; nudge down a bit.
   return { x: (x0 + x1) / 2, y: Math.min(1, (y0 + y1) / 2 + (y1 - y0) * 0.25) };
+}
+
+// Main-subject point for photos without faces: the importance-weighted
+// centroid of the clearly important cells (subjects, salient highlights).
+function importanceCentroid(photo) {
+  const imp = photo?.insights?.importance;
+  if (!imp) return null;
+  const G = imp.grid;
+  let sx = 0;
+  let sy = 0;
+  let sw = 0;
+  imp.cells.forEach((c, i) => {
+    const v = c / 255;
+    if (v < 0.3) return;
+    sx += ((i % G) + 0.5) / G * v;
+    sy += (Math.floor(i / G) + 0.5) / G * v;
+    sw += v;
+  });
+  return sw > 0.5 ? { x: sx / sw, y: sy / sw } : null;
 }
 
 const image = (photo, frame, opts = {}) => ({
@@ -109,15 +130,32 @@ export function placePhoto(frame, pxW, pxH, focus) {
   };
 }
 
-// Face boxes of an image element in spread coordinates (visible part only).
+// What matters in a (background) image element, in spread coordinates: its
+// importance grid (faces + bodies, detected subjects, saliency - see
+// photoAnalysis.js) mapped through the photo's crop into the frame. Falls
+// back to plain face boxes for photos without an importance grid.
 function facesInSpread(photo, frame) {
-  const faces = photo?.insights?.faces || [];
-  if (!faces.length) return [];
-  const p = placePhoto(frame, photo.width || 3, photo.height || 2, focusOf(photo));
-  return faces
-    .map((f) => ({ x: p.x + f.x * p.w, y: p.y + f.y * p.h, w: f.w * p.w, h: f.h * p.h }))
-    .map((f) => intersect(f, frame))
-    .filter(Boolean);
+  const p = placePhoto(frame, photo?.width || 3, photo?.height || 2, focusOf(photo));
+  const imp = photo?.insights?.importance;
+  const cells = [];
+  if (imp) {
+    const G = imp.grid;
+    imp.cells.forEach((c, i) => {
+      const v = c / 255;
+      if (v < 0.04) return;
+      const r = intersect(
+        { x: p.x + ((i % G) / G) * p.w, y: p.y + (Math.floor(i / G) / G) * p.h, w: p.w / G, h: p.h / G },
+        frame
+      );
+      if (r) cells.push({ ...r, v });
+    });
+  } else {
+    for (const f of photo?.insights?.faces || []) {
+      const r = intersect({ x: p.x + f.x * p.w, y: p.y + f.y * p.h, w: f.w * p.w, h: f.h * p.h }, frame);
+      if (r) cells.push({ ...r, v: 1 });
+    }
+  }
+  return cells;
 }
 
 function intersect(a, b) {
@@ -128,21 +166,31 @@ function intersect(a, b) {
   return w > 0 && h > 0 ? { x, y, w, h } : null;
 }
 
-// Share of face area hidden by `boxes` (0 = no face covered). Faces get a
-// margin so cards don't clip foreheads and chins either.
-function faceCost(faces, boxes) {
-  if (!faces.length || !boxes.length) return 0;
-  let covered = 0;
+// How much of what matters `boxes` would hide: the covered share of the
+// importance, plus a smaller term for boxes crowding it (within ~15 mm) so
+// cards keep some air around people instead of just missing them.
+const HALO = 150;
+function faceCost(cells, boxes) {
+  if (!cells.length || !boxes.length) return 0;
   let total = 0;
-  for (const f0 of faces) {
-    const f = { x: f0.x - f0.w * 0.3, y: f0.y - f0.h * 0.4, w: f0.w * 1.6, h: f0.h * 1.9 };
-    total += f.w * f.h;
+  let covered = 0;
+  let crowded = 0;
+  for (const c0 of cells) {
+    // Heads (importance 1) weigh four times: never trade a face for other
+    // detail.
+    const c = c0.v >= 0.99 ? { ...c0, v: 4 } : c0;
+    const area = c.w * c.h;
+    total += c.v * area;
+    const halo = { x: c.x - HALO, y: c.y - HALO, w: c.w + 2 * HALO, h: c.h + 2 * HALO };
+    const haloArea = halo.w * halo.h;
     for (const b of boxes) {
-      const i = intersect(f, b);
-      if (i) covered += i.w * i.h;
+      const i = intersect(c, b);
+      if (i) covered += c.v * i.w * i.h;
+      const j = intersect(halo, b);
+      if (j) crowded += c.v * area * ((j.w * j.h) / haloArea);
     }
   }
-  return covered / total;
+  return (covered + 0.3 * crowded) / total;
 }
 
 // Scenery reads well behind cards; faces don't (they get covered).
@@ -156,6 +204,9 @@ export function backdropScore(photo, aspect) {
   if (ins) {
     const faceArea = (ins.faces || []).reduce((a, f) => a + f.w * f.h, 0);
     if (ins.faceCount > 0) score -= 0.15 + Math.min(0.5, faceArea * 5);
+    // People seen from behind / too small for a face count too.
+    const people = (ins.objects || []).filter((o) => o.label === "person");
+    if (people.length && !ins.faceCount) score -= 0.1 + Math.min(0.3, people.reduce((a, o) => a + o.w * o.h, 0) * 2);
     if (ins.labels.some((l) => SCENIC.test(l))) score += 0.2;
     if (ins.labels.includes("people") || ins.labels.includes("portrait")) score -= 0.1;
   }
@@ -277,6 +328,69 @@ function titleCorner(title, page, corners, ctx, faces) {
     .sort((a, b) => a.cost - b.cost)[0].corner;
 }
 
+// Background + cards: every split of the cards between the pages x every
+// corner pattern per page (preferred order first, so books still vary); the
+// arrangement hiding the least of what matters in the background wins.
+function backdropCardsPlan(photos, spread, variant) {
+  const bgIdx = chooseBackdrop(photos, spread.w / spread.h);
+  const bg = photos[bgIdx];
+  const bgFrame = fullBox(spread);
+  const cells = facesInSpread(bg, bgFrame);
+  const cards = photos.filter((_, i) => i !== bgIdx);
+  const L = pageBox(spread, "left");
+  const R = pageBox(spread, "right");
+  const splits = [...new Set([Math.ceil(cards.length / 2), Math.floor(cards.length / 2)])];
+  if (variant % 2) splits.reverse();
+  const candidates = [];
+  for (const leftCount of splits) {
+    for (let dv = 0; dv < 4; dv++) {
+      for (let dw = 0; dw < 4; dw++) {
+        const left = cardsOn(cards.slice(0, leftCount), L, variant + dv, 0.95);
+        const right = cardsOn(cards.slice(leftCount), R, variant + 1 + dw, 0.95);
+        candidates.push({ leftCount, left, right, boxes: [...left.frames, ...right.frames] });
+      }
+    }
+  }
+  const pick = leastFaceCost(candidates, cells);
+  return { bg, bgFrame, cells, cards, pick, L, R, cost: faceCost(cells, pick.boxes) };
+}
+
+// Two backgrounds: the two best page backgrounds (face-free scenery first),
+// the remaining photos as cards, each page's arrangement chosen to hide the
+// least of what matters in its background.
+function pageBackdropsPlan(photos, spread, variant) {
+  const pageAspect = spread.w / 2 / spread.h;
+  const ranked = photos
+    .map((p, i) => ({ i, score: coverRetention(photoAspect(p), pageAspect) >= 0.6 ? backdropScore(p, pageAspect) : -2 }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 2)
+    .map((x) => x.i)
+    .sort((a, b) => a - b);
+  const bgs = ranked.map((i) => photos[i]);
+  const rest = photos.filter((_, i) => !ranked.includes(i));
+  const L = pageBox(spread, "left");
+  const R = pageBox(spread, "right");
+  const leftCells = facesInSpread(bgs[0], L);
+  const rightCells = facesInSpread(bgs[1], R);
+  // Which page gets the extra card matters too when their count is odd.
+  let best = null;
+  for (const leftCount of [...new Set([Math.ceil(rest.length / 2), Math.floor(rest.length / 2)])]) {
+    const pickFor = (cards, page, cells, v0) =>
+      leastFaceCost(
+        [0, 1, 2, 3].map((d) => {
+          const c = cardsOn(cards, page, v0 + d, 0.9);
+          return { ...c, boxes: c.frames };
+        }),
+        cells
+      );
+    const left = pickFor(rest.slice(0, leftCount), L, leftCells, variant);
+    const right = pickFor(rest.slice(leftCount), R, rightCells, variant + 2);
+    const cost = (faceCost(leftCells, left.frames) + faceCost(rightCells, right.frames)) / 2;
+    if (!best || cost < best.cost - 1e-6) best = { leftCount, left, right, cost };
+  }
+  return { bgs, rest, leftCells, rightCells, L, R, ...best };
+}
+
 export const SPREAD_LAYOUTS = {
   // One photo across the whole spread, 2-4 prints floating on it.
   "backdrop-cards": {
@@ -284,36 +398,17 @@ export const SPREAD_LAYOUTS = {
     photos: { min: 3, max: 5, ideal: 4 },
     fit(photos, spread) {
       const aspect = spread.w / spread.h;
-      const bg = photos[chooseBackdrop(photos, aspect)];
-      const r = coverRetention(photoAspect(bg), aspect);
+      const plan = backdropCardsPlan(photos, spread, 0);
+      const r = coverRetention(photoAspect(plan.bg), aspect);
       if (r < 0.55) return 0;
-      // Scenery without faces makes the best backdrop; a face-heavy one
-      // still works, but other layouts should win then.
-      return Math.max(0.05, Math.min(1, backdropScore(bg, aspect) + 0.3));
+      // Scenery without faces makes the best backdrop; if even the best
+      // card arrangement hides something important, another layout should
+      // win for these photos.
+      return Math.max(0.05, Math.min(1, backdropScore(plan.bg, aspect) + 0.3) - plan.cost * 1.2);
     },
     build(photos, spread, ctx) {
-      const bgIdx = chooseBackdrop(photos, spread.w / spread.h);
-      const bg = photos[bgIdx];
-      const bgFrame = fullBox(spread);
-      const faces = facesInSpread(bg, bgFrame);
-      const cards = photos.filter((_, i) => i !== bgIdx);
-      const L = pageBox(spread, "left");
-      const R = pageBox(spread, "right");
-      // Every split of the cards between the pages x every corner pattern
-      // per page, preferred order first; keep the one hiding fewest faces.
-      const splits = [...new Set([Math.ceil(cards.length / 2), Math.floor(cards.length / 2)])];
-      if (ctx.variant % 2) splits.reverse();
-      const candidates = [];
-      for (const leftCount of splits) {
-        for (let dv = 0; dv < 4; dv++) {
-          for (let dw = 0; dw < 4; dw++) {
-            const left = cardsOn(cards.slice(0, leftCount), L, ctx.variant + dv, 0.95);
-            const right = cardsOn(cards.slice(leftCount), R, ctx.variant + 1 + dw, 0.95);
-            candidates.push({ leftCount, left, right, boxes: [...left.frames, ...right.frames] });
-          }
-        }
-      }
-      const pick = leastFaceCost(candidates, faces);
+      const plan = backdropCardsPlan(photos, spread, ctx.variant);
+      const { bg, bgFrame, cells, cards, pick, L, R } = plan;
       const elements = [
         image(bg, bgFrame, { background: true }),
         ...cards.slice(0, pick.leftCount).map((p, i) => image(p, pick.left.frames[i], { shadow: true })),
@@ -322,7 +417,7 @@ export const SPREAD_LAYOUTS = {
       if (ctx.title) {
         const onLeft = pick.left.freeCorners.length > 0;
         const page = onLeft ? L : R;
-        const corner = titleCorner(ctx.title, page, onLeft ? pick.left.freeCorners : pick.right.freeCorners, ctx, faces);
+        const corner = titleCorner(ctx.title, page, onLeft ? pick.left.freeCorners : pick.right.freeCorners, ctx, cells);
         elements.push(titleElement(ctx.title, page, corner, ctx));
       }
       return { elements };
@@ -337,46 +432,20 @@ export const SPREAD_LAYOUTS = {
       const pageAspect = spread.w / 2 / spread.h;
       const r = photos.map((p) => coverRetention(photoAspect(p), pageAspect)).sort((a, b) => b - a);
       if (r[1] < 0.6) return 0;
-      return Math.min(1, (r[0] + r[1]) / 2 + 0.2);
+      const plan = pageBackdropsPlan(photos, spread, 0);
+      return Math.max(0.05, Math.min(1, (r[0] + r[1]) / 2 + 0.2) - plan.cost * 1.2);
     },
     build(photos, spread, ctx) {
-      const pageAspect = spread.w / 2 / spread.h;
-      const ranked = photos
-        .map((p, i) => ({ i, score: coverRetention(photoAspect(p), pageAspect) >= 0.6 ? backdropScore(p, pageAspect) : -2 }))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 2)
-        .map((x) => x.i)
-        .sort((a, b) => a - b);
-      const rest = photos.filter((_, i) => !ranked.includes(i));
-      const leftCount = Math.ceil(rest.length / 2);
-      const L = pageBox(spread, "left");
-      const R = pageBox(spread, "right");
-      const leftFaces = facesInSpread(photos[ranked[0]], L);
-      const rightFaces = facesInSpread(photos[ranked[1]], R);
-      const variants = (v) => [0, 1, 2, 3].map((d) => v + d);
-      const left = leastFaceCost(
-        variants(ctx.variant).map((v) => {
-          const c = cardsOn(rest.slice(0, leftCount), L, v, 0.9);
-          return { ...c, boxes: c.frames };
-        }),
-        leftFaces
-      );
-      const right = leastFaceCost(
-        variants(ctx.variant + 2).map((v) => {
-          const c = cardsOn(rest.slice(leftCount), R, v, 0.9);
-          return { ...c, boxes: c.frames };
-        }),
-        rightFaces
-      );
+      const { bgs, rest, leftCount, left, right, leftCells, L, R } = pageBackdropsPlan(photos, spread, ctx.variant);
       // Page-sized photos are plain images: Saal allows one background per
       // spread (see saalSvg.js); `background` here only means "big".
       const elements = [
-        image(photos[ranked[0]], L, { background: true }),
-        image(photos[ranked[1]], R, { background: true }),
+        image(bgs[0], L, { background: true }),
+        image(bgs[1], R, { background: true }),
         ...rest.slice(0, leftCount).map((p, i) => image(p, left.frames[i], { shadow: true })),
         ...rest.slice(leftCount).map((p, i) => image(p, right.frames[i], { shadow: true })),
       ];
-      if (ctx.title) elements.push(titleElement(ctx.title, L, titleCorner(ctx.title, L, left.freeCorners, ctx, leftFaces), ctx));
+      if (ctx.title) elements.push(titleElement(ctx.title, L, titleCorner(ctx.title, L, left.freeCorners, ctx, leftCells), ctx));
       return { elements };
     },
   },
@@ -521,15 +590,15 @@ export const DEFAULT_SPREAD_WEIGHTS = {
 
 // Line count of `text` in a box `widthUnits` wide: a word-by-word
 // simulation of the line breaker with the font's real glyph widths.
-function estimateLines(text, widthUnits, size, font) {
-  const space = textWidth(" ", size, font);
+function estimateLines(text, widthUnits, size, font, bold = false) {
+  const space = textWidth(" ", size, font, bold);
   return String(text || "")
     .split(/\n+/)
     .reduce((n, para) => {
       let lines = 1;
       let used = 0;
       for (const word of para.split(/\s+/).filter(Boolean)) {
-        const w = textWidth(word, size, font);
+        const w = textWidth(word, size, font, bold);
         if (used > 0 && used + space + w > widthUnits) {
           lines += 1 + Math.floor(w / widthUnits);
           used = w % widthUnits;
@@ -637,24 +706,103 @@ export function chapterSpread(spread, ctx, { backdrop, title, narrative, pullQuo
 }
 
 // Info card: the place's photo as a full-bleed page, the facts on the other.
+// Info card: the place's photo as a full-bleed page; the other page is a
+// small fact sheet - name, subtitle, an accent rule, the summary, then the
+// facts in two balanced columns (small uppercase label over a bold value)
+// and the website. Everything is measured with Saal's metrics and shrunk
+// together until it fits the page.
 export function infoCardSpread(spread, ctx, { card, hero }) {
   const L = pageBox(spread, "left");
   const R = pageBox(spread, "right");
-  const facts = (card.facts || []).map((f) => `${f.label}: ${f.value}`);
-  const body = [card.summary, ...facts].filter(Boolean);
-  const block = textBlock(inset(R, R.w * 0.12), {
-    title: card.placeName,
-    subtitle: card.subtitle,
-    body,
-    color: "#2b2b2b",
-    accent: ctx.accentColor,
-    typeScale: ctx.typeScale,
-    fonts: ctx.fonts,
-    titleSize: 30,
-  });
+  const box = inset(R, R.w * 0.11);
+  const ts = ctx.typeScale;
+  const accent = ctx.accentColor || "#5c7a89";
+  const ink = "#2b2b2b";
+  const muted = "#6b6b6b";
+  const facts = (card.facts || []).filter((f) => f.label || f.value);
+  const domain = (() => {
+    try {
+      return card.websiteUrl ? new URL(card.websiteUrl).hostname.replace(/^www\./, "") : null;
+    } catch {
+      return null;
+    }
+  })();
+  const height = (text, size, font, width, bold = false) => estimateLines(text, width, size, font, bold) * size * SAAL_LINE;
+  const text = (frame, paragraphs) => ({ kind: "text", frame, paragraphs });
+
+  const layout = (k) => {
+    const sz = { title: 30 * ts * k, sub: 11.5 * ts * k, body: 10.5 * ts * k, label: 7 * ts * k, value: 9.5 * ts * k };
+    const gap = sz.body * SAAL_LINE * 0.9;
+    const slack = sz.body * SAAL_LINE * 0.7;
+    const els = [];
+    let y = 0;
+    const add = (h, el) => {
+      // Headroom: tall ascenders/descenders (e.g. Architects Daughter) need
+      // more than the bare line pitch.
+      el.frame = { x: box.x, y: box.y + y, w: box.w, h: h + slack };
+      els.push(el);
+      y += h;
+    };
+    add(height(card.placeName, sz.title, ctx.fonts.title, box.w), text(null, [
+      { text: card.placeName, role: "title", font: ctx.fonts.title, size: sz.title, color: accent, align: "left" },
+    ]));
+    if (card.subtitle) {
+      y += sz.sub * SAAL_LINE * 0.15;
+      add(height(card.subtitle, sz.sub, ctx.fonts.body, box.w), text(null, [
+        { text: card.subtitle, role: "subtitle", font: ctx.fonts.body, italic: true, size: sz.sub, color: muted, align: "left" },
+      ]));
+    }
+    // Accent rule
+    y += gap * 0.8;
+    els.push({ kind: "panel", frame: { x: box.x, y: box.y + y, w: Math.min(box.w * 0.25, 500), h: 12 }, color: accent, opacity: 1 });
+    y += gap;
+    if (card.summary) {
+      add(height(card.summary, sz.body, ctx.fonts.body, box.w), text(null, [
+        { text: card.summary, role: "body", font: ctx.fonts.body, size: sz.body, color: ink, align: "left" },
+      ]));
+      y += gap;
+    }
+    // Facts: two columns, each fact goes to the currently shorter column.
+    const colGap = box.w * 0.06;
+    const colW = (box.w - colGap) / 2;
+    const cols = [0, 0];
+    const factTop = y;
+    for (const f of facts) {
+      const label = String(f.label || "").toUpperCase();
+      const value = String(f.value || "");
+      const hL = label ? height(label, sz.label, ctx.fonts.body, colW) : 0;
+      const hV = height(value, sz.value, ctx.fonts.body, colW, true);
+      const col = cols[0] <= cols[1] ? 0 : 1;
+      const frame = { x: box.x + col * (colW + colGap), y: box.y + factTop + cols[col], w: colW, h: hL + hV + slack };
+      els.push(text(frame, [
+        ...(label ? [{ text: label, role: "body", font: ctx.fonts.body, size: sz.label, color: accent, align: "left" }] : []),
+        { text: value, role: "body", font: ctx.fonts.body, bold: true, size: sz.value, color: ink, align: "left" },
+      ]));
+      cols[col] += hL + hV + gap * 0.9;
+    }
+    y = factTop + Math.max(cols[0], cols[1]);
+    if (domain) {
+      y += gap * 0.3;
+      add(sz.label * SAAL_LINE, text(null, [
+        { text: `↗ ${domain}`, role: "body", font: ctx.fonts.body, size: sz.label * 1.15, color: accent, align: "left" },
+      ]));
+    }
+    return { els, height: y };
+  };
+
+  let k = 1;
+  let result = layout(k);
+  while (result.height > box.h && k > 0.6) {
+    k -= 0.05;
+    result = layout(k);
+  }
+  // Center the sheet vertically on its page.
+  const shift = Math.max(0, (box.h - result.height) / 2);
+  result.els.forEach((el) => (el.frame = { ...el.frame, y: el.frame.y + shift }));
+
   const elements = [];
   if (hero) elements.push(image(hero, L, { background: true }));
-  elements.push(block);
+  elements.push(...result.els);
   return { elements, paper: "#ffffff" };
 }
 

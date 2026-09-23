@@ -30,22 +30,36 @@ const index = JSON.parse(readFileSync(join(dir, "index.json"), "utf8"));
 const googleOk = new Set(["Architects Daughter","Allison","Allura","Amarante","Anonymous Pro","Babylonica","Bellota","Brygada 1918","Butterfly Kids","Clara","Exo","Explora","Grand Hotel","Great Vibes","Lavishly Yours","Tangerine","Waterfall"]);
 const fonts = Object.entries(OFFERED).map(([name, kind]) => {
   const key = name.replace(/ /g, "");
-  const entry = index.find((e) => e.key === key && e.style === "Regular");
-  if (!entry) throw new Error(`font not found in extraction: ${name}`);
-  const f = opentype.parse(readFileSync(join(dir, entry.file)).buffer);
-  const upm = f.unitsPerEm;
-  const adv = {};
-  for (const ch of CHARSET) adv[ch] = Math.round((f.charToGlyph(ch).advanceWidth / upm) * 1000);
   const sample = "Nach einer langen Fahrt voller Trubel und ein wenig Verzögerung landeten wir schließlich in Lerkil.";
-  const avg = Math.round([...sample].reduce((s, c) => s + adv[c], 0) / sample.length);
-  return { name, saal: entry.family, key, kind, google: googleOk.has(name), avg, adv };
+  const widths = (style) => {
+    const entry = index.find((e) => e.key === key && e.style === style);
+    if (!entry) throw new Error(`font not found in extraction: ${name} ${style}`);
+    const f = opentype.parse(readFileSync(join(dir, entry.file)).buffer);
+    const adv = {};
+    for (const ch of CHARSET) adv[ch] = Math.round((f.charToGlyph(ch).advanceWidth / f.unitsPerEm) * 1000);
+    const avg = Math.round([...sample].reduce((s, c) => s + adv[c], 0) / sample.length);
+    return { family: entry.family, adv, avg };
+  };
+  const regular = widths("Regular");
+  const bold = widths("Bold");
+  return {
+    name,
+    saal: regular.family,
+    key,
+    kind,
+    google: googleOk.has(name),
+    avg: regular.avg,
+    adv: regular.adv,
+    boldAvg: bold.avg,
+    boldAdv: bold.adv,
+  };
 });
 writeFileSync(
   OUT,
   JSON.stringify(
     {
       _source:
-        "Fonts offered for Saal books. saal = font family name inside Saal's own font files; adv = advance width per character in 1/1000 em, read from the OpenType fonts Saal renders with (extracted by tools/extract_saal_fonts.py); avg = average over a German sample. google = also on Google Fonts (preview fallback when the Saal fonts are not extracted locally).",
+        "Fonts offered for Saal books. saal = font family name inside Saal's own font files; adv/boldAdv = advance width per character in 1/1000 em (regular/bold), read from the OpenType fonts Saal renders with (extracted by tools/extract_saal_fonts.py); avg = average over a German sample. google = also on Google Fonts (preview fallback when the Saal fonts are not extracted locally).",
       fonts,
     },
     null,

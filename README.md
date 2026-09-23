@@ -320,10 +320,22 @@ useful for a second person to use the editor from their own device.
       center on faces, and burst shots (≤ 3 s apart) are reduced to the
       best one (toggle "keep burst shots"). Test story: backgrounds with
       faces 21 → 5, covered faces 5 → 0, 11 burst shots dropped
-- [ ] More content awareness: similarity beyond time (PhotoPrism has no
-      similarity API; perceptual hashes would catch re-takes minutes
-      apart), people names from face markers for captions, horizon/saliency
-      for crops of face-free photos
+- [x] Importance maps instead of face boxes (`server/src/photoAnalysis.js`):
+      faces (+ the body below them), NanoDet-Plus object detection (people
+      also from behind, animals, vehicles; run on the whole photo and on two
+      overlapping halves so small people are found) and frequency-tuned
+      saliency (the sun, a red jacket on grey rock) combine into a 24x24
+      grid per photo. Card arrangements, chapter panels and titles minimize
+      covered importance plus a margin term (so cards don't crowd people),
+      faces weigh 4x, layouts whose best arrangement still covers something
+      score lower, and face-free photos are cropped around their main
+      subject. Test story vs. no content awareness: faces covered 5 -> 0,
+      people covered 14 -> 0, covered importance 17.6 % -> 2.2 %
+- [x] Info cards as a fact sheet: name, italic subtitle, accent rule,
+      summary, facts in two balanced columns (uppercase label over bold
+      value), website domain; shrinks as a whole to fit
+- [ ] Nice-to-have: people names from face markers for captions; retakes
+      minutes apart (perceptual hashes) - low priority per user
 - [ ] More Saal fonts: only `Architects DaughterEmbedded` is confirmed to
       exist in Saal, so body text uses it too. Reading any other font name
       from a Saal project would unlock a separate body font

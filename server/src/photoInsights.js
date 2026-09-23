@@ -1,5 +1,6 @@
 import { db } from "./db.js";
 import { detectFaces } from "./faceDetect.js";
+import { detectObjects, saliencyGrid, importanceGrid, GRID } from "./photoAnalysis.js";
 
 // Facts about a photo that make a printed layout smarter, read from
 // PhotoPrism's photo details and cached in SQLite (they don't change once
@@ -8,13 +9,16 @@ import { detectFaces } from "./faceDetect.js";
 //              from PhotoPrism's face markers, or - when PhotoPrism found none
 //              - from our own detector (faceDetect.js) run on the thumbnail
 //   faceSource - "photoprism" | "yunet" | null
+//   objects  - detected subjects {x, y, w, h, label, score} (NanoDet)
+//   importance - { grid: GRID, cells: [0..255] } what matters where in the
+//              photo (faces + bodies, subjects, saliency), see photoAnalysis.js
 //   labels   - lower-case label names ("landscape", "people", ...)
 //   takenAt  - capture time in ms (for burst detection)
 //   quality  - PhotoPrism's quality score (higher is better)
 const BASE_URL = process.env.PHOTOPRISM_BASE_URL;
 const REFRESH_MS = 30 * 24 * 3600 * 1000;
 // Bump when the stored shape changes so old cache rows are recomputed.
-const VERSION = 2;
+const VERSION = 3;
 
 const getStmt = db.prepare("SELECT data, fetched_at FROM photo_insights WHERE photo_uid = ?");
 const putStmt = db.prepare(
@@ -38,17 +42,23 @@ function parse(details) {
 async function fetchInsight(uid, thumbUrl) {
   const res = await fetch(`${BASE_URL}/api/v1/photos/${uid}`);
   if (!res.ok) throw new Error(`PhotoPrism ${res.status} for ${uid}`);
-  const insight = { v: VERSION, ...parse(await res.json()), faceSource: null };
+  const insight = { v: VERSION, ...parse(await res.json()), faceSource: null, objects: [], importance: null };
   if (insight.faces.length) insight.faceSource = "photoprism";
-  else if (thumbUrl) {
-    try {
-      const img = Buffer.from(await (await fetch(thumbUrl)).arrayBuffer());
+  if (!thumbUrl) return insight;
+  try {
+    const img = Buffer.from(await (await fetch(thumbUrl)).arrayBuffer());
+    if (!insight.faces.length) {
       insight.faces = (await detectFaces(img)).map(({ x, y, w, h }) => ({ x, y, w, h }));
-      insight.faceCount = Math.max(insight.faceCount, insight.faces.length);
       insight.faceSource = "yunet";
-    } catch (err) {
-      console.warn("face detection failed:", uid, err.message);
     }
+    insight.faceCount = Math.max(insight.faceCount, insight.faces.length);
+    insight.objects = await detectObjects(img);
+    insight.importance = {
+      grid: GRID,
+      cells: importanceGrid({ faces: insight.faces, objects: insight.objects, saliency: await saliencyGrid(img) }),
+    };
+  } catch (err) {
+    console.warn("photo analysis failed:", uid, err.message);
   }
   return insight;
 }
