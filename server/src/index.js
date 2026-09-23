@@ -23,6 +23,10 @@ import { buildPdfHtml } from "./pdfDocument.js";
 import { PDF_TEMPLATES } from "./pdfTemplates.js";
 import { PDF_LAYOUT_PACKS } from "./pdfLayoutPacks.js";
 import { PDF_PAPER_SIZES } from "./pdfPaperSizes.js";
+import { BOOK_PRODUCTS } from "./photobook/products.js";
+import { SPREAD_LAYOUTS } from "./photobook/spreadLayouts.js";
+import { buildBookPreviewHtml } from "./photobook/bookPreview.js";
+import { startBookExport, getBookJob } from "./photobook/saalExport.js";
 import { THEMES } from "./themes.js";
 import { fetchArticleText } from "./article.js";
 
@@ -68,6 +72,13 @@ app.get("/api/pdf-layouts", (req, res) => {
     })),
     packs: Object.entries(PDF_LAYOUT_PACKS).map(([id, p]) => ({ id, label: p.label })),
     paperSizes: Object.entries(PDF_PAPER_SIZES).map(([id, p]) => ({ id, label: p.label })),
+  });
+});
+
+app.get("/api/book-products", (req, res) => {
+  res.json({
+    products: Object.entries(BOOK_PRODUCTS).map(([id, p]) => ({ id, label: p.label })),
+    layouts: Object.entries(SPREAD_LAYOUTS).map(([id, l]) => ({ id, label: l.label })),
   });
 });
 
@@ -347,6 +358,57 @@ app.post("/api/stories/:id/pdf-preview", (req, res) => {
     console.error(err);
     res.status(500).send(String(err.message || err));
   }
+});
+
+// The editor posts its (possibly unsaved) draft for both the book preview
+// and the Saal export, so what gets exported is exactly what was previewed.
+function draftFromBody(body) {
+  const draft = body?.story;
+  if (!draft || !Array.isArray(draft.stops)) return null;
+  return {
+    ...draft,
+    stops: draft.stops.map((s) => ({
+      ...s,
+      photos: (Array.isArray(s.photos) ? s.photos : []).map((p) => ({
+        ...p,
+        // Drafts loaded before photo hashes were exposed only carry URLs.
+        hash: p.hash || (p.thumbUrl || "").match(/\/t\/([0-9a-f]+)\//)?.[1] || null,
+      })),
+      infoCards: Array.isArray(s.infoCards) ? s.infoCards : [],
+      embeds: Array.isArray(s.embeds) ? s.embeds : [],
+    })),
+  };
+}
+
+app.post("/api/stories/:id/book-preview", (req, res) => {
+  const story = draftFromBody(req.body);
+  if (!story) return res.status(400).send("Missing story draft");
+  try {
+    res.type("html").send(buildBookPreviewHtml(story));
+  } catch (err) {
+    console.error(err);
+    res.status(500).send(String(err.message || err));
+  }
+});
+
+app.post("/api/stories/:id/book-export", (req, res) => {
+  const story = draftFromBody(req.body) || getStory(req.params.id);
+  if (!story) return res.status(404).json({ error: "Not found" });
+  const job = startBookExport(story);
+  res.json({ jobId: job.id });
+});
+
+app.get("/api/book-exports/:jobId", (req, res) => {
+  const job = getBookJob(req.params.jobId);
+  if (!job) return res.status(404).json({ error: "Unknown export" });
+  const { id, status, stage, done, total, error, size, numPages, fileName } = job;
+  res.json({ id, status, stage, done, total, error, size, numPages, fileName });
+});
+
+app.get("/api/book-exports/:jobId/download", (req, res) => {
+  const job = getBookJob(req.params.jobId);
+  if (!job || job.status !== "done") return res.status(404).json({ error: "Export not ready" });
+  res.download(job.path, job.fileName);
 });
 
 app.get("/api/stories/:id/export/pdf", async (req, res) => {

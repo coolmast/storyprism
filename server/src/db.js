@@ -102,3 +102,5 @@ ensureColumn("stories", "pdf_paper_size", "TEXT NOT NULL DEFAULT 'a4-portrait'")
 // NULL means "automatic" - the story's pack decides this stop's photo
 // layout. Non-NULL pins every photo page for this stop to one template.
 ensureColumn("stops", "pdf_template_override", "TEXT");
+ensureColumn("stories", "book_product", "TEXT NOT NULL DEFAULT 'saal-square-28'");
+ensureColumn("stops", "book_layout_override", "TEXT");

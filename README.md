@@ -76,6 +76,24 @@ view, a reveal.js presentation, or a printable PDF (either format).
     draft; `web/src/PdfLivePreview.jsx` shows it in a side drawer / full
     screen on a phone, re-rendering ~0.5 s after any edit, with pack/paper
     switches and per-stop layout pickers right inside the preview).
+  - **Photobook → Saal Design Software** (`server/src/photobook/`): the
+    story is planned as a lay-flat *spread* book (`bookPlanner.js`) — cover,
+    optional intro, per stop a chapter opener (photo across the spread, story
+    on a translucent panel) or a title on the first photo spread, photo
+    spreads, info-card spreads, outro, blank padding to the product minimum.
+    Spread layouts (`spreadLayouts.js`: background + photo cards, two page
+    backgrounds + cards, mosaic on both pages, hero page + gallery, scattered
+    prints, full-spread panorama) are chosen per spread *and* per photo count
+    by scoring the actual photo shapes, reusing the aspect-true geometry of
+    `pdfLayoutEngine.js`. `saalSvg.js` renders every spread either as Saal's
+    own SVG dialect or as a browser preview from the same element list, so
+    the editor's live "Photobook" preview (`bookPreview.js`) is exactly what
+    gets exported. `saalExport.js` fetches originals from PhotoPrism,
+    auto-orients and downscales them (backgrounds ≤ 6000 px, prints ≤ 3400 px,
+    HEIC falls back to the 2048 px JPEG), writes `project.xml` + SVGs and
+    streams a `.sswprm` (`sswContainer.js`) as a background job with
+    progress. Products (`products.js`): Saal 28×28 square, A4 portrait, A4
+    landscape. See "Saal project format" below.
   - The deck's own PDF (`/api/stories/:id/export/deck-pdf`, reveal.js's
     built-in print-pdf mode) is unrelated and untouched by the above.
   - A stop can carry route/activity embeds (Strava, Komoot, Garmin Connect)
@@ -136,6 +154,44 @@ view, a reveal.js presentation, or a printable PDF (either format).
     `StoryEditor.jsx` next to the theme picker and is per-story, so (per
     the original ask) the UI can be in English while a story's AI text and
     exported output come out in German.
+
+## Saal project format
+
+Reverse-engineered from real projects of Saal Design Software 4.7.378 (no
+public documentation exists) and verified by importing generated files into
+the real software.
+
+- **Container** (`.sswpm` internal, `.sswprm` export/share): a ZIP64 archive,
+  all entries stored uncompressed, with the `PK` magic replaced by `SW` in
+  local headers (`SW 03 04`), central directory headers (`SW 01 02`) and the
+  ZIP64 end record (`SW 06 06`); locator and classic end record keep `PK`.
+  All sizes live in ZIP64 extra fields (central extra = 28 bytes incl. a
+  4-byte disk number). Our writer reproduces a Saal-written file byte for
+  byte. Import in Saal: *Projekte → Projekt importieren* with a `.sswprm`.
+- **`project.xml`**: `<multiProject>` with two `<project>`s — cover (2 pages)
+  and inner block (`numPages`) — carrying the product ids (article,
+  child article = paper, configurator article, article number), and a
+  `<groups>` image list (`imageID`, file name, pixel size of the stored
+  file). The export format drops `accountID` and `key`, so projects aren't
+  bound to an account. Image ids are 32 hex chars; any unique value works.
+- **One SVG per spread** (`<innerUid>/00.svg`, `02.svg`, … = pages 1/2, 3/4,
+  …; cover `<coverUid>/0.svg` with `ws:pageType="cover"`), units 0.1 mm,
+  spread incl. ~3 mm bleed (square: 5460×2760, A4 portrait 4260×2760, A4
+  landscape 5660×1940). Cover width = base + 1 unit per page (spine).
+  - photo: `<image>` at full placed size behind a `clipPath` rect (= the
+    visible frame), `xlink:href="../images/<imageID>.jpg"`,
+    `ws:inBackground="1"` for backgrounds, rotation via
+    `transform="rotate(a, frameX, frameY)"`
+  - print shadow: `ws:filterType="shadow"` + a fixed filter (offset 17.7,
+    75 % black, blur 28.5) on a wrapping `<g>`
+  - text: `<image ws:textData="…">` holding an Adobe TLF `<TextFlow>`; Saal
+    renders it itself (the referenced PNG doesn't need to exist). Font used
+    in the user's books: `Architects DaughterEmbedded`
+  - translucent box: a Saal shape `rect` with `ws:color`, `opacity` and a
+    rounded-rect `mask`
+- `images/<imageID>.jpg` inside `.sswprm`: Saal stores downscaled working
+  copies (median long edge ~2760 px); a 2048 px background shows as "gut",
+  2048 px prints as "sehr gut".
 
 ## Running locally
 
@@ -211,6 +267,21 @@ useful for a second person to use the editor from their own device.
       different packs (Photobook is the new default for new stories), 30 cm
       square paper, and a live PDF preview drawer in the editor that
       renders the unsaved draft
+- [x] Photobook pipeline → Saal Design Software: spread-based book planner
+      modeled on the user's own Saal books, live "Photobook" preview tab in
+      the editor (product choice, per-stop spread layout override), and a
+      one-click `.sswprm` export with all photos in print resolution that
+      imports into Saal and stays fully editable there. Square 28×28, A4
+      portrait and A4 landscape products
+- [ ] Face-aware backgrounds: photo cards are placed in corners without
+      knowing what's underneath and can cover faces. PhotoPrism has face
+      markers per photo — using them to pick card corners (and crop
+      backgrounds) is the obvious next step
+- [ ] More Saal fonts: only `Architects DaughterEmbedded` is confirmed to
+      exist in Saal, so body text uses it too. Reading any other font name
+      from a Saal project would unlock a separate body font
+- [ ] Saal minimum/maximum page counts assumed as 26/130; blank spreads pad
+      short books to the minimum (easy to delete in Saal)
 - [ ] Per-page control in the live preview (e.g. "shuffle this page",
       choose the background photo, move a photo to the next page) — today
       control is per stop (layout override) plus photo order/featured
@@ -236,6 +307,15 @@ useful for a second person to use the editor from their own device.
       downloading and re-embedding the images
 
 ## Notes
+
+- The book export and preview take the editor's *draft* (like the PDF live
+  preview), so unsaved layout choices are exported exactly as previewed.
+- `better-sqlite3` had to move to v12: installing `sharp` made npm fetch a
+  v11 prebuilt binary that aborts the process on Node 24 whenever a
+  prepared statement is garbage-collected
+  (`RemoveEnvironmentCleanupHook … Assertion failed`).
+- `SAAL_IMAGE_URL_BASE` (server `.env`) sets the local Saal library path
+  recorded per photo in `project.xml`; real projects always carry one.
 
 - **Two photo-and-caption templates (`duo-caption`, `photo-strip`) were
   wasting nearly half the page as blank white space** whenever the

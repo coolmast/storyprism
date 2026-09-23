@@ -226,6 +226,11 @@ export default function StoryEditor({ story, onBack, onSaved }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleBookOverride = useCallback((stopId, layoutId) => {
+    updateStop(stopId, { bookLayoutOverride: layoutId || null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function handleSave() {
     setSaving(true);
     try {
@@ -274,6 +279,7 @@ export default function StoryEditor({ story, onBack, onSaved }) {
           pdfLayouts={pdfLayouts}
           onChange={(patch) => markDirty((d) => ({ ...d, ...patch }))}
           onOverride={handlePdfOverride}
+          onBookOverride={handleBookOverride}
           onClose={() => setShowPdfPreview(false)}
         />
       )}

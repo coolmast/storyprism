@@ -87,3 +87,21 @@ export const fetchMatchingPhotos = (storyId, stopId, placeName) =>
   fetch(
     `/api/stories/${storyId}/stops/${stopId}/places/${encodeURIComponent(placeName)}/photos`
   ).then(json);
+
+export const fetchBookProducts = () => fetch("/api/book-products").then(json);
+export const fetchBookPreviewHtml = (id, story) =>
+  fetch(`/api/stories/${id}/book-preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ story }),
+  }).then(async (res) => {
+    if (!res.ok) throw new Error((await res.text()) || `Request failed (${res.status})`);
+    return res.text();
+  });
+export const startBookExport = (id, story) =>
+  fetch(`/api/stories/${id}/book-export`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ story }),
+  }).then(json);
+export const fetchBookExport = (jobId) => fetch(`/api/book-exports/${jobId}`).then(json);

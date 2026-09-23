@@ -6,3 +6,6 @@ dist/
 *.sqlite-wal
 *.sqlite-shm
 server/data/
+*.sswprm
+*.sswpm
+saal-test/

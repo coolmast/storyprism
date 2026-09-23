@@ -9,6 +9,8 @@ import { DEFAULT_LANGUAGE } from "./i18n.js";
 import { PDF_TEMPLATE_IDS } from "./pdfTemplates.js";
 import { PDF_LAYOUT_PACKS, DEFAULT_LAYOUT_PACK } from "./pdfLayoutPacks.js";
 import { PDF_PAPER_SIZES, DEFAULT_PAPER_SIZE } from "./pdfPaperSizes.js";
+import { BOOK_PRODUCTS, DEFAULT_BOOK_PRODUCT } from "./photobook/products.js";
+import { SPREAD_LAYOUT_IDS } from "./photobook/spreadLayouts.js";
 
 // The AI always returns a full https:// URL when it includes one at all, but
 // a human editing/adding this field by hand will often just type
@@ -174,6 +176,7 @@ export function getStory(id) {
     contentLanguage: story.content_language,
     pdfLayoutPack: story.pdf_layout_pack,
     pdfPaperSize: story.pdf_paper_size,
+    bookProduct: story.book_product,
     createdAt: story.created_at,
     updatedAt: story.updated_at,
     stops: stops.map((s) => {
@@ -193,12 +196,14 @@ export function getStory(id) {
         research: s.research,
         pullQuote: s.pull_quote,
         pdfTemplateOverride: s.pdf_template_override || null,
+        bookLayoutOverride: s.book_layout_override || null,
         suggestedPlaces: suggestPlacesForStop(
           includedRows.map((p) => ({ title: p.title, placeLabel: p.place_label }))
         ),
         photos: photoRows.map((p) => ({
           id: p.id,
           photoUid: p.photo_uid,
+          hash: p.hash || null,
           thumbUrl: p.hash ? thumbUrl(p.hash, "fit_720") : null,
           fullUrl: p.hash ? thumbUrl(p.hash, "fit_2048") : null,
           width: p.width,
@@ -236,7 +241,7 @@ export function getStory(id) {
 }
 
 const updateStoryStmt = db.prepare(
-  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, content_language = @contentLanguage, pdf_layout_pack = @pdfLayoutPack, pdf_paper_size = @pdfPaperSize, updated_at = @now WHERE id = @id"
+  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, content_language = @contentLanguage, pdf_layout_pack = @pdfLayoutPack, pdf_paper_size = @pdfPaperSize, book_product = @bookProduct, updated_at = @now WHERE id = @id"
 );
 // Upsert, not a plain UPDATE: the editor can now create brand-new stops
 // client-side (splitting one stop into two, or adding a blank section) and
@@ -245,8 +250,8 @@ const updateStoryStmt = db.prepare(
 // Position is included so inserting a stop in the middle (or reordering)
 // is reflected, same as photos already work.
 const upsertStopStmt = db.prepare(`
-  INSERT INTO stops (id, story_id, position, lat, lng, place_label, started_at, ended_at, heading, narrative, research, pull_quote, pdf_template_override)
-  VALUES (@id, @storyId, @position, @lat, @lng, @placeLabel, @startedAt, @endedAt, @heading, @narrative, @research, @pullQuote, @pdfTemplateOverride)
+  INSERT INTO stops (id, story_id, position, lat, lng, place_label, started_at, ended_at, heading, narrative, research, pull_quote, pdf_template_override, book_layout_override)
+  VALUES (@id, @storyId, @position, @lat, @lng, @placeLabel, @startedAt, @endedAt, @heading, @narrative, @research, @pullQuote, @pdfTemplateOverride, @bookLayoutOverride)
   ON CONFLICT(id) DO UPDATE SET
     position = excluded.position,
     lat = excluded.lat,
@@ -258,7 +263,8 @@ const upsertStopStmt = db.prepare(`
     narrative = excluded.narrative,
     research = excluded.research,
     pull_quote = excluded.pull_quote,
-    pdf_template_override = excluded.pdf_template_override
+    pdf_template_override = excluded.pdf_template_override,
+    book_layout_override = excluded.book_layout_override
 `);
 // Matched by id alone (a photo's id is globally unique, not just within its
 // stop) and stop_id is now part of the SET clause, not the WHERE - splitting
@@ -303,6 +309,8 @@ export function updateStory(id, data) {
           : existing.pdfLayoutPack || DEFAULT_LAYOUT_PACK,
       pdfPaperSize:
         data.pdfPaperSize in PDF_PAPER_SIZES ? data.pdfPaperSize : existing.pdfPaperSize || DEFAULT_PAPER_SIZE,
+      bookProduct:
+        data.bookProduct in BOOK_PRODUCTS ? data.bookProduct : existing.bookProduct || DEFAULT_BOOK_PRODUCT,
       now,
     });
 
@@ -318,6 +326,7 @@ export function updateStory(id, data) {
         startedAt: stop.startedAt ?? null,
         endedAt: stop.endedAt ?? null,
         pdfTemplateOverride: PDF_TEMPLATE_IDS.includes(stop.pdfTemplateOverride) ? stop.pdfTemplateOverride : null,
+        bookLayoutOverride: SPREAD_LAYOUT_IDS.includes(stop.bookLayoutOverride) ? stop.bookLayoutOverride : null,
         heading: stop.heading ?? "",
         narrative: stop.narrative ?? "",
         research: stop.research ?? "",

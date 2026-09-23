@@ -90,3 +90,24 @@ export async function getPhotosByDateRange(from, to, { count = 3000 } = {}) {
 export function thumbUrl(hash, size = "fit_720") {
   return `${BASE_URL}/api/v1/t/${hash}/public/${size}`;
 }
+
+// Original file download for print exports. PhotoPrism hands out a
+// download token via /api/v1/config (it's the literal "public" when auth is
+// off, as on this instance); cached after the first call.
+let downloadTokenPromise = null;
+async function downloadToken() {
+  if (!downloadTokenPromise) {
+    downloadTokenPromise = fetch(`${BASE_URL}/api/v1/config`)
+      .then((r) => r.json())
+      .then((c) => c.downloadToken || "public")
+      .catch(() => {
+        downloadTokenPromise = null;
+        return "public";
+      });
+  }
+  return downloadTokenPromise;
+}
+
+export async function originalUrl(hash) {
+  return `${BASE_URL}/api/v1/dl/${hash}?t=${await downloadToken()}`;
+}
