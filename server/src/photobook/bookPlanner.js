@@ -6,6 +6,7 @@ import {
   infoCardSpread,
   coverSpread,
   resolveFonts,
+  backdropScore,
 } from "./spreadLayouts.js";
 import { photoAspect, coverRetention } from "../pdfLayoutEngine.js";
 import { dateRange } from "../render.js";
@@ -92,6 +93,39 @@ function chunkIntoSpreads(photos, weights, spread, nextVariant, pinned = []) {
   return spreads;
 }
 
+// Burst shots: photos taken within a few seconds of each other are almost
+// always the same moment shot several times, not distinct pictures. Keep
+// one per burst (the featured one, else the best-rated by PhotoPrism, else
+// the first) unless the story says to keep them all.
+const BURST_MS = 3000;
+
+function skipBursts(photos) {
+  const kept = [];
+  const skipped = [];
+  let group = [];
+  const flush = () => {
+    if (!group.length) return;
+    const best =
+      group.find((p) => p.featured) ||
+      group.reduce((a, p) => ((p.insights?.quality ?? 0) > (a.insights?.quality ?? 0) ? p : a), group[0]);
+    kept.push(best);
+    skipped.push(...group.filter((p) => p !== best));
+    group = [];
+  };
+  for (const p of photos) {
+    const prev = group.at(-1);
+    const t = p.insights?.takenAt;
+    const tp = prev?.insights?.takenAt;
+    if (prev && t != null && tp != null && Math.abs(t - tp) <= BURST_MS) group.push(p);
+    else {
+      flush();
+      group = [p];
+    }
+  }
+  flush();
+  return { kept, skipped };
+}
+
 function heroForCard(card, stop) {
   if (!card.heroPhotoHash) return null;
   return stop.photos.find((p) => p.hash === card.heroPhotoHash || (p.thumbUrl || "").includes(card.heroPhotoHash)) || null;
@@ -124,6 +158,7 @@ export function planBook(story, { product: productId, strings } = {}) {
   const baseCtx = { typeScale, accentColor: theme.accent, fonts };
 
   const spreads = [];
+  let burstSkips = 0;
   const build = (layoutId, photos, v, extra = {}) => {
     const { elements, paper } = SPREAD_LAYOUTS[layoutId].build(photos, spreadSize, { ...baseCtx, variant: v, ...extra });
     return { layoutId, elements, paper: paper || "#ffffff" };
@@ -146,7 +181,11 @@ export function planBook(story, { product: productId, strings } = {}) {
 
   story.stops.forEach((stop) => {
     if (isStopEmpty(stop)) return;
-    const included = stop.photos.filter((p) => p.included);
+    const allIncludedHere = stop.photos.filter((p) => p.included);
+    const { kept: included, skipped } = story.bookKeepBursts
+      ? { kept: allIncludedHere, skipped: [] }
+      : skipBursts(allIncludedHere);
+    burstSkips += skipped.length;
     const feat = included.find((p) => p.featured);
     const hasText = Boolean(stop.narrative || stop.pullQuote);
     const tag = { stopId: stop.id, stopHeading: stop.heading };
@@ -154,13 +193,11 @@ export function planBook(story, { product: productId, strings } = {}) {
 
     let pool = included;
     if (hasText) {
+      // The chapter's backdrop: best scenery for a full spread (a face-free
+      // featured photo wins through backdropScore's featured bonus).
       const spreadAspect = spreadSize.w / spreadSize.h;
       const backdrop =
-        feat ||
-        [...included].sort(
-          (a, b) => coverRetention(photoAspect(b), spreadAspect) - coverRetention(photoAspect(a), spreadAspect)
-        )[0] ||
-        null;
+        [...included].sort((a, b) => backdropScore(b, spreadAspect) - backdropScore(a, spreadAspect))[0] || null;
       pool = included.filter((p) => p !== backdrop);
       stopSpreads.push({
         kind: "chapter",
@@ -237,8 +274,9 @@ export function planBook(story, { product: productId, strings } = {}) {
   // Cover: best-fitting featured photo as backdrop, two more as prints.
   const cSize = coverSize(product, numPages);
   const cAspect = cSize.w / cSize.h;
+  const coverCandidates = [...coverPool, ...allIncluded.filter((p) => !coverPool.includes(p))];
   const coverBg =
-    [...coverPool].sort((a, b) => coverRetention(photoAspect(b), cAspect) - coverRetention(photoAspect(a), cAspect))[0] ||
+    [...coverCandidates].sort((a, b) => backdropScore(b, cAspect) + (coverPool.includes(b) ? 0.15 : 0) - backdropScore(a, cAspect) - (coverPool.includes(a) ? 0.15 : 0))[0] ||
     null;
   const coverCards = [...coverPool, ...allIncluded].filter((p, i, arr) => p !== coverBg && arr.indexOf(p) === i).slice(0, 2);
   const cover = {
@@ -264,5 +302,6 @@ export function planBook(story, { product: productId, strings } = {}) {
     knownPageCounts: knownPageCounts(product),
     childArticleID: childArticleIdFor(product, numPages),
     blankSpreads: blanks,
+    burstSkips,
   };
 }

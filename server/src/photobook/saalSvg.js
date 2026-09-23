@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { SAAL_EM, SAAL_LINE, fontInfo } from "./spreadLayouts.js";
+import { SAAL_EM, SAAL_LINE, fontInfo, placePhoto } from "./spreadLayouts.js";
 
 // Saal lays text out inside its element box with a fixed ~44 mm inner margin
 // on every side (measured in a calibration import; Saal's own projects show
@@ -53,14 +53,6 @@ function shadowFilter(id) {
     </filter>`;
 }
 
-// Photo placed to cover its frame (centered crop), as Saal stores it.
-function placeImage(frame, pxW, pxH) {
-  const s = Math.max(frame.w / pxW, frame.h / pxH);
-  const w = pxW * s;
-  const h = pxH * s;
-  return { x: frame.x + (frame.w - w) / 2, y: frame.y + (frame.h - h) / 2, w, h, s };
-}
-
 // Saal has exactly one background slot per spread (always clipped to the
 // whole canvas) - flagging a page-sized photo as background makes Saal
 // stretch it across both pages. So only photos that really cover the whole
@@ -76,7 +68,8 @@ function imageSvg(el, id, ref, mode, defs, size) {
       <rect x="${n(f.x)}" y="${n(f.y)}" width="${n(f.w)}" height="${n(f.h)}"/>
     </clipPath>`);
   if (el.shadow) defs.push(shadowFilter(id));
-  const p = placeImage(f, ref.width, ref.height);
+  // Crop centered on the faces (el.focus), as planned by the layout.
+  const p = placePhoto(f, ref.width, ref.height, el.focus);
   const rot = el.rotation ? ` transform="rotate(${n(el.rotation)}, ${n(f.x)}, ${n(f.y)})"` : "";
   const attrs =
     mode === "saal"

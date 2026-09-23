@@ -172,6 +172,14 @@ export default function PdfLivePreview({
               </select>
             </label>
           ))}
+          <label className="pdf-live-font" title={t("bookKeepBurstsHint")}>
+            <input
+              type="checkbox"
+              checked={!!draft.bookKeepBursts}
+              onChange={(e) => onChange({ bookKeepBursts: e.target.checked })}
+            />
+            <span>{t("bookKeepBursts")}</span>
+          </label>
           <button
             className="pdf-live-export"
             onClick={handleExport}

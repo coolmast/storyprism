@@ -203,6 +203,7 @@ export function getStory(id) {
     bookProduct: story.book_product,
     bookTitleFont: story.book_title_font || null,
     bookBodyFont: story.book_body_font || null,
+    bookKeepBursts: !!story.book_keep_bursts,
     createdAt: story.created_at,
     updatedAt: story.updated_at,
     stops: stops.map((s) => {
@@ -268,7 +269,7 @@ export function getStory(id) {
 }
 
 const updateStoryStmt = db.prepare(
-  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, content_language = @contentLanguage, pdf_layout_pack = @pdfLayoutPack, pdf_paper_size = @pdfPaperSize, book_product = @bookProduct, book_title_font = @bookTitleFont, book_body_font = @bookBodyFont, updated_at = @now WHERE id = @id"
+  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, content_language = @contentLanguage, pdf_layout_pack = @pdfLayoutPack, pdf_paper_size = @pdfPaperSize, book_product = @bookProduct, book_title_font = @bookTitleFont, book_body_font = @bookBodyFont, book_keep_bursts = @bookKeepBursts, updated_at = @now WHERE id = @id"
 );
 // Upsert, not a plain UPDATE: the editor can now create brand-new stops
 // client-side (splitting one stop into two, or adding a blank section) and
@@ -341,6 +342,7 @@ export function updateStory(id, data) {
         data.bookProduct in BOOK_PRODUCTS ? data.bookProduct : existing.bookProduct || DEFAULT_BOOK_PRODUCT,
       bookTitleFont: validFont(data.bookTitleFont, existing.bookTitleFont),
       bookBodyFont: validFont(data.bookBodyFont, existing.bookBodyFont),
+      bookKeepBursts: (data.bookKeepBursts ?? existing.bookKeepBursts) ? 1 : 0,
       now,
     });
 

@@ -27,6 +27,7 @@ import { BOOK_PRODUCTS } from "./photobook/products.js";
 import { SPREAD_LAYOUTS, BOOK_FONTS, DEFAULT_TITLE_FONT, DEFAULT_BODY_FONT } from "./photobook/spreadLayouts.js";
 import { buildBookPreviewHtml } from "./photobook/bookPreview.js";
 import { startBookExport, getBookJob } from "./photobook/saalExport.js";
+import { attachInsights } from "./photoInsights.js";
 import { THEMES } from "./themes.js";
 import { fetchArticleText } from "./article.js";
 
@@ -393,10 +394,13 @@ function draftFromBody(body) {
   };
 }
 
-app.post("/api/stories/:id/book-preview", (req, res) => {
+app.post("/api/stories/:id/book-preview", async (req, res) => {
   const story = draftFromBody(req.body);
   if (!story) return res.status(400).send("Missing story draft");
   try {
+    // Faces, labels and capture times from PhotoPrism (cached after the
+    // first preview) drive the content-aware layout decisions.
+    await attachInsights(story);
     res.type("html").send(buildBookPreviewHtml(story));
   } catch (err) {
     console.error(err);
@@ -404,9 +408,10 @@ app.post("/api/stories/:id/book-preview", (req, res) => {
   }
 });
 
-app.post("/api/stories/:id/book-export", (req, res) => {
+app.post("/api/stories/:id/book-export", async (req, res) => {
   const story = draftFromBody(req.body) || getStory(req.params.id);
   if (!story) return res.status(404).json({ error: "Not found" });
+  await attachInsights(story);
   const job = startBookExport(story);
   res.json({ jobId: job.id });
 });

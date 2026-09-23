@@ -80,6 +80,14 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_stop_photos_stop ON stop_photos(stop_id);
   CREATE INDEX IF NOT EXISTS idx_stop_embeds_stop ON stop_embeds(stop_id);
   CREATE INDEX IF NOT EXISTS idx_stop_info_cards_stop ON stop_info_cards(stop_id);
+
+  -- Per-photo facts from PhotoPrism used for photobook layout (faces with
+  -- positions, labels, capture time, quality); cached, keyed by photo UID.
+  CREATE TABLE IF NOT EXISTS photo_insights (
+    photo_uid TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
+  );
 `);
 
 // "CREATE TABLE IF NOT EXISTS" above only helps on a brand-new database -
@@ -107,3 +115,4 @@ ensureColumn("stops", "book_layout_override", "TEXT");
 ensureColumn("stops", "book_spread_counts", "TEXT");
 ensureColumn("stories", "book_title_font", "TEXT");
 ensureColumn("stories", "book_body_font", "TEXT");
+ensureColumn("stories", "book_keep_bursts", "INTEGER NOT NULL DEFAULT 0");

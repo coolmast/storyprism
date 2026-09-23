@@ -310,10 +310,20 @@ useful for a second person to use the editor from their own device.
       automatically; "↺ Auto" per stop resets). Stored per stop as
       `stops.book_spread_counts` (JSON array), up to 10 photos per spread
       (max 6 per page)
-- [ ] Face-aware backgrounds: photo cards are placed in corners without
-      knowing what's underneath and can cover faces. PhotoPrism has face
-      markers per photo — using them to pick card corners (and crop
-      backgrounds) is the obvious next step
+- [x] Content-aware photobook layouts: per-photo insights (face boxes,
+      labels, capture time, quality) from PhotoPrism, with our own YuNet
+      face detector (`server/src/faceDetect.js`, onnxruntime) for photos
+      PhotoPrism has no markers for (it found faces in 18 of 104 photos of
+      the test story; with the detector 51); cached in `photo_insights`.
+      Backgrounds prefer face-free scenery (labels), card arrangements /
+      chapter panels / titles are chosen to cover the least face area, crops
+      center on faces, and burst shots (≤ 3 s apart) are reduced to the
+      best one (toggle "keep burst shots"). Test story: backgrounds with
+      faces 21 → 5, covered faces 5 → 0, 11 burst shots dropped
+- [ ] More content awareness: similarity beyond time (PhotoPrism has no
+      similarity API; perceptual hashes would catch re-takes minutes
+      apart), people names from face markers for captions, horizon/saliency
+      for crops of face-free photos
 - [ ] More Saal fonts: only `Architects DaughterEmbedded` is confirmed to
       exist in Saal, so body text uses it too. Reading any other font name
       from a Saal project would unlock a separate body font

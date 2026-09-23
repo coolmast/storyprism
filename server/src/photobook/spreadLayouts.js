@@ -59,7 +59,109 @@ export function textWidth(text, size, font) {
 
 const roleFont = (fonts, role) => (role === "title" || role === "quote" ? fonts.title : fonts.body);
 
-const image = (photo, frame, opts = {}) => ({ kind: "image", photo, frame, background: false, shadow: false, rotation: 0, ...opts });
+// --- Content awareness ------------------------------------------------------
+//
+// Photos may carry `insights` from PhotoPrism (see photoInsights.js): face
+// boxes (relative to the image), labels, capture time. Layouts use them to
+// keep faces visible when a photo is cropped into a frame, to prefer
+// face-free scenery as backgrounds, and to keep cards and titles off the
+// faces in a background photo.
+
+// Where a crop into a frame should center: the middle of all faces.
+function focusOf(photo) {
+  const faces = photo?.insights?.faces || [];
+  if (!faces.length) return null;
+  const x0 = Math.min(...faces.map((f) => f.x));
+  const y0 = Math.min(...faces.map((f) => f.y));
+  const x1 = Math.max(...faces.map((f) => f.x + f.w));
+  const y1 = Math.max(...faces.map((f) => f.y + f.h));
+  // Faces sit in the upper part of a head-and-shoulders box; nudge down a bit.
+  return { x: (x0 + x1) / 2, y: Math.min(1, (y0 + y1) / 2 + (y1 - y0) * 0.25) };
+}
+
+const image = (photo, frame, opts = {}) => ({
+  kind: "image",
+  photo,
+  frame,
+  background: false,
+  shadow: false,
+  rotation: 0,
+  focus: focusOf(photo),
+  ...opts,
+});
+
+// Photo scaled to cover `frame`, positioned so `focus` (relative point in the
+// photo) sits as close to the frame center as the crop allows. Shared with
+// saalSvg.js so the exported crop is exactly the planned one.
+export function placePhoto(frame, pxW, pxH, focus) {
+  const s = Math.max(frame.w / pxW, frame.h / pxH);
+  const w = pxW * s;
+  const h = pxH * s;
+  const fx = focus ? focus.x : 0.5;
+  const fy = focus ? focus.y : 0.5;
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  return {
+    x: clamp(frame.x + frame.w / 2 - fx * w, frame.x + frame.w - w, frame.x),
+    y: clamp(frame.y + frame.h / 2 - fy * h, frame.y + frame.h - h, frame.y),
+    w,
+    h,
+    s,
+  };
+}
+
+// Face boxes of an image element in spread coordinates (visible part only).
+function facesInSpread(photo, frame) {
+  const faces = photo?.insights?.faces || [];
+  if (!faces.length) return [];
+  const p = placePhoto(frame, photo.width || 3, photo.height || 2, focusOf(photo));
+  return faces
+    .map((f) => ({ x: p.x + f.x * p.w, y: p.y + f.y * p.h, w: f.w * p.w, h: f.h * p.h }))
+    .map((f) => intersect(f, frame))
+    .filter(Boolean);
+}
+
+function intersect(a, b) {
+  const x = Math.max(a.x, b.x);
+  const y = Math.max(a.y, b.y);
+  const w = Math.min(a.x + a.w, b.x + b.w) - x;
+  const h = Math.min(a.y + a.h, b.y + b.h) - y;
+  return w > 0 && h > 0 ? { x, y, w, h } : null;
+}
+
+// Share of face area hidden by `boxes` (0 = no face covered). Faces get a
+// margin so cards don't clip foreheads and chins either.
+function faceCost(faces, boxes) {
+  if (!faces.length || !boxes.length) return 0;
+  let covered = 0;
+  let total = 0;
+  for (const f0 of faces) {
+    const f = { x: f0.x - f0.w * 0.3, y: f0.y - f0.h * 0.4, w: f0.w * 1.6, h: f0.h * 1.9 };
+    total += f.w * f.h;
+    for (const b of boxes) {
+      const i = intersect(f, b);
+      if (i) covered += i.w * i.h;
+    }
+  }
+  return covered / total;
+}
+
+// Scenery reads well behind cards; faces don't (they get covered).
+const SCENIC =
+  /landscape|nature|mountain|beach|sea|ocean|lake|water|river|sky|sunset|sunrise|forest|field|snow|coast|shore|harbo|port|building|architecture|city|tower|bridge|church|castle|desert|island|hill|valley|park|garden|street|night|cloud|rock|boat|ship/;
+
+export function backdropScore(photo, aspect) {
+  const r = coverRetention(photoAspect(photo), aspect);
+  let score = r;
+  const ins = photo.insights;
+  if (ins) {
+    const faceArea = (ins.faces || []).reduce((a, f) => a + f.w * f.h, 0);
+    if (ins.faceCount > 0) score -= 0.15 + Math.min(0.5, faceArea * 5);
+    if (ins.labels.some((l) => SCENIC.test(l))) score += 0.2;
+    if (ins.labels.includes("people") || ins.labels.includes("portrait")) score -= 0.1;
+  }
+  if (photo.featured) score += 0.1;
+  return r < 0.5 ? -1 : score;
+}
 
 function pageBox(spread, side) {
   const P = spread.w / 2;
@@ -135,12 +237,44 @@ function jitter(seed, i, amount) {
   return ((v - Math.floor(v)) * 2 - 1) * amount;
 }
 
-// Prefer the featured photo as a backdrop when its shape allows, otherwise
-// the one that survives a crop to `aspect` best.
-function chooseBackdrop(photos, aspect, minRetention = 0.55) {
-  const featured = photos.findIndex((p) => p.featured);
-  if (featured >= 0 && coverRetention(photoAspect(photos[featured]), aspect) >= minRetention) return featured;
-  return pickBackdrop(photos, aspect);
+// The photo best suited as a background for `aspect`: good crop, ideally
+// scenery without faces (featured photos get a small bonus).
+export function chooseBackdrop(photos, aspect, minRetention = 0.55) {
+  let best = -1;
+  let bestScore = -Infinity;
+  photos.forEach((p, i) => {
+    if (coverRetention(photoAspect(p), aspect) < minRetention) return;
+    const sc = backdropScore(p, aspect);
+    if (sc > bestScore) {
+      bestScore = sc;
+      best = i;
+    }
+  });
+  return best >= 0 ? best : pickBackdrop(photos, aspect);
+}
+
+// Among candidate card arrangements, the one hiding the least face area of
+// `faces` (ties keep the earlier candidate, which callers order by the
+// spread's variant so books still vary).
+function leastFaceCost(candidates, faces) {
+  let best = candidates[0];
+  let bestCost = Infinity;
+  for (const c of candidates) {
+    const cost = faceCost(faces, c.boxes);
+    if (cost < bestCost - 1e-6) {
+      bestCost = cost;
+      best = c;
+    }
+  }
+  return best;
+}
+
+// A title corner (from `corners`) that covers no face, if there is one.
+function titleCorner(title, page, corners, ctx, faces) {
+  const options = corners.length ? corners : ["tl", "tr", "bl", "br"];
+  return options
+    .map((corner) => ({ corner, cost: faceCost(faces, [titleElement(title, page, corner, ctx).frame]) }))
+    .sort((a, b) => a.cost - b.cost)[0].corner;
 }
 
 export const SPREAD_LAYOUTS = {
@@ -149,25 +283,47 @@ export const SPREAD_LAYOUTS = {
     label: "Background + photo cards",
     photos: { min: 3, max: 5, ideal: 4 },
     fit(photos, spread) {
-      const bg = photos[chooseBackdrop(photos, spread.w / spread.h)];
-      const r = coverRetention(photoAspect(bg), spread.w / spread.h);
-      return r < 0.55 ? 0 : Math.min(1, r + 0.3);
+      const aspect = spread.w / spread.h;
+      const bg = photos[chooseBackdrop(photos, aspect)];
+      const r = coverRetention(photoAspect(bg), aspect);
+      if (r < 0.55) return 0;
+      // Scenery without faces makes the best backdrop; a face-heavy one
+      // still works, but other layouts should win then.
+      return Math.max(0.05, Math.min(1, backdropScore(bg, aspect) + 0.3));
     },
     build(photos, spread, ctx) {
       const bgIdx = chooseBackdrop(photos, spread.w / spread.h);
+      const bg = photos[bgIdx];
+      const bgFrame = fullBox(spread);
+      const faces = facesInSpread(bg, bgFrame);
       const cards = photos.filter((_, i) => i !== bgIdx);
-      const leftCount = ctx.variant % 2 ? Math.floor(cards.length / 2) : Math.ceil(cards.length / 2);
-      const left = cardsOn(cards.slice(0, leftCount), pageBox(spread, "left"), ctx.variant, 0.95);
-      const right = cardsOn(cards.slice(leftCount), pageBox(spread, "right"), ctx.variant + 1, 0.95);
+      const L = pageBox(spread, "left");
+      const R = pageBox(spread, "right");
+      // Every split of the cards between the pages x every corner pattern
+      // per page, preferred order first; keep the one hiding fewest faces.
+      const splits = [...new Set([Math.ceil(cards.length / 2), Math.floor(cards.length / 2)])];
+      if (ctx.variant % 2) splits.reverse();
+      const candidates = [];
+      for (const leftCount of splits) {
+        for (let dv = 0; dv < 4; dv++) {
+          for (let dw = 0; dw < 4; dw++) {
+            const left = cardsOn(cards.slice(0, leftCount), L, ctx.variant + dv, 0.95);
+            const right = cardsOn(cards.slice(leftCount), R, ctx.variant + 1 + dw, 0.95);
+            candidates.push({ leftCount, left, right, boxes: [...left.frames, ...right.frames] });
+          }
+        }
+      }
+      const pick = leastFaceCost(candidates, faces);
       const elements = [
-        image(photos[bgIdx], fullBox(spread), { background: true }),
-        ...cards.slice(0, leftCount).map((p, i) => image(p, left.frames[i], { shadow: true })),
-        ...cards.slice(leftCount).map((p, i) => image(p, right.frames[i], { shadow: true })),
+        image(bg, bgFrame, { background: true }),
+        ...cards.slice(0, pick.leftCount).map((p, i) => image(p, pick.left.frames[i], { shadow: true })),
+        ...cards.slice(pick.leftCount).map((p, i) => image(p, pick.right.frames[i], { shadow: true })),
       ];
       if (ctx.title) {
-        const onLeft = left.freeCorners.length > 0;
-        const corner = (onLeft ? left.freeCorners : right.freeCorners)[0] || "tl";
-        elements.push(titleElement(ctx.title, pageBox(spread, onLeft ? "left" : "right"), corner, ctx));
+        const onLeft = pick.left.freeCorners.length > 0;
+        const page = onLeft ? L : R;
+        const corner = titleCorner(ctx.title, page, onLeft ? pick.left.freeCorners : pick.right.freeCorners, ctx, faces);
+        elements.push(titleElement(ctx.title, page, corner, ctx));
       }
       return { elements };
     },
@@ -186,8 +342,8 @@ export const SPREAD_LAYOUTS = {
     build(photos, spread, ctx) {
       const pageAspect = spread.w / 2 / spread.h;
       const ranked = photos
-        .map((p, i) => ({ i, r: coverRetention(photoAspect(p), pageAspect) }))
-        .sort((a, b) => b.r - a.r)
+        .map((p, i) => ({ i, score: coverRetention(photoAspect(p), pageAspect) >= 0.6 ? backdropScore(p, pageAspect) : -2 }))
+        .sort((a, b) => b.score - a.score)
         .slice(0, 2)
         .map((x) => x.i)
         .sort((a, b) => a - b);
@@ -195,15 +351,32 @@ export const SPREAD_LAYOUTS = {
       const leftCount = Math.ceil(rest.length / 2);
       const L = pageBox(spread, "left");
       const R = pageBox(spread, "right");
-      const left = cardsOn(rest.slice(0, leftCount), L, ctx.variant, 0.9);
-      const right = cardsOn(rest.slice(leftCount), R, ctx.variant + 2, 0.9);
+      const leftFaces = facesInSpread(photos[ranked[0]], L);
+      const rightFaces = facesInSpread(photos[ranked[1]], R);
+      const variants = (v) => [0, 1, 2, 3].map((d) => v + d);
+      const left = leastFaceCost(
+        variants(ctx.variant).map((v) => {
+          const c = cardsOn(rest.slice(0, leftCount), L, v, 0.9);
+          return { ...c, boxes: c.frames };
+        }),
+        leftFaces
+      );
+      const right = leastFaceCost(
+        variants(ctx.variant + 2).map((v) => {
+          const c = cardsOn(rest.slice(leftCount), R, v, 0.9);
+          return { ...c, boxes: c.frames };
+        }),
+        rightFaces
+      );
+      // Page-sized photos are plain images: Saal allows one background per
+      // spread (see saalSvg.js); `background` here only means "big".
       const elements = [
         image(photos[ranked[0]], L, { background: true }),
         image(photos[ranked[1]], R, { background: true }),
         ...rest.slice(0, leftCount).map((p, i) => image(p, left.frames[i], { shadow: true })),
         ...rest.slice(leftCount).map((p, i) => image(p, right.frames[i], { shadow: true })),
       ];
-      if (ctx.title) elements.push(titleElement(ctx.title, L, left.freeCorners[0] || "tl", ctx));
+      if (ctx.title) elements.push(titleElement(ctx.title, L, titleCorner(ctx.title, L, left.freeCorners, ctx, leftFaces), ctx));
       return { elements };
     },
   },
@@ -312,14 +485,22 @@ export const SPREAD_LAYOUTS = {
       const cards = photos.filter((_, i) => i !== bgIdx);
       const R = pageBox(spread, "right");
       const L = pageBox(spread, "left");
-      const lc = cardsOn(cards.slice(0, 1), L, 3, 0.75);
-      const rc = cardsOn(cards.slice(1), R, 0, 0.75);
+      const faces = facesInSpread(photos[bgIdx], fullBox(spread));
+      const candidates = [];
+      for (let a = 0; a < 4; a++) {
+        for (let b = 0; b < 4; b++) {
+          const lc = cardsOn(cards.slice(0, 1), L, 3 + a, 0.75);
+          const rc = cardsOn(cards.slice(1), R, b, 0.75);
+          candidates.push({ lc, rc, boxes: [...lc.frames, ...rc.frames] });
+        }
+      }
+      const { lc, rc } = leastFaceCost(candidates, faces);
       const elements = [
         image(photos[bgIdx], fullBox(spread), { background: true }),
         ...cards.slice(0, 1).map((p, i) => image(p, lc.frames[i], { shadow: true })),
         ...cards.slice(1).map((p, i) => image(p, rc.frames[i], { shadow: true })),
       ];
-      if (ctx.title) elements.push(titleElement(ctx.title, L, "tl", ctx));
+      if (ctx.title) elements.push(titleElement(ctx.title, L, titleCorner(ctx.title, L, lc.freeCorners, ctx, faces), ctx));
       return { elements };
     },
   },
@@ -408,35 +589,50 @@ function splitParagraphs(text) {
 // Chapter opener: a photo across the spread, the stop's story on a
 // translucent paper panel on the right page, an optional print on the left.
 export function chapterSpread(spread, ctx, { backdrop, title, narrative, pullQuote, card }) {
-  const R = pageBox(spread, "right");
-  const L = pageBox(spread, "left");
   const pad = 130;
-  const panelFrame = { x: R.x + R.w * 0.1, y: R.h * 0.1, w: R.w * 0.8, h: R.h * 0.8 };
-  const block = textBlock(
-    { x: panelFrame.x + pad, y: panelFrame.y + pad, w: panelFrame.w - 2 * pad, h: panelFrame.h - 2 * pad },
-    {
-      title,
-      body: splitParagraphs(narrative),
-      quote: pullQuote,
-      color: "#2b2b2b",
-      accent: ctx.accentColor,
-      typeScale: ctx.typeScale,
-      fonts: ctx.fonts,
+  const sized = (page) => {
+    const panelFrame = { x: page.x + page.w * 0.1, y: page.h * 0.1, w: page.w * 0.8, h: page.h * 0.8 };
+    const block = textBlock(
+      { x: panelFrame.x + pad, y: panelFrame.y + pad, w: panelFrame.w - 2 * pad, h: panelFrame.h - 2 * pad },
+      {
+        title,
+        body: splitParagraphs(narrative),
+        quote: pullQuote,
+        color: "#2b2b2b",
+        accent: ctx.accentColor,
+        typeScale: ctx.typeScale,
+        fonts: ctx.fonts,
+      }
+    );
+    // Shrink the panel to the text so short stories don't sit in a big box.
+    const used = Math.min(block.frame.h, block.estimatedHeight + 40);
+    return { panelFrame, block, used, panelH: used + 2 * pad };
+  };
+  // Panel position: right page centered by default; moved to the other page
+  // or up/down when that keeps it off the faces in the background photo.
+  const faces = backdrop ? facesInSpread(backdrop, fullBox(spread)) : [];
+  const candidates = [];
+  for (const side of ["right", "left"]) {
+    const page = pageBox(spread, side);
+    const base = sized(page);
+    const free = page.h - base.panelH;
+    for (const pos of [0.5, 0.12, 0.88]) {
+      const y = Math.max(page.h * 0.06, Math.min(page.h * 0.94 - base.panelH, free * pos));
+      const panel = { ...base.panelFrame, y, h: base.panelH };
+      candidates.push({ ...base, panel, side, boxes: [panel] });
     }
-  );
-  // Shrink the panel to the text so short stories don't sit in a big box.
-  const used = Math.min(block.frame.h, block.estimatedHeight + 40);
-  const panelH = used + 2 * pad;
-  const panelY = (R.h - panelH) / 2;
-  block.frame = { ...block.frame, y: panelY + pad, h: used + 60 };
+  }
+  const pick = leastFaceCost(candidates, faces);
+  pick.block.frame = { ...pick.block.frame, y: pick.panel.y + pad, h: pick.used + 60 };
   const elements = [];
   if (backdrop) elements.push(image(backdrop, fullBox(spread), { background: true }));
   if (card) {
-    const { frames } = cardsOn([card], L, 1, 0.9);
+    const other = pageBox(spread, pick.side === "right" ? "left" : "right");
+    const { frames } = cardsOn([card], other, 1, 0.9);
     elements.push(image(card, frames[0], { shadow: true, rotation: -2 }));
   }
-  elements.push({ kind: "panel", frame: { ...panelFrame, y: panelY, h: panelH }, color: "#ffffff", opacity: backdrop ? 0.82 : 0 });
-  elements.push(block);
+  elements.push({ kind: "panel", frame: pick.panel, color: "#ffffff", opacity: backdrop ? 0.82 : 0 });
+  elements.push(pick.block);
   return { elements, paper: "#ffffff" };
 }
 

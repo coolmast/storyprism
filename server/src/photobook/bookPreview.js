@@ -112,6 +112,8 @@ export function buildBookPreviewHtml(story) {
     .join("\n");
 
   const warn = [];
+  const notes = [];
+  if (plan.burstSkips) notes.push(`${plan.burstSkips} burst shot(s) left out (photos taken within 3 s of a kept one)`);
   if (plan.overflow) {
     warn.push(
       `The book needs ${plan.contentPages} pages, but the largest page count known for this product is ${plan.numPages} - condense some spreads (−) or remove photos before exporting`
@@ -148,7 +150,7 @@ ${fontHead(plan.fonts)}
 <body>
   <p class="bp-summary"><b>${escapeHtml(plan.product.label)}</b> · ${plan.overflow ? plan.contentPages : plan.numPages} pages · ${plan.spreads.length} spreads${
     warn.length ? `<br><span class="bp-warn">⚠ ${warn.map(escapeHtml).join(" · ")}</span>` : ""
-  }</p>
+  }${notes.length ? `<br><span>${notes.map(escapeHtml).join(" · ")}</span>` : ""}</p>
   <section class="bp-group">
     <div class="bp-group-head"><span>Cover</span></div>
     <figure class="bp-spread bp-cover">
