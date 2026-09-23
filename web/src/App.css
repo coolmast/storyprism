@@ -1938,3 +1938,29 @@ textarea {
   color: var(--preview-bbb);
   font-size: 0.8rem;
 }
+
+/* The shared Toggle component is styled from the app's own light/dark
+   tokens, but this whole drawer stays dark regardless of the app theme
+   (see theme.css's --preview-* comment) - remap it to those tokens here
+   rather than forking the component. */
+.pdf-live-controls .ui-toggle-label {
+  color: var(--preview-text);
+  font-weight: normal;
+  font-size: 0.85rem;
+}
+
+.pdf-live-controls .ui-toggle-hint {
+  color: var(--preview-bbb);
+}
+
+.pdf-live-controls .ui-toggle-track {
+  background: var(--preview-border);
+}
+
+.pdf-live-controls .ui-toggle-track::before {
+  background: var(--preview-surface);
+}
+
+.pdf-live-controls input:checked + .ui-toggle-track {
+  background: var(--preview-ok);
+}
