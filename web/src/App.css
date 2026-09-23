@@ -1,49 +1,153 @@
-.app {
+/* App shell: fixed sidebar (branding + nav) + sticky topbar (title +
+   actions) + content column on desktop; on mobile the sidebar is replaced
+   by a bottom tab bar and the topbar shrinks / gains a back button. One
+   breakpoint (860px) for the whole shell - see brief item 2. */
+.app-shell {
   min-height: 100vh;
   display: flex;
+}
+
+.app-sidebar {
+  width: 240px;
+  flex: none;
+  display: flex;
   flex-direction: column;
+  background: var(--surface-2);
+  border-right: 1px solid var(--border);
+  padding: 1.25rem 1rem;
+  gap: 1.75rem;
 }
 
-.app-header {
-  padding: 1.25rem 1.5rem;
-  border-bottom: 2px solid var(--terracotta);
-  background: var(--sand);
+.app-brand {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.6rem 0.75rem;
+  align-items: flex-start;
+  gap: 0.6rem;
 }
 
-.app-header h1 {
-  margin: 0;
-  font-size: 1.4rem;
-  letter-spacing: 0.02em;
+.app-brand-mark {
+  font-size: 1.5rem;
+  line-height: 1;
 }
 
-.app-header span {
+.app-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.app-brand-text strong {
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
+}
+
+.app-brand-text span {
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 0.8rem;
+  line-height: 1.3;
 }
 
-.tabs {
-  margin-left: auto;
+.app-nav {
   display: flex;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.3rem;
 }
 
-.tabs button {
+.app-nav button {
   font: inherit;
-  padding: 0.4rem 0.9rem;
-  border: 1px solid var(--terracotta);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.7rem;
+  border: none;
   background: transparent;
-  color: var(--terracotta);
-  border-radius: 999px;
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+}
+
+.app-nav button svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--muted);
+}
+
+.app-nav button:hover {
+  background: var(--surface);
+}
+
+.app-nav button.active {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.app-nav button.active svg {
+  color: var(--accent-text);
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 100vh;
+}
+
+.app-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1.5rem;
+  padding-top: calc(0.9rem + env(safe-area-inset-top));
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.topbar-back {
+  font: inherit;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 
-.tabs button.active {
-  background: var(--terracotta);
-  color: white;
+.topbar-back svg {
+  width: 20px;
+  height: 20px;
+}
+
+.topbar-back:hover {
+  background: var(--surface-2);
+}
+
+.topbar-title {
+  margin: 0;
+  font-size: 1.1rem;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: none;
 }
 
 .lang-switcher {
@@ -55,17 +159,87 @@
   font: inherit;
   font-size: 0.8rem;
   padding: 0.3rem 0.6rem;
-  border: 1px solid var(--line);
-  background: white;
+  border: 1px solid var(--border);
+  background: var(--surface);
   color: var(--muted);
   border-radius: 999px;
   cursor: pointer;
 }
 
 .lang-switcher button.active {
-  border-color: var(--teal);
-  color: var(--teal);
+  border-color: var(--accent-2);
+  color: var(--accent-2);
   font-weight: bold;
+}
+
+.app-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-tabbar {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .app-sidebar {
+    display: none;
+  }
+
+  .app-topbar {
+    padding: 0.7rem 1rem;
+    padding-top: calc(0.7rem + env(safe-area-inset-top));
+  }
+
+  .topbar-back {
+    display: flex;
+  }
+
+  .app-shell {
+    flex-direction: column;
+  }
+
+  .app-main {
+    padding-bottom: calc(58px + env(safe-area-inset-bottom));
+  }
+
+  .app-tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    display: flex;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .app-tabbar button {
+    font: inherit;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.5rem 0.25rem 0.4rem;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.7rem;
+  }
+
+  .app-tabbar button svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .app-tabbar button.active {
+    color: var(--accent-text);
+  }
 }
 
 .app-body {
@@ -87,8 +261,10 @@
 /* The New Story tab's sidebar+content split assumes desktop width - on a
    phone, a fixed 280px sidebar next to flex:1 content leaves almost no
    room for the content pane (title, map, create-story button all get
-   squeezed into ~100px and become unreachable). Stack them instead. */
-@media (max-width: 700px) {
+   squeezed into ~100px and become unreachable). Stack them instead. Uses
+   the same 860px breakpoint as the app shell (see above) rather than its
+   own, so the two don't fall out of sync. */
+@media (max-width: 860px) {
   .app-body:not(.single) {
     flex-direction: column;
   }
@@ -142,7 +318,7 @@
 
 .source-toggle button.active {
   background: var(--terracotta);
-  color: white;
+  color: var(--on-accent);
 }
 
 .date-range-picker {
@@ -165,7 +341,7 @@
   padding: 0.4rem 0.5rem;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: white;
+  background: var(--surface);
   color: var(--ink);
 }
 
@@ -174,7 +350,7 @@
   padding: 0.4rem 0.6rem;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: white;
+  background: var(--surface);
   color: var(--ink);
 }
 
@@ -234,7 +410,7 @@
 
 .album-list button.active {
   background: var(--terracotta);
-  color: white;
+  color: var(--on-accent);
 }
 
 .album-count {
@@ -266,9 +442,9 @@
   height: 28px;
   border-radius: 50%;
   background: var(--terracotta);
-  color: white;
+  color: var(--on-accent);
   font-weight: bold;
-  border: 2px solid white;
+  border: 2px solid var(--on-accent);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
@@ -293,7 +469,7 @@
   height: 28px;
   border-radius: 50%;
   background: var(--teal);
-  color: white;
+  color: var(--on-accent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -345,7 +521,7 @@
   border: none;
   border-radius: 6px;
   background: var(--teal);
-  color: white;
+  color: var(--on-accent);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -372,7 +548,7 @@
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
-  background: white;
+  background: var(--surface);
 }
 
 .story-card-main {
@@ -456,7 +632,7 @@
   padding: 0.4rem 0.8rem;
   border: 1px solid var(--teal);
   border-radius: 999px;
-  background: white;
+  background: var(--surface);
   color: var(--teal);
   text-decoration: none;
   cursor: pointer;
@@ -465,7 +641,7 @@
 
 .toolbar-btn:hover {
   background: var(--teal);
-  color: white;
+  color: var(--on-accent);
 }
 
 /* Below this width the toolbar's 5 buttons don't all fit with labels -
@@ -511,7 +687,7 @@
   padding: 0.35rem 0.7rem 0.35rem 0.4rem;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: white;
+  background: var(--surface);
   color: var(--ink);
   cursor: pointer;
 }
@@ -556,7 +732,7 @@
   padding: 0.3rem 0.8rem;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: white;
+  background: var(--surface);
   color: var(--ink);
   cursor: pointer;
 }
@@ -573,7 +749,7 @@
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 0.5rem 0.7rem;
-  background: white;
+  background: var(--surface);
   color: var(--ink);
 }
 
@@ -583,7 +759,7 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 0.6rem;
-  background: white;
+  background: var(--surface);
   color: var(--ink);
   resize: vertical;
   min-height: 3.5rem;
@@ -769,7 +945,7 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 0.8rem;
-  background: white;
+  background: var(--surface);
 }
 
 .interview-header {
@@ -807,7 +983,7 @@ textarea {
 .interview-bubble.user {
   align-self: flex-end;
   background: var(--teal);
-  color: white;
+  color: var(--on-accent);
   border-bottom-right-radius: 2px;
 }
 
@@ -856,7 +1032,7 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 0.8rem;
-  background: white;
+  background: var(--surface);
   margin-bottom: 0.5rem;
 }
 
@@ -871,7 +1047,7 @@ textarea {
   padding: 0.3rem 0.8rem;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: white;
+  background: var(--surface);
   color: var(--ink);
   cursor: pointer;
 }
@@ -879,7 +1055,7 @@ textarea {
 .notes-import-tabs button.active {
   border-color: var(--terracotta);
   background: var(--terracotta);
-  color: white;
+  color: var(--on-accent);
 }
 
 .notes-import-text {
@@ -937,7 +1113,7 @@ textarea {
   padding: 0.4rem 0.6rem;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: white;
+  background: var(--surface);
 }
 
 .route-embed-provider {
@@ -1041,7 +1217,7 @@ textarea {
 
 .info-card-link:hover {
   background: var(--teal);
-  color: white;
+  color: var(--on-accent);
 }
 
 .info-card-subtitle-input {
@@ -1079,7 +1255,7 @@ textarea {
   padding: 0.3rem 0.5rem;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: white;
+  background: var(--surface);
   color: var(--ink);
 }
 
@@ -1109,7 +1285,7 @@ textarea {
   padding: 0.2rem 0.4rem;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: white;
+  background: var(--surface);
 }
 
 .info-card-fact-value {
@@ -1122,7 +1298,7 @@ textarea {
   padding: 0.2rem 0.4rem;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: white;
+  background: var(--surface);
 }
 
 .link-btn.danger.small {
@@ -1147,7 +1323,7 @@ textarea {
   padding: 0.3rem 0.8rem;
   border: 1px dashed var(--terracotta);
   border-radius: 999px;
-  background: white;
+  background: var(--surface);
   color: var(--terracotta);
   cursor: pointer;
 }
@@ -1204,7 +1380,7 @@ textarea {
   padding: 0.25rem 0.5rem;
   border-radius: 6px;
   border: 1px solid var(--line);
-  background: white;
+  background: var(--surface);
   color: var(--ink);
 }
 
@@ -1214,7 +1390,7 @@ textarea {
   padding: 0.2rem 0.4rem;
   border-radius: 6px;
   border: 1px solid var(--line);
-  background: white;
+  background: var(--surface);
 }
 
 .hero-picker-toggle {
@@ -1226,7 +1402,7 @@ textarea {
   padding: 0.25rem 0.7rem 0.25rem 0.25rem;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: white;
+  background: var(--surface);
   color: var(--ink);
   cursor: pointer;
 }
@@ -1273,7 +1449,7 @@ textarea {
   border: 2px solid transparent;
   overflow: hidden;
   cursor: pointer;
-  background: white;
+  background: var(--surface);
 }
 
 .hero-picker-thumb img {
@@ -1317,7 +1493,7 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  background: white;
+  background: var(--surface);
   break-inside: avoid;
   margin-bottom: 1rem;
 }
@@ -1363,7 +1539,7 @@ textarea {
 
 .split-here-btn:hover {
   background: var(--terracotta);
-  color: white;
+  color: var(--on-accent);
 }
 
 .add-section-btn {
@@ -1479,7 +1655,7 @@ textarea {
 
 .toolbar-btn.active {
   background: var(--teal);
-  color: white;
+  color: var(--on-accent);
 }
 
 .pdf-live-preview {
@@ -1595,7 +1771,7 @@ textarea {
   border-radius: 999px;
   border: none;
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   cursor: pointer;
 }
 

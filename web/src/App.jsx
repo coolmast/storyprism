@@ -18,6 +18,32 @@ import "./App.css";
 
 const LANG_FLAG = { en: "🇬🇧", de: "🇩🇪", da: "🇩🇰" };
 
+function NewStoryIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <circle cx="10" cy="10" r="7.2" />
+      <path d="M10 6.8v6.4M6.8 10h6.4" />
+    </svg>
+  );
+}
+
+function LibraryIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3.5 4.5c1.6-.7 3.6-.7 5.5.3v10.7c-1.9-1-3.9-1-5.5-.3z" />
+      <path d="M16.5 4.5c-1.6-.7-3.6-.7-5.5.3v10.7c1.9-1 3.9-1 5.5-.3z" />
+    </svg>
+  );
+}
+
+function BackIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12.5 4.5 6.5 10l6 5.5" />
+    </svg>
+  );
+}
+
 export default function App() {
   const { lang, setLang, t } = useI18n();
   const [tab, setTab] = useState("new"); // "new" | "stories" | "editor"
@@ -145,33 +171,66 @@ export default function App() {
   }
 
   const selectedAlbum = albums.find((a) => a.uid === selectedUid);
+  const libraryActive = tab === "stories" || tab === "editor";
+  const pageTitle =
+    tab === "editor" ? activeStory?.title || t("tabMyStories") : tab === "stories" ? t("tabMyStories") : t("tabNewStory");
 
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>{t("appTitle")}</h1>
-        <span>{t("appTagline")}</span>
-        <nav className="tabs">
-          <button className={tab === "new" ? "active" : ""} onClick={() => goTo("new")}>
-            {t("tabNewStory")}
+    <div className="app-shell">
+      <aside className="app-sidebar">
+        <div className="app-brand">
+          <span className="app-brand-mark" aria-hidden="true">📖</span>
+          <div className="app-brand-text">
+            <strong>{t("appTitle")}</strong>
+            <span>{t("appTagline")}</span>
+          </div>
+        </div>
+        <nav className="app-nav" aria-label={t("appTitle")}>
+          <button
+            className={tab === "new" ? "active" : ""}
+            aria-current={tab === "new" ? "page" : undefined}
+            onClick={() => goTo("new")}
+          >
+            <NewStoryIcon />
+            <span>{t("tabNewStory")}</span>
           </button>
-          <button className={tab === "stories" ? "active" : ""} onClick={() => goTo("stories")}>
-            {t("tabMyStories")}
+          <button
+            className={libraryActive ? "active" : ""}
+            aria-current={libraryActive ? "page" : undefined}
+            onClick={() => goTo("stories")}
+          >
+            <LibraryIcon />
+            <span>{t("tabMyStories")}</span>
           </button>
         </nav>
-        <div className="lang-switcher" title={t("uiLanguageLabel")}>
-          {UI_LANGUAGES.map((code) => (
-            <button
-              key={code}
-              className={lang === code ? "active" : ""}
-              onClick={() => setLang(code)}
-            >
-              {LANG_FLAG[code]} {code.toUpperCase()}
-            </button>
-          ))}
-        </div>
-      </header>
+      </aside>
 
+      <div className="app-main">
+        <header className="app-topbar">
+          {tab === "editor" && (
+            <button className="topbar-back" onClick={() => goTo("stories")} aria-label={t("backToStories")}>
+              <BackIcon />
+            </button>
+          )}
+          <h2 className="topbar-title">{pageTitle}</h2>
+          <div className="topbar-actions">
+            <div className="lang-switcher" role="tablist" aria-label={t("uiLanguageLabel")}>
+              {UI_LANGUAGES.map((code) => (
+                <button
+                  key={code}
+                  role="tab"
+                  aria-selected={lang === code}
+                  className={lang === code ? "active" : ""}
+                  onClick={() => setLang(code)}
+                >
+                  {LANG_FLAG[code]} {code.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+        </header>
+
+        <main className="app-content">
       {tab === "new" && (
         <div className="app-body">
           <aside className="sidebar">
@@ -245,7 +304,6 @@ export default function App() {
       {tab === "stories" && (
         <div className="app-body single">
           <main className="content">
-            <h2>{t("myStoriesTitle")}</h2>
             {error && <p className="error">{error}</p>}
             <StoryList stories={stories} onOpen={openStory} onDelete={removeStory} />
           </main>
@@ -255,14 +313,31 @@ export default function App() {
       {tab === "editor" && activeStory && (
         <div className="app-body single">
           <main className="content">
-            <StoryEditor
-              story={activeStory}
-              onBack={() => goTo("stories")}
-              onSaved={(s) => setActiveStory(s)}
-            />
+            <StoryEditor story={activeStory} onSaved={(s) => setActiveStory(s)} />
           </main>
         </div>
       )}
+        </main>
+      </div>
+
+      <nav className="app-tabbar" aria-label={t("appTitle")}>
+        <button
+          className={tab === "new" ? "active" : ""}
+          aria-current={tab === "new" ? "page" : undefined}
+          onClick={() => goTo("new")}
+        >
+          <NewStoryIcon />
+          <span>{t("tabNewStory")}</span>
+        </button>
+        <button
+          className={libraryActive ? "active" : ""}
+          aria-current={libraryActive ? "page" : undefined}
+          onClick={() => goTo("stories")}
+        >
+          <LibraryIcon />
+          <span>{t("tabMyStories")}</span>
+        </button>
+      </nav>
     </div>
   );
 }

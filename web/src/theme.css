@@ -24,6 +24,11 @@
   --text: #2b2420;
   --muted: #6b5d4d;
 
+  /* Text/borders sitting on a solid accent-colored background (buttons,
+     active pills) - kept white in both themes since the accent colors
+     above are tuned to stay saturated/dark enough for it to read. */
+  --on-accent: #ffffff;
+
   /* Brand accent (warm terracotta) + a soft tint for badges/highlights */
   --accent: #c8703d;
   --accent-soft: #f4e2d3;

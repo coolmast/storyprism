@@ -29,7 +29,7 @@ function formatRange(start, end, locale) {
   return s === e ? s : `${s} – ${e}`;
 }
 
-export default function StoryEditor({ story, onBack, onSaved }) {
+export default function StoryEditor({ story, onSaved }) {
   const { t, locale } = useI18n();
   const [draft, setDraft] = useState(story);
   const [saving, setSaving] = useState(false);
@@ -308,7 +308,6 @@ export default function StoryEditor({ story, onBack, onSaved }) {
         />
       )}
       <div className="editor-toolbar">
-        <button className="link-btn" onClick={onBack}>{t("backToStories")}</button>
         <div className="toolbar-actions">
           <a
             className="toolbar-btn"
