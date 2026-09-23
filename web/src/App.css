@@ -1637,3 +1637,11 @@ textarea {
 .pdf-live-hint {
   opacity: 0.75;
 }
+
+.pdf-live-font {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: #bbb;
+  font-size: 0.8rem;
+}

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { TITLE_FONT, BODY_FONT, FONT_UNIT } from "./spreadLayouts.js";
+import { SAAL_GLYPH, SAAL_LINE, fontInfo } from "./spreadLayouts.js";
 
 // Saal lays text out inside its element box with a fixed ~44 mm inner margin
 // on every side (measured in a calibration import; Saal's own projects show
@@ -86,13 +86,11 @@ function imageSvg(el, id, ref, mode, defs, size) {
   return el.shadow ? `<g filter="url(#filter_${id})">\n      ${tag}\n    </g>` : tag;
 }
 
-const FONT_FOR_ROLE = { title: TITLE_FONT, subtitle: BODY_FONT, body: BODY_FONT, quote: TITLE_FONT };
-
 function tlf(paragraphs) {
   const ps = paragraphs
     .map((p) => {
-      const font = FONT_FOR_ROLE[p.role] || BODY_FONT;
-      return `<p color="${p.color}" fontFamily="${font}" fontSize="${p.size}" fontStyle="normal" fontWeight="normal" lineBreak="toFit" lineHeight="120%" textAlign="${p.align === "right" ? "end" : p.align === "center" ? "center" : "start"}" textAlpha="1" textDecoration="none" verticalAlign="top"><span>${xmlEscape(p.text)}</span></p>`;
+      const font = (p.font || fontInfo()).saal;
+      return `<p color="${p.color}" fontFamily="${xmlEscape(font)}" fontSize="${p.size}" fontStyle="normal" fontWeight="normal" lineBreak="toFit" lineHeight="120%" textAlign="${p.align === "right" ? "end" : p.align === "center" ? "center" : "start"}" textAlpha="1" textDecoration="none" verticalAlign="top"><span>${xmlEscape(p.text)}</span></p>`;
     })
     .join("");
   return `<TextFlow verticalAlign="top" whiteSpaceCollapse="preserve" version="3.0.0" xmlns="http://ns.adobe.com/textLayout/2008">${ps}</TextFlow>`;
@@ -107,15 +105,16 @@ function textSvg(el, id, mode) {
     const saalRot = el.rotation ? ` transform="rotate(${n(el.rotation)}, ${n(box.x)}, ${n(box.y)})"` : "";
     return `<image ws:uid="${id}" x="${n(box.x)}" y="${n(box.y)}" width="${n(box.w)}" height="${n(box.h)}" ws:modificationTime="0"${saalRot} xlink:href="${id}.png" ImSo:autoenhance="0" ws:textData="${xmlEscape(tlf(el.paragraphs))}" ws:overflow="100" ws:textAreaMode="1"/>`;
   }
-  // Same metrics as Saal: FONT_UNIT Saal units per size unit, 1.2 line
-  // height, no paragraph spacing.
+  // Same metrics as Saal (see spreadLayouts.js): glyphs scaled so a line
+  // breaks where Saal breaks it, Saal's line pitch, no paragraph spacing.
   const html = el.paragraphs
-    .map(
-      (p) =>
-        `<p style="margin:0;font-size:${n(p.size * FONT_UNIT)}px;color:${p.color};text-align:${p.align};line-height:1.2;white-space:pre-wrap">${xmlEscape(p.text)}</p>`
-    )
+    .map((p) => {
+      const font = p.font || fontInfo();
+      const family = `'${font.name}', ${font.kind === "serif" ? "serif" : font.kind === "mono" ? "monospace" : "cursive"}`;
+      return `<p style="margin:0;font-family:${xmlEscape(family)};font-size:${n(p.size * SAAL_GLYPH)}px;line-height:${n(p.size * SAAL_LINE)}px;color:${p.color};text-align:${p.align};white-space:pre-wrap">${xmlEscape(p.text)}</p>`;
+    })
     .join("");
-  return `<foreignObject x="${n(f.x)}" y="${n(f.y)}" width="${n(f.w)}" height="${n(f.h)}"${rot}><div xmlns="http://www.w3.org/1999/xhtml" style="font-family:'Architects Daughter',cursive;width:100%;height:100%;overflow:hidden">${html}</div></foreignObject>`;
+  return `<foreignObject x="${n(f.x)}" y="${n(f.y)}" width="${n(f.w)}" height="${n(f.h)}"${rot}><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden">${html}</div></foreignObject>`;
 }
 
 function roundedRectPath(x, y, w, h, r) {

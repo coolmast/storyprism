@@ -10,7 +10,7 @@ import { PDF_TEMPLATE_IDS } from "./pdfTemplates.js";
 import { PDF_LAYOUT_PACKS, DEFAULT_LAYOUT_PACK } from "./pdfLayoutPacks.js";
 import { PDF_PAPER_SIZES, DEFAULT_PAPER_SIZE } from "./pdfPaperSizes.js";
 import { BOOK_PRODUCTS, DEFAULT_BOOK_PRODUCT } from "./photobook/products.js";
-import { SPREAD_LAYOUT_IDS } from "./photobook/spreadLayouts.js";
+import { SPREAD_LAYOUT_IDS, BOOK_FONTS } from "./photobook/spreadLayouts.js";
 
 // The AI always returns a full https:// URL when it includes one at all, but
 // a human editing/adding this field by hand will often just type
@@ -34,6 +34,12 @@ function serializeSpreadCounts(counts) {
   if (!Array.isArray(counts)) return null;
   const clean = counts.filter((n) => Number.isInteger(n) && n >= 1 && n <= 10).slice(0, 60);
   return clean.length ? JSON.stringify(clean) : null;
+}
+
+function validFont(name, fallback) {
+  if (name === null) return null;
+  if (name && BOOK_FONTS.some((f) => f.name === name)) return name;
+  return fallback || null;
 }
 
 function normalizeWebsiteUrl(url) {
@@ -195,6 +201,8 @@ export function getStory(id) {
     pdfLayoutPack: story.pdf_layout_pack,
     pdfPaperSize: story.pdf_paper_size,
     bookProduct: story.book_product,
+    bookTitleFont: story.book_title_font || null,
+    bookBodyFont: story.book_body_font || null,
     createdAt: story.created_at,
     updatedAt: story.updated_at,
     stops: stops.map((s) => {
@@ -260,7 +268,7 @@ export function getStory(id) {
 }
 
 const updateStoryStmt = db.prepare(
-  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, content_language = @contentLanguage, pdf_layout_pack = @pdfLayoutPack, pdf_paper_size = @pdfPaperSize, book_product = @bookProduct, updated_at = @now WHERE id = @id"
+  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, content_language = @contentLanguage, pdf_layout_pack = @pdfLayoutPack, pdf_paper_size = @pdfPaperSize, book_product = @bookProduct, book_title_font = @bookTitleFont, book_body_font = @bookBodyFont, updated_at = @now WHERE id = @id"
 );
 // Upsert, not a plain UPDATE: the editor can now create brand-new stops
 // client-side (splitting one stop into two, or adding a blank section) and
@@ -331,6 +339,8 @@ export function updateStory(id, data) {
         data.pdfPaperSize in PDF_PAPER_SIZES ? data.pdfPaperSize : existing.pdfPaperSize || DEFAULT_PAPER_SIZE,
       bookProduct:
         data.bookProduct in BOOK_PRODUCTS ? data.bookProduct : existing.bookProduct || DEFAULT_BOOK_PRODUCT,
+      bookTitleFont: validFont(data.bookTitleFont, existing.bookTitleFont),
+      bookBodyFont: validFont(data.bookBodyFont, existing.bookBodyFont),
       now,
     });
 

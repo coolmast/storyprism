@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { photoAspect, coverRetention, collage, pickBackdrop, cardLayout } from "../pdfLayoutEngine.js";
 
 // Spread layouts for printed photobooks, modeled on the user's hand-made Saal
@@ -23,18 +24,36 @@ import { photoAspect, coverRetention, collage, pickBackdrop, cardLayout } from "
 // build(photos, spread, ctx) -> { elements } }. `ctx`: { variant, title,
 // typeScale }.
 
-export const TITLE_FONT = "Architects DaughterEmbedded";
+// Fonts offered for the printed book: names as listed in Saal Design
+// Software (its family name is `${name}Embedded`), each with its average
+// character width measured in Chrome (see bookFonts.json).
+export const BOOK_FONTS = JSON.parse(readFileSync(new URL("./bookFonts.json", import.meta.url), "utf8")).fonts;
+export const DEFAULT_TITLE_FONT = "Architects Daughter";
+export const DEFAULT_BODY_FONT = "Architects Daughter";
+
+export function fontInfo(name) {
+  return BOOK_FONTS.find((f) => f.name === name) || BOOK_FONTS.find((f) => f.name === DEFAULT_TITLE_FONT);
+}
+
+export function resolveFonts(story) {
+  return { title: fontInfo(story.bookTitleFont || DEFAULT_TITLE_FONT), body: fontInfo(story.bookBodyFont || DEFAULT_BODY_FONT) };
+}
 
 // Saal's text metrics, measured from a calibration project imported into
-// Saal Design Software 4.7: a TLF fontSize unit renders as 4.15 Saal units
-// (0.415 mm, ~18 % larger than a typographic point), Architects Daughter
-// averages 0.59 em per character, lines are 1.2 em apart and paragraphs get
-// no extra spacing. (The ~44 mm inner margin Saal adds around every text
-// element is compensated in saalSvg.js; frames here are the text area.)
-export const FONT_UNIT = 4.15;
-const CHAR_EM = 0.62; // slightly above the measured 0.59: word wrap wastes some width
-const LINE_EM = 1.2;
-export const BODY_FONT = "Architects DaughterEmbedded";
+// Saal Design Software 4.7:
+//   - line pitch: 4.98 Saal units per TLF fontSize unit (1.2 x 4.15; Saal's
+//     own UI shows fontSize x 1.18 as "pt")
+//   - character width: Saal renders Architects Daughter at 0.586 em of
+//     4.15 units, which is 1.25x what Chrome measures for the same font;
+//     every font's Chrome-measured width is scaled by that factor
+//   - no paragraph spacing
+// (The ~44 mm inner margin Saal adds around every text element is
+// compensated in saalSvg.js; frames here are the text area.)
+export const SAAL_LINE = 4.98;
+export const SAAL_GLYPH = (0.586 * 4.15) / 0.4697;
+const WRAP_SLACK = 1.06; // word wrap wastes some width
+
+const roleFont = (fonts, role) => (role === "title" || role === "quote" ? fonts.title : fonts.body);
 
 const image = (photo, frame, opts = {}) => ({ kind: "image", photo, frame, background: false, shadow: false, rotation: 0, ...opts });
 
@@ -69,7 +88,7 @@ function collageOn(photos, box, { gap, fill = 0.9, variant = 0 }) {
 // Stop title in a page corner, handwritten, white on photos / accent on paper.
 export function titleElement(title, page, corner, ctx, { dark = false } = {}) {
   const size = 34 * ctx.typeScale;
-  const lineH = size * FONT_UNIT * LINE_EM;
+  const lineH = size * SAAL_LINE;
   const w = page.w * 0.5;
   const h = lineH * 2.2;
   const m = page.w * 0.07;
@@ -82,6 +101,7 @@ export function titleElement(title, page, corner, ctx, { dark = false } = {}) {
       {
         text: title,
         role: "title",
+        font: ctx.fonts.title,
         size,
         color: dark ? ctx.accentColor || "#333333" : "#ffffff",
         align: corner.includes("r") ? "right" : "left",
@@ -314,43 +334,56 @@ export const DEFAULT_SPREAD_WEIGHTS = {
 
 // --- Text-led spreads (not part of the automatic photo rotation) ----------
 
-function estimateLines(text, widthUnits, sizePt) {
-  const charW = sizePt * FONT_UNIT * CHAR_EM;
-  const perLine = Math.max(8, Math.floor(widthUnits / charW));
+function estimateLines(text, widthUnits, size, font) {
+  const charW = size * SAAL_GLYPH * font.em * WRAP_SLACK;
+  const perLine = Math.max(6, Math.floor(widthUnits / charW));
+  // Word-aware: a word that doesn't fit on the current line starts a new one.
   return String(text || "")
     .split(/\n+/)
-    .reduce((n, para) => n + Math.max(1, Math.ceil(para.length / perLine)), 0);
+    .reduce((n, para) => {
+      let lines = 1;
+      let used = 0;
+      for (const word of para.split(/\s+/).filter(Boolean)) {
+        const len = word.length;
+        if (used && used + 1 + len > perLine) {
+          lines++;
+          used = len;
+        } else used += (used ? 1 : 0) + len;
+      }
+      return n + lines;
+    }, 0);
 }
 
 // Fits title + body paragraphs into `frame`, shrinking the body size until
 // the estimated height fits (down to a floor).
-export function textBlock(frame, { title, subtitle, body = [], quote, color, accent, typeScale, titleSize = 30 }) {
+export function textBlock(frame, { title, subtitle, body = [], quote, color, accent, typeScale, fonts, titleSize = 30 }) {
   let size = 10.5 * typeScale;
   const tSize = titleSize * typeScale;
   const measure = (s) => {
     let h = 0;
-    const lines = (text, sz) => estimateLines(text, frame.w, sz) * sz * FONT_UNIT * LINE_EM;
-    if (title) h += lines(title, tSize);
+    const lines = (text, sz, font = fonts.body) => estimateLines(text, frame.w, sz, font) * sz * SAAL_LINE;
+    if (title) h += lines(title, tSize, fonts.title);
     if (subtitle) h += lines(subtitle, s * 1.1);
     // Half-line gap between paragraphs: Saal adds no paragraph spacing, so
     // small spacer paragraphs are inserted below.
-    body.forEach((b, i) => (h += lines(b, s) + (i < body.length - 1 ? s * FONT_UNIT * LINE_EM * 0.5 : 0)));
-    if (quote) h += lines(quote, s * 1.35) + s * FONT_UNIT * LINE_EM * 0.5;
+    body.forEach((b, i) => (h += lines(b, s) + (i < body.length - 1 ? s * SAAL_LINE * 0.5 : 0)));
+    if (quote) h += lines(quote, s * 1.35, fonts.title) + s * SAAL_LINE * 0.5;
     // One spare line of slack against estimate error.
-    return h + s * FONT_UNIT * LINE_EM;
+    return h + s * SAAL_LINE;
   };
   while (size > 7.5 * typeScale && measure(size) > frame.h) size -= 0.5 * typeScale;
   const paragraphs = [];
-  if (title) paragraphs.push({ text: title, role: "title", size: tSize, color: accent || color, align: "left" });
-  if (subtitle) paragraphs.push({ text: subtitle, role: "subtitle", size: size * 1.1, color: accent || color, align: "left" });
-  const gap = () => paragraphs.push({ text: " ", role: "body", size: size * 0.5, color, align: "left" });
+  const para = (p) => paragraphs.push({ ...p, font: roleFont(fonts, p.role) });
+  if (title) para({ text: title, role: "title", size: tSize, color: accent || color, align: "left" });
+  if (subtitle) para({ text: subtitle, role: "subtitle", size: size * 1.1, color: accent || color, align: "left" });
+  const gap = () => para({ text: " ", role: "body", size: size * 0.5, color, align: "left" });
   body.forEach((b, i) => {
     if (i > 0) gap();
-    paragraphs.push({ text: b, role: "body", size, color, align: "left" });
+    para({ text: b, role: "body", size, color, align: "left" });
   });
   if (quote) {
     gap();
-    paragraphs.push({ text: quote, role: "quote", size: size * 1.35, color: accent || color, align: "left" });
+    para({ text: quote, role: "quote", size: size * 1.35, color: accent || color, align: "left" });
   }
   return { kind: "text", frame, paragraphs, estimatedHeight: measure(size) };
 }
@@ -378,6 +411,7 @@ export function chapterSpread(spread, ctx, { backdrop, title, narrative, pullQuo
       color: "#2b2b2b",
       accent: ctx.accentColor,
       typeScale: ctx.typeScale,
+      fonts: ctx.fonts,
     }
   );
   // Shrink the panel to the text so short stories don't sit in a big box.
@@ -409,6 +443,7 @@ export function infoCardSpread(spread, ctx, { card, hero }) {
     color: "#2b2b2b",
     accent: ctx.accentColor,
     typeScale: ctx.typeScale,
+    fonts: ctx.fonts,
     titleSize: 30,
   });
   const elements = [];
@@ -434,8 +469,10 @@ export function coverSpread(cover, ctx, { backdrop, cards, title, subtitle }) {
     kind: "text",
     frame: { x: frontX + frontW * 0.05, y: bandY + bandH * 0.12, w: frontW * 0.9, h: bandH * 0.8 },
     paragraphs: [
-      { text: title, role: "title", size: tSize, color: "#ffffff", align: "center" },
-      ...(subtitle ? [{ text: subtitle, role: "subtitle", size: 13 * ctx.typeScale, color: "#ffffff", align: "center" }] : []),
+      { text: title, role: "title", font: ctx.fonts.title, size: tSize, color: "#ffffff", align: "center" },
+      ...(subtitle
+        ? [{ text: subtitle, role: "subtitle", font: ctx.fonts.body, size: 13 * ctx.typeScale, color: "#ffffff", align: "center" }]
+        : []),
     ],
   });
   const tilts = [-6, 5];

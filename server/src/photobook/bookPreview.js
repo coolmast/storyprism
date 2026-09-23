@@ -100,7 +100,10 @@ export function buildBookPreviewHtml(story) {
 
   return `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<link href="https://fonts.googleapis.com/css2?family=Architects+Daughter&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?${[...new Set([plan.fonts.title, plan.fonts.body])]
+    .filter((f) => f.google)
+    .map((f) => "family=" + f.name.replace(/ /g, "+"))
+    .join("&")}&display=block" rel="stylesheet">
 <style>
   body { margin: 0; padding: 12px; background: #2e2e2e; color: #eee; font: 13px system-ui, sans-serif; }
   .bp-summary { margin: 0 2px 12px; opacity: 0.85; }

@@ -1,0 +1,165 @@
+{
+ "_source": "Font names as offered by Saal Design Software 4.7 (Saal font family = name + \"Embedded\"). em = average advance per character of a German sample text measured in Chrome from Google Fonts (estimated for fonts not on Google Fonts); Saal renders Architects Daughter 1.25x wider than Chrome at the same nominal size, which the layout code applies to all fonts.",
+ "fonts": [
+  {
+   "name": "Architects Daughter",
+   "saal": "Architects DaughterEmbedded",
+   "google": true,
+   "em": 0.4697,
+   "kind": "handwriting",
+   "measured": true
+  },
+  {
+   "name": "Allison",
+   "saal": "AllisonEmbedded",
+   "google": true,
+   "em": 0.2402,
+   "kind": "script",
+   "measured": true
+  },
+  {
+   "name": "Allura",
+   "saal": "AlluraEmbedded",
+   "google": true,
+   "em": 0.3349,
+   "kind": "script",
+   "measured": true
+  },
+  {
+   "name": "Amarante",
+   "saal": "AmaranteEmbedded",
+   "google": true,
+   "em": 0.4362,
+   "kind": "display",
+   "measured": true
+  },
+  {
+   "name": "Anonymous Pro",
+   "saal": "Anonymous ProEmbedded",
+   "google": true,
+   "em": 0.5459,
+   "kind": "mono",
+   "measured": true
+  },
+  {
+   "name": "Babylonica",
+   "saal": "BabylonicaEmbedded",
+   "google": true,
+   "em": 0.2789,
+   "kind": "script",
+   "measured": true
+  },
+  {
+   "name": "Bainsley",
+   "saal": "BainsleyEmbedded",
+   "google": false,
+   "em": 0.3,
+   "kind": "script",
+   "measured": false
+  },
+  {
+   "name": "Bellota",
+   "saal": "BellotaEmbedded",
+   "google": true,
+   "em": 0.4476,
+   "kind": "text",
+   "measured": true
+  },
+  {
+   "name": "Brygada 1918",
+   "saal": "Brygada 1918Embedded",
+   "google": true,
+   "em": 0.4667,
+   "kind": "serif",
+   "measured": true
+  },
+  {
+   "name": "Berenika",
+   "saal": "BerenikaEmbedded",
+   "google": false,
+   "em": 0.46,
+   "kind": "serif",
+   "measured": false
+  },
+  {
+   "name": "Butterfly Kids",
+   "saal": "Butterfly KidsEmbedded",
+   "google": true,
+   "em": 0.2982,
+   "kind": "script",
+   "measured": true
+  },
+  {
+   "name": "Clara",
+   "saal": "ClaraEmbedded",
+   "google": true,
+   "em": 0.4583,
+   "kind": "serif",
+   "measured": true
+  },
+  {
+   "name": "Coelacanth",
+   "saal": "CoelacanthEmbedded",
+   "google": false,
+   "em": 0.46,
+   "kind": "serif",
+   "measured": false
+  },
+  {
+   "name": "Exo",
+   "saal": "ExoEmbedded",
+   "google": true,
+   "em": 0.4623,
+   "kind": "text",
+   "measured": true
+  },
+  {
+   "name": "Explora",
+   "saal": "ExploraEmbedded",
+   "google": true,
+   "em": 0.2388,
+   "kind": "script",
+   "measured": true
+  },
+  {
+   "name": "Grand Hotel",
+   "saal": "Grand HotelEmbedded",
+   "google": true,
+   "em": 0.3034,
+   "kind": "script",
+   "measured": true
+  },
+  {
+   "name": "Great Vibes",
+   "saal": "Great VibesEmbedded",
+   "google": true,
+   "em": 0.305,
+   "kind": "script",
+   "measured": true
+  },
+  {
+   "name": "Lavishly Yours",
+   "saal": "Lavishly YoursEmbedded",
+   "google": true,
+   "em": 0.3037,
+   "kind": "script",
+   "measured": true
+  },
+  {
+   "name": "Tangerine",
+   "saal": "TangerineEmbedded",
+   "google": true,
+   "em": 0.2318,
+   "kind": "script",
+   "measured": true
+  },
+  {
+   "name": "Waterfall",
+   "saal": "WaterfallEmbedded",
+   "google": true,
+   "em": 0.2437,
+   "kind": "script",
+   "measured": true
+  }
+ ]
+}

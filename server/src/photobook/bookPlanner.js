@@ -5,6 +5,7 @@ import {
   chapterSpread,
   infoCardSpread,
   coverSpread,
+  resolveFonts,
 } from "./spreadLayouts.js";
 import { photoAspect, coverRetention } from "../pdfLayoutEngine.js";
 import { dateRange } from "../render.js";
@@ -119,7 +120,8 @@ export function planBook(story, { product: productId, strings } = {}) {
   const typeScale = Math.min(spreadSize.w / 2, spreadSize.h) / 2730;
   let variant = 0;
   const nextVariant = () => variant++;
-  const baseCtx = { typeScale, accentColor: theme.accent };
+  const fonts = resolveFonts(story);
+  const baseCtx = { typeScale, accentColor: theme.accent, fonts };
 
   const spreads = [];
   const build = (layoutId, photos, v, extra = {}) => {
@@ -256,6 +258,7 @@ export function planBook(story, { product: productId, strings } = {}) {
     cover,
     spreads,
     numPages,
+    fonts,
     contentPages,
     overflow,
     knownPageCounts: knownPageCounts(product),

@@ -35,6 +35,7 @@ export default function PdfLivePreview({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [bookProducts, setBookProducts] = useState([]);
+  const [bookFonts, setBookFonts] = useState({ fonts: [], defaultFonts: {} });
   const [job, setJob] = useState(null);
   const iframeRef = useRef(null);
   const scrollRef = useRef({ book: 0, pdf: 0 });
@@ -42,7 +43,10 @@ export default function PdfLivePreview({
 
   useEffect(() => {
     fetchBookProducts()
-      .then((r) => setBookProducts(r.products))
+      .then((r) => {
+        setBookProducts(r.products);
+        setBookFonts({ fonts: r.fonts || [], defaultFonts: r.defaultFonts || {} });
+      })
       .catch(() => {});
     return () => clearTimeout(pollRef.current);
   }, []);
@@ -149,6 +153,25 @@ export default function PdfLivePreview({
               </option>
             ))}
           </select>
+          {[
+            ["bookTitleFont", "title", t("bookTitleFontLabel")],
+            ["bookBodyFont", "body", t("bookBodyFontLabel")],
+          ].map(([field, role, label]) => (
+            <label key={field} className="pdf-live-font">
+              <span>{label}</span>
+              <select
+                value={draft[field] || bookFonts.defaultFonts[role] || ""}
+                onChange={(e) => onChange({ [field]: e.target.value })}
+              >
+                {bookFonts.fonts.map((f) => (
+                  <option key={f.name} value={f.name}>
+                    {f.name}
+                    {f.kind === "script" && role === "body" ? " ✍" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
           <button
             className="pdf-live-export"
             onClick={handleExport}

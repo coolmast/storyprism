@@ -105,3 +105,5 @@ ensureColumn("stops", "pdf_template_override", "TEXT");
 ensureColumn("stories", "book_product", "TEXT NOT NULL DEFAULT 'saal-square-28'");
 ensureColumn("stops", "book_layout_override", "TEXT");
 ensureColumn("stops", "book_spread_counts", "TEXT");
+ensureColumn("stories", "book_title_font", "TEXT");
+ensureColumn("stories", "book_body_font", "TEXT");
