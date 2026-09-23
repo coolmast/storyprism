@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { planBook, MAX_PHOTOS_PER_SPREAD } from "./bookPlanner.js";
 import { renderSpreadSvg } from "./saalSvg.js";
 import { SPREAD_LAYOUTS } from "./spreadLayouts.js";
@@ -5,6 +8,25 @@ import { getStrings } from "../i18n.js";
 import { escapeHtml } from "../render.js";
 
 const KIND_LABEL = { intro: "Intro", chapter: "Chapter opener", info: "Info card", outro: "Outro", blank: "Blank" };
+
+// Saal's own font files, when extracted with tools/extract_saal_fonts.py,
+// are served from /api/saal-fonts so the preview renders with exactly the
+// glyphs Saal uses; otherwise the Google Fonts version is loaded.
+const SAAL_FONT_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../data/saal-fonts");
+
+function fontHead(fonts) {
+  const used = [...new Map([fonts.title, fonts.body].map((f) => [f.key, f])).values()];
+  const local = used.filter((f) => existsSync(join(SAAL_FONT_DIR, `${f.key}-Regular.otf`)));
+  const google = used.filter((f) => !local.includes(f) && f.google);
+  const faces = local
+    .map((f) => `@font-face { font-family: 'SB-${f.key}'; src: url('/api/saal-fonts/${f.key}-Regular.otf') format('opentype'); font-display: block; }`)
+    .join("\n");
+  return `${faces ? `<style>${faces}</style>` : ""}${
+    google.length
+      ? `<link href="https://fonts.googleapis.com/css2?${google.map((f) => "family=" + f.name.replace(/ /g, "+")).join("&")}&display=block" rel="stylesheet">`
+      : ""
+  }`;
+}
 
 function previewRef(photo) {
   if (!photo) return null;
@@ -100,10 +122,7 @@ export function buildBookPreviewHtml(story) {
 
   return `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<link href="https://fonts.googleapis.com/css2?${[...new Set([plan.fonts.title, plan.fonts.body])]
-    .filter((f) => f.google)
-    .map((f) => "family=" + f.name.replace(/ /g, "+"))
-    .join("&")}&display=block" rel="stylesheet">
+${fontHead(plan.fonts)}
 <style>
   body { margin: 0; padding: 12px; background: #2e2e2e; color: #eee; font: 13px system-ui, sans-serif; }
   .bp-summary { margin: 0 2px 12px; opacity: 0.85; }

@@ -39,19 +39,23 @@ export function resolveFonts(story) {
   return { title: fontInfo(story.bookTitleFont || DEFAULT_TITLE_FONT), body: fontInfo(story.bookBodyFont || DEFAULT_BODY_FONT) };
 }
 
-// Saal's text metrics, measured from a calibration project imported into
-// Saal Design Software 4.7:
-//   - line pitch: 4.98 Saal units per TLF fontSize unit (1.2 x 4.15; Saal's
-//     own UI shows fontSize x 1.18 as "pt")
-//   - character width: Saal renders Architects Daughter at 0.586 em of
-//     4.15 units, which is 1.25x what Chrome measures for the same font;
-//     every font's Chrome-measured width is scaled by that factor
-//   - no paragraph spacing
-// (The ~44 mm inner margin Saal adds around every text element is
-// compensated in saalSvg.js; frames here are the text area.)
-export const SAAL_LINE = 4.98;
-export const SAAL_GLYPH = (0.586 * 4.15) / 0.4697;
-const WRAP_SLACK = 1.06; // word wrap wastes some width
+// Saal's text metrics: a TLF fontSize unit is 4.15 Saal units of em size
+// (Saal's UI shows fontSize x 1.18 as "pt"), lines are 1.2 em apart, and
+// paragraphs get no extra spacing. Glyph widths come from the OpenType fonts
+// Saal itself renders with (bookFonts.json) - confirmed against a calibration
+// import, where Saal's Architects Daughter measured 0.586 em per character
+// and its font file says 0.587. (The ~44 mm inner margin Saal adds around
+// every text element is compensated in saalSvg.js; frames here are the text
+// area.)
+export const SAAL_EM = 4.15;
+export const SAAL_LINE = SAAL_EM * 1.2;
+
+// Width of `text` in Saal units at `size`, from the font's advance table.
+export function textWidth(text, size, font) {
+  let w = 0;
+  for (const ch of text) w += font.adv[ch] ?? font.avg;
+  return (w / 1000) * size * SAAL_EM;
+}
 
 const roleFont = (fonts, role) => (role === "title" || role === "quote" ? fonts.title : fonts.body);
 
@@ -334,21 +338,27 @@ export const DEFAULT_SPREAD_WEIGHTS = {
 
 // --- Text-led spreads (not part of the automatic photo rotation) ----------
 
+// Line count of `text` in a box `widthUnits` wide: a word-by-word
+// simulation of the line breaker with the font's real glyph widths.
 function estimateLines(text, widthUnits, size, font) {
-  const charW = size * SAAL_GLYPH * font.em * WRAP_SLACK;
-  const perLine = Math.max(6, Math.floor(widthUnits / charW));
-  // Word-aware: a word that doesn't fit on the current line starts a new one.
+  const space = textWidth(" ", size, font);
   return String(text || "")
     .split(/\n+/)
     .reduce((n, para) => {
       let lines = 1;
       let used = 0;
       for (const word of para.split(/\s+/).filter(Boolean)) {
-        const len = word.length;
-        if (used && used + 1 + len > perLine) {
-          lines++;
-          used = len;
-        } else used += (used ? 1 : 0) + len;
+        const w = textWidth(word, size, font);
+        if (used > 0 && used + space + w > widthUnits) {
+          lines += 1 + Math.floor(w / widthUnits);
+          used = w % widthUnits;
+        } else {
+          used += (used > 0 ? space : 0) + w;
+          if (used > widthUnits) {
+            lines += Math.floor(used / widthUnits);
+            used %= widthUnits;
+          }
+        }
       }
       return n + lines;
     }, 0);

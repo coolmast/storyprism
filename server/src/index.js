@@ -75,6 +75,17 @@ app.get("/api/pdf-layouts", (req, res) => {
   });
 });
 
+// Saal's own fonts, if extracted locally (tools/extract_saal_fonts.py) -
+// used by the book preview to render with the exact glyphs Saal prints.
+app.use(
+  "/api/saal-fonts",
+  express.static(path.join(path.dirname(fileURLToPath(import.meta.url)), "../data/saal-fonts"), {
+    index: false,
+    maxAge: "7d",
+    setHeaders: (res) => res.set("Access-Control-Allow-Origin", "*"),
+  })
+);
+
 app.get("/api/book-products", (req, res) => {
   res.json({
     products: Object.entries(BOOK_PRODUCTS).map(([id, p]) => ({ id, label: p.label })),

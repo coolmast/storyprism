@@ -189,6 +189,16 @@ the real software.
     in the user's books: `Architects DaughterEmbedded`
   - translucent box: a Saal shape `rect` with `ws:color`, `opacity` and a
     rounded-rect `mask`
+  - **fonts**: Saal ships each font as an LZMA-compressed Flash SWF
+    (`fonts/files/*.sswa`, `ZWS` header) holding `DefineFont4` tags with
+    the complete OpenType (CFF) fonts, one per style.
+    `tools/extract_saal_fonts.py <Saal fonts/files dir>` extracts them to
+    the git-ignored `server/data/saal-fonts/` (they're licensed with Saal);
+    `node tools/saal_font_metrics.mjs` turns them into
+    `server/src/photobook/bookFonts.json` (Saal family names + per-glyph
+    advance widths). Text is sized by simulating line breaks with those
+    widths, and the preview renders with the extracted fonts (served at
+    `/api/saal-fonts`), falling back to Google Fonts
   - **text metrics** (measured with a calibration import): Saal lays text
     out with a fixed ~44 mm (440 units) inner margin on every side of the
     text element, so element boxes are written 440 units larger than the

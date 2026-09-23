@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { SAAL_GLYPH, SAAL_LINE, fontInfo } from "./spreadLayouts.js";
+import { SAAL_EM, SAAL_LINE, fontInfo } from "./spreadLayouts.js";
 
 // Saal lays text out inside its element box with a fixed ~44 mm inner margin
 // on every side (measured in a calibration import; Saal's own projects show
@@ -105,13 +105,16 @@ function textSvg(el, id, mode) {
     const saalRot = el.rotation ? ` transform="rotate(${n(el.rotation)}, ${n(box.x)}, ${n(box.y)})"` : "";
     return `<image ws:uid="${id}" x="${n(box.x)}" y="${n(box.y)}" width="${n(box.w)}" height="${n(box.h)}" ws:modificationTime="0"${saalRot} xlink:href="${id}.png" ImSo:autoenhance="0" ws:textData="${xmlEscape(tlf(el.paragraphs))}" ws:overflow="100" ws:textAreaMode="1"/>`;
   }
-  // Same metrics as Saal (see spreadLayouts.js): glyphs scaled so a line
-  // breaks where Saal breaks it, Saal's line pitch, no paragraph spacing.
+  // Same metrics as Saal (see spreadLayouts.js): em size, line pitch, no
+  // paragraph spacing.
   const html = el.paragraphs
     .map((p) => {
       const font = p.font || fontInfo();
-      const family = `'${font.name}', ${font.kind === "serif" ? "serif" : font.kind === "mono" ? "monospace" : "cursive"}`;
-      return `<p style="margin:0;font-family:${xmlEscape(family)};font-size:${n(p.size * SAAL_GLYPH)}px;line-height:${n(p.size * SAAL_LINE)}px;color:${p.color};text-align:${p.align};white-space:pre-wrap">${xmlEscape(p.text)}</p>`;
+      // Saal's own font file when extracted locally (@font-face "SB-<key>",
+      // see bookPreview.js), the Google Fonts version otherwise.
+      const generic = font.kind === "serif" ? "serif" : font.kind === "mono" ? "monospace" : "cursive";
+      const family = `'SB-${font.key}', '${font.name}', ${generic}`;
+      return `<p style="margin:0;font-family:${xmlEscape(family)};font-size:${n(p.size * SAAL_EM)}px;line-height:${n(p.size * SAAL_LINE)}px;color:${p.color};text-align:${p.align};white-space:pre-wrap">${xmlEscape(p.text)}</p>`;
     })
     .join("");
   return `<foreignObject x="${n(f.x)}" y="${n(f.y)}" width="${n(f.w)}" height="${n(f.h)}"${rot}><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden">${html}</div></foreignObject>`;
