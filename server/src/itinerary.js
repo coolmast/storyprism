@@ -2,7 +2,7 @@ const EARTH_RADIUS_M = 6371000;
 const NEW_STOP_TIME_GAP_MS = 3 * 60 * 60 * 1000; // 3h with no photos -> likely moved on
 const NEW_STOP_DISTANCE_M = 2000; // >2km from the running stop centroid -> new stop
 
-function haversine(lat1, lng1, lat2, lng2) {
+export function haversine(lat1, lng1, lat2, lng2) {
   const toRad = (d) => (d * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);

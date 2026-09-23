@@ -12,6 +12,9 @@ export const fetchItinerary = (albumUids) =>
 export const fetchItineraryByDate = (from, to) =>
   fetch(`/api/itinerary/by-date?from=${from}&to=${to}`).then(json);
 
+export const fetchThemeCandidates = (from, to) =>
+  fetch(`/api/theme-candidates?from=${from}&to=${to}`).then(json);
+
 export const fetchThemes = () => fetch("/api/themes").then(json);
 export const fetchLanguages = () => fetch("/api/languages").then(json);
 export const fetchPdfLayouts = () => fetch("/api/pdf-layouts").then(json);

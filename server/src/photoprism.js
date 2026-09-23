@@ -56,18 +56,39 @@ function authHeaders() {
   return headers;
 }
 
-async function ppFetch(path, { retry = true } = {}) {
+async function ppRequest(path, { retry = true } = {}) {
   const res = await fetch(`${BASE_URL}${path}`, { headers: authHeaders() });
   if (res.status === 401 && retry && USERNAME && !STATIC_TOKEN) {
     // Session expired (or this is the very first request and login() at
     // startup failed transiently) - log in again once and retry.
     await login();
-    return ppFetch(path, { retry: false });
+    return ppRequest(path, { retry: false });
   }
   if (!res.ok) {
     throw new Error(`PhotoPrism request failed: ${res.status} ${path}`);
   }
-  return res.json();
+  return res;
+}
+
+async function ppFetch(path, opts) {
+  return (await ppRequest(path, opts)).json();
+}
+
+// PhotoPrism reports a search's *total* match count in this header even when
+// `count=1` is requested - lets theme discovery (photoThemes.js) cheaply ask
+// "how many photos match this label/subject in this date range" for dozens
+// of candidates without ever fetching their actual photo lists.
+async function ppFetchCount(path) {
+  const res = await ppRequest(path);
+  return Number(res.headers.get("x-count") || 0);
+}
+
+// PhotoPrism's "before" bound is exclusive of the date itself, so bump it by
+// a day to make a user-facing "to" date inclusive of that whole day.
+function inclusiveBefore(to) {
+  const beforeDate = new Date(`${to}T00:00:00Z`);
+  beforeDate.setUTCDate(beforeDate.getUTCDate() + 1);
+  return beforeDate.toISOString().slice(0, 10);
 }
 
 // Called once at server startup: logs in if credentials are configured, and
@@ -152,16 +173,75 @@ export async function getAlbumPhotos(albumUid, { count = 1000 } = {}) {
 // A custom snapshot across the whole library by date, for trips that don't
 // fit a single album or PhotoPrism "moment" - e.g. one spanning New Year's
 // (splits across two yearly moments) or a multi-country trip (splits across
-// several country moments). PhotoPrism's "before" bound is exclusive of the
-// date itself, so bump it by a day to make the user's "to" date inclusive of
-// that whole day.
+// several country moments).
 export async function getPhotosByDateRange(from, to, { count = 3000 } = {}) {
-  const beforeDate = new Date(`${to}T00:00:00Z`);
-  beforeDate.setUTCDate(beforeDate.getUTCDate() + 1);
-  const before = beforeDate.toISOString().slice(0, 10);
-
+  const before = inclusiveBefore(to);
   const photos = await ppFetch(
     `/api/v1/photos?after=${from}&before=${before}&count=${count}&order=oldest&merged=true`
+  );
+  return photos.map(mapPhoto);
+}
+
+// --- Theme-based grouping (server/src/photoThemes.js) -----------------
+//
+// PhotoPrism already tags every photo with content Labels ("Zoo", "Dining",
+// "Camping", ...) and, for anyone with face recognition set up, named
+// Subjects ("Grandma", regardless of where/when the photo was taken) - see
+// the "Story Builder — Content-aware Fotolayout" note for how Labels are
+// already used for face-safe layout. Neither was ever surfaced to the photo
+// *picker* before; these functions do that, cheaply: listLabels/
+// listPersonSubjects fetch PhotoPrism's global catalogs (one request each,
+// independent of how many photos exist), and countPhotosByLabel/
+// countPhotosBySubject probe a single candidate against a date range using
+// only the X-Count header - no photo data is transferred until a candidate
+// is actually chosen.
+
+export async function listLabels({ count = 500 } = {}) {
+  // Without all=true, PhotoPrism only returns a curated subset (roughly:
+  // labels with a non-negative Priority) and silently drops
+  // location-derived ones - which is exactly where a label like "Zoo" (a
+  // clear, meaningful theme) lives, since it comes from matching GPS
+  // coordinates to a known place rather than image classification.
+  const labels = await ppFetch(`/api/v1/labels?count=${count}&all=true`);
+  return labels.map((l) => ({ slug: l.Slug, name: l.Name, photoCount: l.PhotoCount }));
+}
+
+export async function listPersonSubjects({ count = 300 } = {}) {
+  const subjects = await ppFetch(`/api/v1/subjects?count=${count}`);
+  return subjects
+    .filter((s) => s.Type === "person")
+    .map((s) => ({ uid: s.UID, name: s.Name, photoCount: s.PhotoCount }));
+}
+
+// PhotoPrism's X-Count header is capped at (and only ever equal to) however
+// many rows this particular request actually returned - it's "how many did
+// you give me", not an independent SELECT COUNT(*), so `count=1` always
+// reports back 0 or 1 and never anything higher. To learn "does this
+// candidate clear N photos", request `count=N` itself: a scoped total of N
+// or more comes back as exactly N (the ceiling this call asked for), and
+// anything less comes back as its real, true value.
+export async function countPhotosByLabel(slug, from, to, sampleSize) {
+  return ppFetchCount(
+    `/api/v1/photos?label=${slug}&after=${from}&before=${inclusiveBefore(to)}&count=${sampleSize}`
+  );
+}
+
+export async function countPhotosBySubject(uid, from, to, sampleSize) {
+  return ppFetchCount(
+    `/api/v1/photos?subject=${uid}&after=${from}&before=${inclusiveBefore(to)}&count=${sampleSize}`
+  );
+}
+
+export async function getPhotosByLabel(slug, from, to, { count = 500 } = {}) {
+  const photos = await ppFetch(
+    `/api/v1/photos?label=${slug}&after=${from}&before=${inclusiveBefore(to)}&count=${count}&order=oldest&merged=true`
+  );
+  return photos.map(mapPhoto);
+}
+
+export async function getPhotosBySubject(uid, from, to, { count = 500 } = {}) {
+  const photos = await ppFetch(
+    `/api/v1/photos?subject=${uid}&after=${from}&before=${inclusiveBefore(to)}&count=${count}&order=oldest&merged=true`
   );
   return photos.map(mapPhoto);
 }

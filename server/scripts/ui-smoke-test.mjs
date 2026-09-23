@@ -105,6 +105,32 @@ async function runChecksAtBreakpoint(browser, story, width, tag) {
     await page.waitForTimeout(200);
   }
 
+  // --- "Nach Themen" (yearbook) source: discover + select + create ---
+  await page.locator(".source-toggle button").nth(2).click();
+  await page.waitForTimeout(200);
+  const themeDateInputs = page.locator('.theme-source-picker input[type="date"]');
+  await themeDateInputs.nth(0).fill("2015-01-01");
+  await themeDateInputs.nth(1).fill("2026-12-31");
+  await page.locator(".theme-source-picker .ai-btn").click();
+  await page.waitForTimeout(4000);
+  const themeChips = page.locator(".theme-chip");
+  const themeChipCount = await themeChips.count();
+  check(`[${tag}] theme discovery returns candidates`, themeChipCount > 0);
+  let themeStoryId = null;
+  if (themeChipCount > 0) {
+    await themeChips.nth(0).click();
+    await page.waitForTimeout(150);
+    check(`[${tag}] selecting a theme chip marks it active`, await themeChips.nth(0).evaluate((el) => el.classList.contains("active")));
+    await page.locator(".theme-candidates .save-btn").click();
+    await page.waitForTimeout(2500);
+    const themeStoryTitle = await page.locator(".story-title-input").inputValue().catch(() => null);
+    check(`[${tag}] creating a yearbook story opens its editor`, !!themeStoryTitle);
+    themeStoryId = new URL(page.url()).pathname.split("/").pop();
+  }
+  if (themeStoryId) {
+    await jsonFetch(`${BACKEND_URL}/api/stories/${themeStoryId}`, { method: "DELETE" });
+  }
+
   // --- Open the disposable test story's editor ---
   await page.locator(nav).nth(1).click();
   await page.waitForTimeout(200);

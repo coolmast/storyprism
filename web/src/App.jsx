@@ -9,6 +9,7 @@ import {
   deleteStory,
 } from "./api.js";
 import AlbumList from "./AlbumList.jsx";
+import ThemeStoryPicker from "./ThemeStoryPicker.jsx";
 import ItineraryMap from "./ItineraryMap.jsx";
 import StopList from "./StopList.jsx";
 import StoryList from "./StoryList.jsx";
@@ -125,7 +126,7 @@ export default function App() {
         .then(setStops)
         .catch((e) => setError(e.message))
         .finally(() => setLoading(false));
-    } else {
+    } else if (source === "dateRange") {
       if (!dateFrom || !dateTo) {
         setStops([]);
         return;
@@ -137,6 +138,8 @@ export default function App() {
         .catch((e) => setError(e.message))
         .finally(() => setLoading(false));
     }
+    // "themes" manages its own preview state entirely inside
+    // ThemeStoryPicker - no chronological itinerary to fetch here.
   }, [source, selectedUids, dateFrom, dateTo]);
 
   function toggleAlbum(uid) {
@@ -275,6 +278,9 @@ export default function App() {
               >
                 {t("sourceDateRange")}
               </button>
+              <button className={source === "themes" ? "active" : ""} onClick={() => setSource("themes")}>
+                {t("sourceThemes")}
+              </button>
             </div>
             {error && <p className="error">{error}</p>}
             {source === "album" && (
@@ -327,6 +333,9 @@ export default function App() {
                   </>
                 )}
               </>
+            )}
+            {source === "themes" && (
+              <ThemeStoryPicker lang={lang} onCreated={(story) => goTo("editor", story)} />
             )}
           </main>
         </div>

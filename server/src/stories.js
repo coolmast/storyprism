@@ -1,6 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { db } from "./db.js";
-import { listAlbums, getAlbumPhotos, getPhotosByDateRange, thumbUrl } from "./photoprism.js";
+import {
+  listAlbums,
+  getAlbumPhotos,
+  getPhotosByDateRange,
+  getPhotosByLabel,
+  getPhotosBySubject,
+  thumbUrl,
+} from "./photoprism.js";
 import { buildItinerary } from "./itinerary.js";
 import { DEFAULT_THEME } from "./themes.js";
 import { isAllowedEmbedHost } from "./embeds.js";
@@ -181,6 +188,79 @@ export async function createStoryFromDateRange(from, to, title, contentLanguage 
       now,
     });
     insertStops(storyId, stops);
+  });
+  tx();
+
+  return getStory(storyId);
+}
+
+// "Yearbook" mode: instead of one chronological itinerary, a date range's
+// photos are split into theme sections the user picked from suggested
+// candidates (see photoThemes.js), in the order trip -> content -> person,
+// followed by one ordinary chronological tail for whatever no theme
+// claimed. A photo can belong to more than one selected theme (an "airport"
+// beach-vacation shot can be both the trip and a "Beach" content theme) -
+// intentional per-theme duplication, not deduped against other themes -
+// but only ever appears once more, in the chronological tail, if no theme
+// claimed it at all.
+export async function createStoryFromThemePlan({ from, to, title, contentLanguage = DEFAULT_LANGUAGE, themes }) {
+  const rangePhotos = await getPhotosByDateRange(from, to);
+  const claimed = new Set();
+  const themeStops = [];
+
+  const typeOrder = { trip: 0, content: 1, person: 2 };
+  const orderedThemes = [...themes].sort((a, b) => (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9));
+
+  for (const theme of orderedThemes) {
+    let photos;
+    if (theme.type === "trip") {
+      const fromMs = new Date(`${theme.from}T00:00:00Z`).getTime();
+      const toMs = new Date(`${theme.to}T23:59:59.999Z`).getTime();
+      photos = rangePhotos.filter((p) => {
+        const t = new Date(p.takenAt).getTime();
+        return t >= fromMs && t <= toMs;
+      });
+    } else if (theme.type === "content") {
+      photos = await getPhotosByLabel(theme.slug, from, to);
+    } else if (theme.type === "person") {
+      photos = await getPhotosBySubject(theme.subjectUid, from, to);
+    } else {
+      continue;
+    }
+    if (photos.length === 0) continue;
+
+    photos = [...photos].sort((a, b) => new Date(a.takenAt) - new Date(b.takenAt));
+    for (const p of photos) claimed.add(p.uid);
+    themeStops.push({
+      photos,
+      lat: null,
+      lng: null,
+      placeLabel: theme.title,
+      placeCity: null,
+      startedAt: photos[0].takenAt,
+      endedAt: photos[photos.length - 1].takenAt,
+    });
+  }
+
+  const leftoverPhotos = rangePhotos.filter((p) => !claimed.has(p.uid));
+  const leftoverStops = buildItinerary(leftoverPhotos);
+  const allStops = [...themeStops, ...leftoverStops];
+
+  const storyId = randomUUID();
+  const now = new Date().toISOString();
+  const storyTitle = (title || "").trim() || `Yearbook ${from} – ${to}`;
+
+  const tx = db.transaction(() => {
+    insertStory.run({
+      id: storyId,
+      albumUid: "",
+      albumTitle: storyTitle,
+      title: storyTitle,
+      theme: DEFAULT_THEME,
+      contentLanguage,
+      now,
+    });
+    insertStops(storyId, allStops);
   });
   tx();
 

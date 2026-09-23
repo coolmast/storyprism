@@ -25,6 +25,29 @@ view, a reveal.js presentation, or a printable PDF (either format).
     (`getPhotosByDateRange`) for a trip that doesn't fit either - crossing
     New Year's (splits across two yearly moments) or spanning several
     countries.
+  - **"Yearbook" mode (`server/src/photoThemes.js`)**: a fourth way to start
+    a story, for when the natural grouping for a date range (e.g. a whole
+    year) isn't one chronological trip but a mix of recurring themes - "all
+    the zoo photos," "every visit to the grandparents regardless of
+    location," one whole vacation as its own section. Suggests candidates
+    from data PhotoPrism already computes for free: content themes from its
+    Labels ("Zoo", "Dining", "Camping", ...; `all=true` is required to see
+    location-derived ones like "Zoo" at all - PhotoPrism's default listing
+    hides negative-priority labels), person themes from its named Subjects
+    (face recognition - works regardless of where/when a photo was taken),
+    and trip themes from a home-distance-based clustering (most common
+    rough location = "home"; contiguous-in-time photos far from it = a
+    trip) that's independent of the regular per-stop itinerary clustering.
+    Candidate discovery only ever asks PhotoPrism "does this candidate clear
+    N photos" (`count=N` + the `X-Count` response header, which reports how
+    many rows a request actually returned, not an independent total - so
+    getting a true "at least N" signal means requesting exactly N) rather
+    than fetching full photo data for every candidate. A photo can end up in
+    more than one selected theme (duplicated on purpose - e.g. a beach photo
+    during a vacation can be both the trip and a "Beach" theme); whatever no
+    selected theme claims still gets an ordinary chronological tail section,
+    via the exact same `buildItinerary` the default flow uses, so nothing is
+    ever silently dropped.
   - **The browser never talks to PhotoPrism directly.** Every photo URL this
     app hands out (`thumbUrl`/`fullUrl` on a story's photos, info-card hero
     photos, ...) is a path on this server, `/api/photo/t/:hash/:size` or
@@ -503,6 +526,14 @@ pick up `server.allowedHosts` changes on the fly.
       clustering. `POST /api/stories` takes `albumUids` (an array, replacing
       the old singular `albumUid`) and defaults an unselected title to the
       selected albums' titles joined with " + "
+- [x] "Yearbook" mode: a new "Nach Themen" source alongside album/date-range
+      for a story organized by recurring theme instead of chronology - pick
+      a date range, get suggested content/person/trip candidates from
+      PhotoPrism's own Labels/Subjects plus a home-distance trip detector,
+      pick any mix, and get one section per chosen theme (photos duplicated
+      across an overlap on purpose) followed by a normal chronological tail
+      for everything else. See the Architecture section above
+      (`server/src/photoThemes.js`)
 
 ## Notes
 

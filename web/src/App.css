@@ -372,6 +372,93 @@
   color: var(--ink);
 }
 
+/* "Nach Themen" (yearbook) source */
+.theme-picker-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: 700px;
+}
+
+.theme-source-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.theme-source-picker .ai-btn {
+  align-self: flex-start;
+}
+
+.theme-candidates {
+  display: flex;
+  flex-direction: column;
+}
+
+.theme-candidate-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.1rem;
+}
+
+.theme-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.theme-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.theme-chip:hover {
+  border-color: var(--terracotta);
+}
+
+.theme-chip.active {
+  background: var(--terracotta);
+  border-color: var(--terracotta);
+  color: var(--on-accent);
+}
+
+.theme-chip-check {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-size: 0.65rem;
+  line-height: 1;
+}
+
+.theme-chip.active .theme-chip-check {
+  border-color: var(--on-accent);
+}
+
+.theme-chip-count {
+  opacity: 0.7;
+  font-size: 0.85em;
+}
+
+.theme-leftover-hint {
+  margin: 0.2rem 0 1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 .content {
   flex: 1;
   padding: 1.5rem;

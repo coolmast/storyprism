@@ -13,9 +13,11 @@ import {
   fetchOriginalBuffer,
 } from "./photoprism.js";
 import { buildItinerary } from "./itinerary.js";
+import { findContentThemeCandidates, findPersonThemeCandidates, detectTripClusters } from "./photoThemes.js";
 import {
   createStoryFromAlbums,
   createStoryFromDateRange,
+  createStoryFromThemePlan,
   listStories,
   getStory,
   updateStory,
@@ -202,22 +204,53 @@ app.get("/api/itinerary/by-date", async (req, res) => {
   }
 });
 
+// "Yearbook" mode's suggestion step - see photoThemes.js. Trip detection
+// reuses the same photo list the regular date-range preview already
+// fetches, so this is one extra full fetch plus a bounded set of cheap
+// (count=1) label/subject probes, not per-photo work.
+app.get("/api/theme-candidates", async (req, res) => {
+  try {
+    const { from, to } = req.query;
+    if (!from || !to) {
+      return res.status(400).json({ error: "from and to are required (YYYY-MM-DD)" });
+    }
+    const [contentThemes, peopleThemes, rangePhotos] = await Promise.all([
+      findContentThemeCandidates(from, to),
+      findPersonThemeCandidates(from, to),
+      getPhotosByDateRange(from, to),
+    ]);
+    res.json({
+      contentThemes,
+      peopleThemes,
+      tripThemes: detectTripClusters(rangePhotos),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(502).json({ error: err.message });
+  }
+});
+
 app.get("/api/stories", (req, res) => {
   res.json(listStories());
 });
 
 app.post("/api/stories", async (req, res) => {
   try {
-    const { albumUids, dateFrom, dateTo, title, contentLanguage } = req.body;
+    const { albumUids, dateFrom, dateTo, title, contentLanguage, themePlan } = req.body;
     if (Array.isArray(albumUids) && albumUids.length > 0) {
       return res.status(201).json(await createStoryFromAlbums(albumUids, title, contentLanguage));
+    }
+    if (themePlan) {
+      return res
+        .status(201)
+        .json(await createStoryFromThemePlan({ ...themePlan, contentLanguage }));
     }
     if (dateFrom && dateTo) {
       return res
         .status(201)
         .json(await createStoryFromDateRange(dateFrom, dateTo, title, contentLanguage));
     }
-    return res.status(400).json({ error: "albumUids or dateFrom/dateTo is required" });
+    return res.status(400).json({ error: "albumUids, themePlan, or dateFrom/dateTo is required" });
   } catch (err) {
     console.error(err);
     res.status(502).json({ error: err.message });
