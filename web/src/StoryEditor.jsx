@@ -8,6 +8,7 @@ import NotesImportPanel from "./NotesImportPanel.jsx";
 import InfoCards from "./InfoCards.jsx";
 import { useI18n } from "./i18n.jsx";
 import { uid } from "./uid.js";
+import { Modal, useToast } from "./ui/index.js";
 
 const THEME_LABEL_KEY = {
   coastal: "themeCoastal",
@@ -31,6 +32,7 @@ function formatRange(start, end, locale) {
 
 export default function StoryEditor({ story, onSaved }) {
   const { t, locale } = useI18n();
+  const showToast = useToast();
   const [draft, setDraft] = useState(story);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -40,8 +42,8 @@ export default function StoryEditor({ story, onSaved }) {
   const [languages, setLanguages] = useState([]);
   const [pdfLayouts, setPdfLayouts] = useState({ templates: [], packs: [], paperSizes: [] });
   const [collapsedStops, setCollapsedStops] = useState(() => new Set());
-  const [copied, setCopied] = useState(false);
   const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [pendingRemoveStopId, setPendingRemoveStopId] = useState(null);
 
   async function handleCopyShareLink() {
     // No ?preview=1 here on purpose: that flag only exists to show the
@@ -53,8 +55,7 @@ export default function StoryEditor({ story, onSaved }) {
     } catch {
       window.prompt(t("copyShareLink"), url);
     }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    showToast(t("linkCopied"), { tone: "ok" });
   }
 
   function toggleStopCollapsed(stopId) {
@@ -214,9 +215,14 @@ export default function StoryEditor({ story, onSaved }) {
     });
   }
 
-  function removeSection(stopId) {
-    if (!confirm(t("removeSectionConfirm"))) return;
+  function requestRemoveSection(stopId) {
+    setPendingRemoveStopId(stopId);
+  }
+
+  function confirmRemoveSection() {
+    const stopId = pendingRemoveStopId;
     markDirty((d) => ({ ...d, stops: d.stops.filter((s) => s.id !== stopId) }));
+    setPendingRemoveStopId(null);
   }
 
   // Stable identity so the preview's message listener isn't re-bound on
@@ -320,8 +326,8 @@ export default function StoryEditor({ story, onSaved }) {
             <span className="toolbar-btn-label">{t("viewStory")}</span>
           </a>
           <button className="toolbar-btn" onClick={handleCopyShareLink} title={t("copyShareLink")}>
-            <span aria-hidden="true">{copied ? "✓" : "🔗"}</span>
-            <span className="toolbar-btn-label">{copied ? t("linkCopied") : t("copyShareLink")}</span>
+            <span aria-hidden="true">🔗</span>
+            <span className="toolbar-btn-label">{t("copyShareLink")}</span>
           </button>
           <a
             className="toolbar-btn"
@@ -486,7 +492,7 @@ export default function StoryEditor({ story, onSaved }) {
                     <button
                       type="button"
                       className="link-btn danger small"
-                      onClick={() => removeSection(stop.id)}
+                      onClick={() => requestRemoveSection(stop.id)}
                     >
                       {t("removeSection")}
                     </button>
@@ -633,6 +639,24 @@ export default function StoryEditor({ story, onSaved }) {
         value={draft.outro}
         onChange={(e) => markDirty((d) => ({ ...d, outro: e.target.value }))}
       />
+
+      <Modal
+        open={pendingRemoveStopId != null}
+        onClose={() => setPendingRemoveStopId(null)}
+        title={t("removeSection")}
+        footer={
+          <>
+            <button type="button" className="link-btn" onClick={() => setPendingRemoveStopId(null)}>
+              {t("cancel")}
+            </button>
+            <button type="button" className="ui-danger-btn" onClick={confirmRemoveSection}>
+              {t("removeSection")}
+            </button>
+          </>
+        }
+      >
+        <p>{t("removeSectionConfirm")}</p>
+      </Modal>
     </div>
   );
 }

@@ -14,6 +14,7 @@ import StopList from "./StopList.jsx";
 import StoryList from "./StoryList.jsx";
 import StoryEditor from "./StoryEditor.jsx";
 import { useI18n, UI_LANGUAGES } from "./i18n.jsx";
+import { Modal, useToast } from "./ui/index.js";
 import "./App.css";
 
 const LANG_FLAG = { en: "🇬🇧", de: "🇩🇪", da: "🇩🇰" };
@@ -61,6 +62,9 @@ export default function App() {
 
   const [stories, setStories] = useState([]);
   const [activeStory, setActiveStory] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const showToast = useToast();
 
   useEffect(() => {
     fetchAlbums().then(setAlbums).catch((e) => setError(e.message));
@@ -164,10 +168,23 @@ export default function App() {
     goTo("editor", story);
   }
 
-  async function removeStory(id) {
-    if (!confirm(t("deleteStoryConfirm"))) return;
-    await deleteStory(id);
-    refreshStories();
+  function requestDeleteStory(id) {
+    setPendingDelete(id);
+  }
+
+  async function confirmDeleteStory() {
+    const id = pendingDelete;
+    setDeleting(true);
+    try {
+      await deleteStory(id);
+      setPendingDelete(null);
+      refreshStories();
+      showToast(t("deleteStoryDone"), { tone: "ok" });
+    } catch (e) {
+      showToast(e.message, { tone: "bad" });
+    } finally {
+      setDeleting(false);
+    }
   }
 
   const selectedAlbum = albums.find((a) => a.uid === selectedUid);
@@ -305,7 +322,12 @@ export default function App() {
         <div className="app-body single">
           <main className="content">
             {error && <p className="error">{error}</p>}
-            <StoryList stories={stories} onOpen={openStory} onDelete={removeStory} />
+            <StoryList
+              stories={stories}
+              onOpen={openStory}
+              onDelete={requestDeleteStory}
+              onCreateNew={() => goTo("new")}
+            />
           </main>
         </div>
       )}
@@ -338,6 +360,24 @@ export default function App() {
           <span>{t("tabMyStories")}</span>
         </button>
       </nav>
+
+      <Modal
+        open={pendingDelete != null}
+        onClose={() => setPendingDelete(null)}
+        title={t("deleteStoryTitle")}
+        footer={
+          <>
+            <button type="button" className="link-btn" onClick={() => setPendingDelete(null)}>
+              {t("cancel")}
+            </button>
+            <button type="button" className="ui-danger-btn" onClick={confirmDeleteStory} disabled={deleting}>
+              {deleting ? t("deleting") : t("deleteStoryTitle")}
+            </button>
+          </>
+        }
+      >
+        <p>{t("deleteStoryConfirm")}</p>
+      </Modal>
     </div>
   );
 }

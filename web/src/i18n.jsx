@@ -30,9 +30,13 @@ const DICT = {
     creating: "Creating…",
     loadingItinerary: "Loading itinerary…",
     myStoriesTitle: "My Stories",
-    noStoriesYet: 'No stories yet — create one from an album under "New Story".',
+    noStoriesYet: "No stories yet.",
+    noStoriesHint: "Create one from a PhotoPrism album.",
     deleteStoryConfirm: "Delete this story? This can't be undone.",
     deleteStoryTitle: "Delete story",
+    deleteStoryDone: "Story deleted",
+    deleting: "Deleting…",
+    cancel: "Cancel",
     storyCardMeta: (albumTitle, stopCount, date) =>
       `${albumTitle} · ${stopCount} stops · updated ${date}`,
 
@@ -198,9 +202,13 @@ const DICT = {
     creating: "Wird erstellt…",
     loadingItinerary: "Reiseroute wird geladen…",
     myStoriesTitle: "Meine Geschichten",
-    noStoriesYet: 'Noch keine Geschichten — erstelle eine aus einem Album unter „Neue Geschichte".',
+    noStoriesYet: "Noch keine Geschichten.",
+    noStoriesHint: "Erstelle eine aus einem PhotoPrism-Album.",
     deleteStoryConfirm: "Diese Geschichte löschen? Das kann nicht rückgängig gemacht werden.",
     deleteStoryTitle: "Geschichte löschen",
+    deleteStoryDone: "Geschichte gelöscht",
+    deleting: "Wird gelöscht…",
+    cancel: "Abbrechen",
     storyCardMeta: (albumTitle, stopCount, date) =>
       `${albumTitle} · ${stopCount} Stopps · aktualisiert ${date}`,
 
@@ -367,9 +375,13 @@ const DICT = {
     creating: "Opretter…",
     loadingItinerary: "Indlæser rute…",
     myStoriesTitle: "Mine historier",
-    noStoriesYet: 'Ingen historier endnu — opret en fra et album under "Ny historie".',
+    noStoriesYet: "Ingen historier endnu.",
+    noStoriesHint: "Opret en fra et PhotoPrism-album.",
     deleteStoryConfirm: "Slet denne historie? Dette kan ikke fortrydes.",
     deleteStoryTitle: "Slet historie",
+    deleteStoryDone: "Historie slettet",
+    deleting: "Sletter…",
+    cancel: "Annuller",
     storyCardMeta: (albumTitle, stopCount, date) =>
       `${albumTitle} · ${stopCount} stop · opdateret ${date}`,
 

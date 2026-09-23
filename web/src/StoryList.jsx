@@ -1,9 +1,23 @@
 import { useI18n } from "./i18n.jsx";
+import { EmptyState } from "./ui/index.js";
 
-export default function StoryList({ stories, onOpen, onDelete }) {
+export default function StoryList({ stories, onOpen, onDelete, onCreateNew }) {
   const { t, locale } = useI18n();
   if (stories.length === 0) {
-    return <p className="hint">{t("noStoriesYet")}</p>;
+    return (
+      <EmptyState
+        icon="📚"
+        title={t("noStoriesYet")}
+        hint={t("noStoriesHint")}
+        action={
+          onCreateNew ? (
+            <button type="button" className="save-btn" onClick={onCreateNew}>
+              {t("tabNewStory")}
+            </button>
+          ) : null
+        }
+      />
+    );
   }
 
   return (
