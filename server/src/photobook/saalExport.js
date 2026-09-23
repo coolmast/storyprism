@@ -7,7 +7,7 @@ import { planBook } from "./bookPlanner.js";
 import { renderSpreadSvg, saalUid } from "./saalSvg.js";
 import { createSswWriter } from "./sswContainer.js";
 import { SAAL_CATEGORY_ID, SAAL_VERSION } from "./products.js";
-import { originalUrl } from "../photoprism.js";
+import { fetchOriginalBuffer, fetchThumbBuffer } from "../photoprism.js";
 import { getStrings } from "../i18n.js";
 
 // Builds a Saal Design Software project (.sswprm - the software's own
@@ -49,12 +49,6 @@ function imageIdFor(photo) {
   return createHash("md5").update(`storybuilder:${photo.hash || photo.id}`).digest("hex");
 }
 
-async function fetchBuffer(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return Buffer.from(await res.arrayBuffer());
-}
-
 async function prepareImage(photo, maxEdge) {
   const resize = (buf) =>
     sharp(buf, { failOn: "none" })
@@ -64,9 +58,11 @@ async function prepareImage(photo, maxEdge) {
       .toBuffer({ resolveWithObject: true });
   let result;
   try {
-    result = await resize(await fetchBuffer(await originalUrl(photo.hash)));
+    result = await resize((await fetchOriginalBuffer(photo.hash)).buffer);
   } catch {
-    result = await resize(await fetchBuffer(photo.fullUrl));
+    // Formats sharp can't decode from the original (HEIC) fall back to
+    // PhotoPrism's own 2048px JPEG rendition.
+    result = await resize((await fetchThumbBuffer(photo.hash, "fit_2048")).buffer);
   }
   return { data: result.data, width: result.info.width, height: result.info.height };
 }
@@ -231,7 +227,7 @@ async function runExport(job, story) {
   const resolveImage = (photo) => (photo ? refs.get(photo.hash || photo.id) || null : null);
   const coverThumbPhoto = plan.cover.elements.find((e) => e.kind === "image" && e.background)?.photo;
   if (coverThumbPhoto) {
-    const thumb = await sharp(await fetchBuffer(coverThumbPhoto.thumbUrl || coverThumbPhoto.fullUrl))
+    const thumb = await sharp((await fetchThumbBuffer(coverThumbPhoto.hash, "fit_720")).buffer)
       .resize({ width: 400 })
       .png()
       .toBuffer();

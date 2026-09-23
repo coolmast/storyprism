@@ -3,7 +3,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
 import cors from "cors";
-import { listAlbums, getAlbumPhotos, getPhotosByDateRange, thumbUrl } from "./photoprism.js";
+import {
+  listAlbums,
+  getAlbumPhotos,
+  getPhotosByDateRange,
+  thumbUrl,
+  initPhotoPrism,
+  fetchThumbBuffer,
+  fetchOriginalBuffer,
+} from "./photoprism.js";
 import { buildItinerary } from "./itinerary.js";
 import {
   createStoryFromAlbum,
@@ -51,6 +59,44 @@ app.use(
   "/vendor/reveal",
   express.static(path.join(__dirname, "../../node_modules/reveal.js/dist"))
 );
+
+// Every photo URL this app ever sends to a browser points here, never at
+// PhotoPrism directly (see the comment at the top of photoprism.js) - the
+// client only needs to reach this server, which is the thing that's
+// actually exposed publicly (story.sensing-the-world.de); PhotoPrism itself
+// can stay LAN-only. Long, immutable cache lifetime: a given hash+size (or
+// hash, for the original) never changes content.
+function sendPhotoError(res, err) {
+  // "Invalid photo hash/size" is our own input validation (a malformed
+  // request); anything else is PhotoPrism/network failing.
+  res.status(err.message.startsWith("Invalid photo") ? 400 : 502).json({ error: err.message });
+}
+
+app.get("/api/photo/t/:hash/:size", async (req, res) => {
+  try {
+    const { buffer, contentType } = await fetchThumbBuffer(req.params.hash, req.params.size);
+    res.set("Content-Type", contentType).set("Cache-Control", "public, max-age=31536000, immutable").send(buffer);
+  } catch (err) {
+    sendPhotoError(res, err);
+  }
+});
+
+app.get("/api/photo/dl/:hash", async (req, res) => {
+  try {
+    const { buffer, contentType } = await fetchOriginalBuffer(req.params.hash);
+    res.set("Content-Type", contentType).set("Cache-Control", "public, max-age=31536000, immutable").send(buffer);
+  } catch (err) {
+    sendPhotoError(res, err);
+  }
+});
+
+// Trivial same-origin page for renderStoryPdf (pdf.js) to navigate to before
+// calling page.setContent(): setContent() only overwrites the *content* of
+// whatever page is already loaded, so navigating here first (instead of
+// leaving Chromium on about:blank) gives that document a real origin -
+// this server's own - and makes the relative /api/photo/... URLs inside the
+// generated PDF HTML resolve correctly.
+app.get("/__pdf-base", (req, res) => res.type("html").send("<!doctype html><title>.</title>"));
 
 app.get("/api/themes", (req, res) => {
   res.json(
@@ -182,11 +228,11 @@ app.post("/api/stories/:id/stops/:stopId/photos/:photoId/draft-caption", async (
   const stop = story?.stops.find((s) => s.id === req.params.stopId);
   const photo = stop?.photos.find((p) => p.id === req.params.photoId);
   if (!photo) return res.status(404).json({ error: "Not found" });
-  if (!photo.thumbUrl) return res.status(400).json({ error: "Photo has no image to look at" });
+  if (!photo.hash) return res.status(400).json({ error: "Photo has no image to look at" });
 
   try {
     const caption = await getProvider().draftCaption({
-      photoUrl: photo.thumbUrl,
+      photoHash: photo.hash,
       place: stop.heading || stop.placeLabel,
       date: stop.startedAt,
       storyTitle: story.title,
@@ -460,6 +506,12 @@ app.get("/api/stories/:id/export/deck-pdf", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Logs into PhotoPrism (if PHOTOPRISM_USERNAME/PHOTOPRISM_APP_PASSWORD are
+// set) and fetches its preview/download tokens before accepting requests -
+// see photoprism.js. Never rejects; a broken PhotoPrism connection is
+// logged there and shouldn't stop this server from starting.
+await initPhotoPrism();
 
 const port = process.env.PORT || 3001;
 app.listen(port, () => console.log(`story-builder server on :${port}`));

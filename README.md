@@ -10,13 +10,29 @@ view, a reveal.js presentation, or a printable PDF (either format).
 ## Architecture
 
 - `server/` — Node/Express API.
-  - Talks to PhotoPrism's REST API (read-only, no auth needed on this
-    instance) — `server/src/photoprism.js`. A story's source photos can
-    come from a manually-curated album, one of PhotoPrism's auto-generated
-    "moment" albums (country+year groupings), or an arbitrary date range
-    across the whole library (`getPhotosByDateRange`) for a trip that
-    doesn't fit either - crossing New Year's (splits across two yearly
-    moments) or spanning several countries.
+  - Talks to PhotoPrism's REST API, read-only — `server/src/photoprism.js`.
+    Only `PHOTOPRISM_BASE_URL` is required (this project's own instance runs
+    with auth off); `PHOTOPRISM_USERNAME`/`PHOTOPRISM_APP_PASSWORD` (or a
+    pre-obtained `PHOTOPRISM_API_TOKEN`) let it talk to someone else's
+    PhotoPrism that requires login instead, so the same app can be pointed
+    at a different instance per deployment purely via `.env` — see
+    `server/.env.example`. A story's source photos can come from a
+    manually-curated album, one of PhotoPrism's auto-generated "moment"
+    albums (country+year groupings), or an arbitrary date range across the
+    whole library (`getPhotosByDateRange`) for a trip that doesn't fit
+    either - crossing New Year's (splits across two yearly moments) or
+    spanning several countries.
+  - **The browser never talks to PhotoPrism directly.** Every photo URL this
+    app hands out (`thumbUrl`/`fullUrl` on a story's photos, info-card hero
+    photos, ...) is a path on this server, `/api/photo/t/:hash/:size` or
+    `/api/photo/dl/:hash`, which fetches the bytes from PhotoPrism itself
+    (authenticated the same way as everything else) and streams them back -
+    `photoprism.js`'s `fetchThumbBuffer`/`fetchOriginalBuffer`, routed in
+    `index.js`. This is what makes exposing this app itself at a public
+    domain work while PhotoPrism stays LAN-only, as it should. Code that
+    needs actual photo bytes server-side (the Saal photobook export, AI
+    captioning, face/object detection) calls those fetch functions directly
+    rather than requesting its own proxy URL over HTTP.
   - Clusters photos into itinerary "stops" by time/distance gaps —
     `server/src/itinerary.js`.
   - Stores stories (per-stop headings, narrative, pull quotes, per-photo
@@ -237,6 +253,25 @@ Both servers bind to all interfaces, so on the LAN they're also reachable at
 this machine's IP (e.g. `http://192.168.42.213:5174` for the frontend) —
 useful for a second person to use the editor from their own device.
 
+### Exposing the dev server through a reverse proxy
+
+`npm run dev --workspace web` (what's actually run in production too, so
+far - there's no separate `vite build` + static-serve step yet) runs Vite's
+dev server, which rejects any request whose `Host` header it doesn't
+recognize as localhost/a LAN address - a security feature, not a bug, that
+otherwise blocks it being reached at all under a real domain
+(`story.sensing-the-world.de` in this project's own deployment, behind mTLS
++ Authentik forward-auth). Allow it explicitly:
+
+```
+cp web/.env.example web/.env
+echo "ALLOWED_HOSTS=story.example.com" >> web/.env
+```
+
+(`web/vite.config.js` reads `ALLOWED_HOSTS` via `loadEnv`; comma-separate
+for more than one.) Restart the dev server after changing it - Vite doesn't
+pick up `server.allowedHosts` changes on the fly.
+
 ## Status
 
 - [x] M0 — repo scaffold, PhotoPrism client
@@ -370,9 +405,30 @@ useful for a second person to use the editor from their own device.
       recompression) is probably the real fix. Worth trying a smaller size (`fit_1600`?) now that there
       are dedicated full-bleed single-photo templates that would show the
       difference most, but wasn't tested this pass
-- [ ] Sharing a story off the PhotoPrism LAN — the view/PDF/deck all embed
-      PhotoPrism image URLs directly; taking a story off-network would need
-      downloading and re-embedding the images
+- [x] Sharing a story off the PhotoPrism LAN: the view/PDF/deck/photobook
+      used to embed PhotoPrism image URLs directly, so a client outside
+      PhotoPrism's own network (this app's own domain,
+      story.sensing-the-world.de, reached from outside via mTLS + Authentik
+      forward-auth) couldn't load a single photo even though the app itself
+      was reachable. Every photo URL sent to a browser is now a path on
+      this server instead (`/api/photo/t/:hash/:size`,
+      `/api/photo/dl/:hash`), which fetches from PhotoPrism server-side and
+      streams the bytes back - see `photoprism.js`/`index.js`. PhotoPrism
+      itself never needs to be reachable from outside its own LAN
+- [x] Vite's dev server (what's actually run in production so far, not a
+      `vite build`) rejects a `Host` header it doesn't recognize - exposing
+      it under a real domain via a reverse proxy needs that domain
+      allow-listed via `ALLOWED_HOSTS` in `web/.env` (`vite.config.js`,
+      loaded with `loadEnv`) - see "Running locally" above
+- [ ] PhotoPrism login (`PHOTOPRISM_USERNAME`/`PHOTOPRISM_APP_PASSWORD`) is
+      written against PhotoPrism's documented `/api/v1/session` request
+      shape but untested against a real password-protected instance (this
+      project's own PhotoPrism runs with auth off) - the response field
+      names it reads (`id`/`session_id`/`access_token`/`token`) and the
+      request headers it sends (`Authorization: Bearer`, `X-Session-ID`)
+      cover what's documented across PhotoPrism versions, but worth
+      verifying against whichever version a real login-required instance
+      turns out to run
 
 ## Notes
 
@@ -755,3 +811,13 @@ useful for a second person to use the editor from their own device.
   `server/node_modules` one too, delete `server/node_modules` (not just
   the better-sqlite3 folder inside it) before assuming it's unrelated
   flakiness.
+- `renderStoryPdf` (`pdf.js`) generates the PDF from an HTML string via
+  Playwright's `page.setContent()`, which only replaces the document's
+  *markup* - left on the default `about:blank`, it has no real origin, so
+  the relative `/api/photo/...` image URLs now used everywhere (see
+  Architecture above) would have nothing to resolve against and every photo
+  would silently fail to load. Fixed by `page.goto()`-ing a trivial page on
+  this same server (`GET /__pdf-base`) first, *then* calling `setContent()`
+  - the document keeps that origin, so the relative URLs resolve correctly.
+  `renderDeckPdf` never had this problem: it already navigates to a real
+  `/story/:id/present` URL rather than using `setContent()`.

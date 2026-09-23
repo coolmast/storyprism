@@ -1,4 +1,5 @@
 import { db } from "./db.js";
+import { getPhotoDetails, fetchThumbBuffer } from "./photoprism.js";
 import { detectFaces } from "./faceDetect.js";
 import { detectObjects, saliencyGrid, importanceGrid, GRID } from "./photoAnalysis.js";
 
@@ -15,7 +16,6 @@ import { detectObjects, saliencyGrid, importanceGrid, GRID } from "./photoAnalys
 //   labels   - lower-case label names ("landscape", "people", ...)
 //   takenAt  - capture time in ms (for burst detection)
 //   quality  - PhotoPrism's quality score (higher is better)
-const BASE_URL = process.env.PHOTOPRISM_BASE_URL;
 const REFRESH_MS = 30 * 24 * 3600 * 1000;
 // Bump when the stored shape changes so old cache rows are recomputed.
 const VERSION = 3;
@@ -39,14 +39,15 @@ function parse(details) {
   };
 }
 
-async function fetchInsight(uid, thumbUrl) {
-  const res = await fetch(`${BASE_URL}/api/v1/photos/${uid}`);
-  if (!res.ok) throw new Error(`PhotoPrism ${res.status} for ${uid}`);
-  const insight = { v: VERSION, ...parse(await res.json()), faceSource: null, objects: [], importance: null };
+async function fetchInsight(uid, hash) {
+  const details = await getPhotoDetails(uid);
+  const insight = { v: VERSION, ...parse(details), faceSource: null, objects: [], importance: null };
   if (insight.faces.length) insight.faceSource = "photoprism";
-  if (!thumbUrl) return insight;
+  if (!hash) return insight;
   try {
-    const img = Buffer.from(await (await fetch(thumbUrl)).arrayBuffer());
+    // Straight to PhotoPrism, in-process - not through this server's own
+    // /api/photo/* proxy, which exists for the browser's benefit, not ours.
+    const { buffer: img } = await fetchThumbBuffer(hash, "fit_720");
     if (!insight.faces.length) {
       insight.faces = (await detectFaces(img)).map(({ x, y, w, h }) => ({ x, y, w, h }));
       insight.faceSource = "yunet";
@@ -65,7 +66,7 @@ async function fetchInsight(uid, thumbUrl) {
 
 // Cached insights for `uids`, fetching missing/stale ones (a handful at a
 // time). Failures are skipped - layout just falls back to shape-only rules.
-// `photos`: [{ photoUid, thumbUrl }].
+// `photos`: [{ photoUid, hash }].
 export async function loadInsights(photos) {
   const out = new Map();
   const missing = [];
@@ -83,9 +84,9 @@ export async function loadInsights(photos) {
   await Promise.all(
     Array.from({ length: Math.min(6, missing.length) }, async () => {
       while (next < missing.length) {
-        const { photoUid: uid, thumbUrl } = missing[next++];
+        const { photoUid: uid, hash } = missing[next++];
         try {
-          const insight = await fetchInsight(uid, thumbUrl);
+          const insight = await fetchInsight(uid, hash);
           putStmt.run(uid, JSON.stringify(insight), new Date().toISOString());
           out.set(uid, insight);
         } catch (err) {

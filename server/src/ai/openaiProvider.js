@@ -1,3 +1,5 @@
+import { fetchThumbBuffer } from "../photoprism.js";
+
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const CAPTION_MODEL = "gpt-4o-mini";
 const RESEARCH_MODEL = "gpt-4o-mini";
@@ -9,16 +11,16 @@ function languageInstruction(language) {
   return language && language !== "English" ? ` Respond in ${language}.` : "";
 }
 
-async function fetchImageAsDataUrl(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Could not fetch photo for captioning: ${res.status}`);
-  const buf = Buffer.from(await res.arrayBuffer());
-  const mime = res.headers.get("content-type") || "image/jpeg";
-  return `data:${mime};base64,${buf.toString("base64")}`;
+async function fetchImageAsDataUrl(photoHash) {
+  // Straight to PhotoPrism, in-process - the browser never sees a PhotoPrism
+  // URL (see photoprism.js), but this call happens on the server, same as
+  // every other AI request here.
+  const { buffer, contentType } = await fetchThumbBuffer(photoHash);
+  return `data:${contentType};base64,${buffer.toString("base64")}`;
 }
 
-export async function draftCaption({ photoUrl, place, date, storyTitle, language }) {
-  const dataUrl = await fetchImageAsDataUrl(photoUrl);
+export async function draftCaption({ photoHash, place, date, storyTitle, language }) {
+  const dataUrl = await fetchImageAsDataUrl(photoHash);
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",

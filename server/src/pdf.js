@@ -23,6 +23,13 @@ export async function renderStoryPdf(story, { pack, paperSize } = {}) {
   const browser = await chromium.launch({ channel: "chrome", headless: true });
   try {
     const page = await browser.newPage();
+    // setContent() only replaces the document's markup, not its origin -
+    // left on the default about:blank, the photo URLs inside `html` (all
+    // relative /api/photo/... paths, see photoprism.js) would have nowhere
+    // to resolve against and every image would fail to load. Navigating to
+    // a real page on this same server first gives the document that
+    // server's origin, so the relative URLs resolve to it correctly.
+    await page.goto(`http://localhost:${process.env.PORT || 3001}/__pdf-base`);
     await page.setContent(html, { waitUntil: "networkidle" });
     await page.evaluate(() =>
       Promise.all(
