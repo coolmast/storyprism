@@ -38,7 +38,13 @@ view, a reveal.js presentation, or a printable PDF (either format).
     and trip themes from a home-distance-based clustering (most common
     rough location = "home"; contiguous-in-time photos far from it = a
     trip) that's independent of the regular per-stop itinerary clustering.
-    Candidate discovery only ever asks PhotoPrism "does this candidate clear
+    Alongside the suggested candidates, any number of hand-defined custom
+    date sub-ranges can be added too (e.g. "3 days around a birthday in
+    March") - not detected, just a title + from/to date the user types in;
+    these are handled identically to a detected trip theme end to end
+    (same `type: "trip"` shape, same date-range photo lookup), the only
+    difference is where the from/to came from. Candidate discovery only
+    ever asks PhotoPrism "does this candidate clear
     N photos" (`count=N` + the `X-Count` response header, which reports how
     many rows a request actually returned, not an independent total - so
     getting a true "at least N" signal means requesting exactly N) rather
@@ -532,7 +538,9 @@ pick up `server.allowedHosts` changes on the fly.
       PhotoPrism's own Labels/Subjects plus a home-distance trip detector,
       pick any mix, and get one section per chosen theme (photos duplicated
       across an overlap on purpose) followed by a normal chronological tail
-      for everything else. See the Architecture section above
+      for everything else, plus any number of hand-defined custom date
+      sub-ranges (a title + from/to date, e.g. "3 days around a birthday")
+      alongside the suggested candidates. See the Architecture section above
       (`server/src/photoThemes.js`)
 
 ## Notes

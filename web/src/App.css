@@ -459,6 +459,34 @@
   color: var(--muted);
 }
 
+.theme-custom-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.3rem;
+}
+
+.theme-custom-form input[type="date"] {
+  font: inherit;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.theme-custom-form input[type="text"] {
+  flex: 1;
+  min-width: 10rem;
+  font: inherit;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
 .content {
   flex: 1;
   padding: 1.5rem;

@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { fetchThemeCandidates, createStory } from "./api.js";
 import { useI18n } from "./i18n.jsx";
-import { Card, EmptyState } from "./ui/index.js";
+import { uid } from "./uid.js";
+import { Card, Chip } from "./ui/index.js";
 
 // "Nach Themen" (yearbook) source: pick a date range, discover candidate
 // sections from PhotoPrism's own Labels/Subjects plus a detected-trip
-// cluster, let the user pick any mix of them, and create a story with one
-// section per chosen theme (in trip -> content -> person order) followed by
-// one ordinary chronological section for whatever no theme claimed.
+// cluster, let the user pick any mix of them (plus any number of
+// hand-defined custom date sub-ranges - e.g. "3 days around a birthday in
+// March"), and create a story with one section per chosen theme (trip ->
+// content -> person -> custom order) followed by one ordinary chronological
+// section for whatever no theme claimed.
 function GroupChips({ label, items, selected, onToggle }) {
   if (items.length === 0) return null;
   return (
@@ -41,6 +44,10 @@ export default function ThemeStoryPicker({ lang, onCreated }) {
   const [title, setTitle] = useState("");
   const [candidates, setCandidates] = useState(null);
   const [selected, setSelected] = useState(() => new Set());
+  const [customThemes, setCustomThemes] = useState([]);
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [customTitle, setCustomTitle] = useState("");
   const [discovering, setDiscovering] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState(null);
@@ -52,6 +59,7 @@ export default function ThemeStoryPicker({ lang, onCreated }) {
       const data = await fetchThemeCandidates(from, to);
       setCandidates(data);
       setSelected(new Set());
+      setCustomThemes([]);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -68,12 +76,33 @@ export default function ThemeStoryPicker({ lang, onCreated }) {
     });
   }
 
+  function addCustomTheme() {
+    if (!customFrom || !customTo) return;
+    setCustomThemes((prev) => [
+      ...prev,
+      {
+        id: `custom-${uid()}`,
+        type: "trip",
+        title: customTitle.trim() || `${customFrom} – ${customTo}`,
+        from: customFrom,
+        to: customTo,
+      },
+    ]);
+    setCustomFrom("");
+    setCustomTo("");
+    setCustomTitle("");
+  }
+
+  function removeCustomTheme(id) {
+    setCustomThemes((prev) => prev.filter((c) => c.id !== id));
+  }
+
   async function handleCreate() {
     setCreating(true);
     setError(null);
     try {
       const all = [...candidates.tripThemes, ...candidates.contentThemes, ...candidates.peopleThemes];
-      const themes = all.filter((c) => selected.has(c.id));
+      const themes = [...all.filter((c) => selected.has(c.id)), ...customThemes];
       const story = await createStory({
         themePlan: { from, to, title, themes },
         contentLanguage: lang,
@@ -85,10 +114,6 @@ export default function ThemeStoryPicker({ lang, onCreated }) {
       setCreating(false);
     }
   }
-
-  const totalCandidates = candidates
-    ? candidates.tripThemes.length + candidates.contentThemes.length + candidates.peopleThemes.length
-    : 0;
 
   return (
     <div className="theme-picker-flow">
@@ -115,11 +140,7 @@ export default function ThemeStoryPicker({ lang, onCreated }) {
 
       {error && <p className="error">{error}</p>}
 
-      {candidates && totalCandidates === 0 && (
-        <EmptyState icon="🗂️" title={t("noThemesFound")} hint={t("noThemesFoundHint")} />
-      )}
-
-      {candidates && totalCandidates > 0 && (
+      {candidates && (
         <Card className="theme-candidates">
           <GroupChips
             label={t("themeGroupTrips")}
@@ -139,6 +160,49 @@ export default function ThemeStoryPicker({ lang, onCreated }) {
             selected={selected}
             onToggle={toggle}
           />
+
+          <div className="theme-candidate-group">
+            <span className="control-label">{t("themeGroupCustom")}</span>
+            <p className="route-embed-hint">{t("themeCustomHint")}</p>
+            {customThemes.length > 0 && (
+              <div className="theme-chip-list">
+                {customThemes.map((c) => (
+                  <Chip key={c.id} onRemove={() => removeCustomTheme(c.id)}>
+                    {c.title}
+                  </Chip>
+                ))}
+              </div>
+            )}
+            <div className="theme-custom-form">
+              <input
+                type="date"
+                aria-label={t("dateFromLabel")}
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+              />
+              <input
+                type="date"
+                aria-label={t("dateToLabel")}
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+              />
+              <input
+                type="text"
+                placeholder={t("customTitlePlaceholder")}
+                value={customTitle}
+                onChange={(e) => setCustomTitle(e.target.value)}
+              />
+              <button
+                type="button"
+                className="ai-btn small"
+                onClick={addCustomTheme}
+                disabled={!customFrom || !customTo}
+              >
+                {t("addCustomThemeBtn")}
+              </button>
+            </div>
+          </div>
+
           <p className="theme-leftover-hint">{t("themeLeftoverHint")}</p>
           <button className="save-btn" onClick={handleCreate} disabled={creating}>
             {creating ? t("creating") : t("createThemeStoryBtn")}

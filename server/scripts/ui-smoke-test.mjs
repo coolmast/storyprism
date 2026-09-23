@@ -112,24 +112,35 @@ async function runChecksAtBreakpoint(browser, story, width, tag) {
   await themeDateInputs.nth(0).fill("2015-01-01");
   await themeDateInputs.nth(1).fill("2026-12-31");
   await page.locator(".theme-source-picker .ai-btn").click();
-  await page.waitForTimeout(4000);
+  // Discovery is network-bound (probes dozens of label/subject candidates
+  // against PhotoPrism) - poll for the candidates Card instead of a fixed
+  // sleep, which was flaky under load.
+  await page.locator(".theme-candidates").waitFor({ state: "visible", timeout: 15000 });
   const themeChips = page.locator(".theme-chip");
   const themeChipCount = await themeChips.count();
   check(`[${tag}] theme discovery returns candidates`, themeChipCount > 0);
-  let themeStoryId = null;
   if (themeChipCount > 0) {
     await themeChips.nth(0).click();
     await page.waitForTimeout(150);
     check(`[${tag}] selecting a theme chip marks it active`, await themeChips.nth(0).evaluate((el) => el.classList.contains("active")));
-    await page.locator(".theme-candidates .save-btn").click();
-    await page.waitForTimeout(2500);
-    const themeStoryTitle = await page.locator(".story-title-input").inputValue().catch(() => null);
-    check(`[${tag}] creating a yearbook story opens its editor`, !!themeStoryTitle);
-    themeStoryId = new URL(page.url()).pathname.split("/").pop();
   }
-  if (themeStoryId) {
-    await jsonFetch(`${BACKEND_URL}/api/stories/${themeStoryId}`, { method: "DELETE" });
-  }
+
+  // Custom date sub-range (e.g. "a few days around a birthday") - not a
+  // discovered candidate, hand-entered, removable, still folds into the plan.
+  const customDateInputs = page.locator('.theme-custom-form input[type="date"]');
+  await customDateInputs.nth(0).fill("2026-03-10");
+  await customDateInputs.nth(1).fill("2026-03-13");
+  await page.locator('.theme-custom-form input[type="text"]').fill("Smoke test birthday");
+  await page.locator(".theme-custom-form .ai-btn").click();
+  await page.waitForTimeout(150);
+  check(`[${tag}] adding a custom section shows it as a removable chip`, (await page.locator(".theme-candidate-group .ui-chip").count()) === 1);
+
+  await page.locator(".theme-candidates .save-btn").click();
+  await page.waitForTimeout(2500);
+  const themeStoryTitle = await page.locator(".story-title-input").inputValue().catch(() => null);
+  check(`[${tag}] creating a yearbook story opens its editor`, !!themeStoryTitle);
+  const themeStoryId = new URL(page.url()).pathname.split("/").pop();
+  await jsonFetch(`${BACKEND_URL}/api/stories/${themeStoryId}`, { method: "DELETE" });
 
   // --- Open the disposable test story's editor ---
   await page.locator(nav).nth(1).click();
