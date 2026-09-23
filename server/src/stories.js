@@ -459,15 +459,21 @@ export function updateStory(id, data) {
 
 // For the info card hero-image picker: which of this stop's photos are the
 // ones that actually signaled this place name, so the user picks from a
-// short relevant set instead of the whole stop.
+// short relevant set instead of the whole stop. That name match only works
+// for cards created from a suggestion chip (the name came from a photo's
+// own PlaceLabel/title in the first place); a card added by typing an
+// arbitrary name - "Eiffel Tower", a restaurant, ... - won't match any
+// photo's metadata at all, so fall back to every photo in the section
+// rather than leaving the picker empty.
 export function getMatchingPhotosForPlace(stopId, placeName) {
   const rows = db
     .prepare("SELECT hash, title, place_label FROM stop_photos WHERE stop_id = ? AND hash IS NOT NULL")
     .all(stopId);
-  return photosMatchingPlace(
-    rows.map((r) => ({ hash: r.hash, title: r.title, placeLabel: r.place_label })),
-    placeName
-  ).map((p) => ({ hash: p.hash, thumbUrl: thumbUrl(p.hash, "fit_720") }));
+  const photos = rows.map((r) => ({ hash: r.hash, title: r.title, placeLabel: r.place_label }));
+  const matched = photosMatchingPlace(photos, placeName);
+  const exact = matched.length > 0;
+  const result = exact ? matched : photos;
+  return { exact, photos: result.map((p) => ({ hash: p.hash, thumbUrl: thumbUrl(p.hash, "fit_720") })) };
 }
 
 export function deleteStory(id) {

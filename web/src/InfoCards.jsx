@@ -80,8 +80,8 @@ export default function InfoCards({ storyId, stopId, suggestedPlaces, infoCards,
     if (!heroCandidates[card.id]) {
       setHeroLoading(true);
       try {
-        const photos = await fetchMatchingPhotos(storyId, stopId, card.placeName);
-        setHeroCandidates((prev) => ({ ...prev, [card.id]: photos }));
+        const result = await fetchMatchingPhotos(storyId, stopId, card.placeName);
+        setHeroCandidates((prev) => ({ ...prev, [card.id]: result }));
       } catch (e) {
         setError(e.message);
       } finally {
@@ -214,8 +214,11 @@ export default function InfoCards({ storyId, stopId, suggestedPlaces, infoCards,
           {heroPickerFor === card.id && (
             <div className="hero-picker">
               {heroLoading && <p className="hint">{t("researching")}</p>}
-              {!heroLoading && (heroCandidates[card.id] || []).length === 0 && (
+              {!heroLoading && (heroCandidates[card.id]?.photos || []).length === 0 && (
                 <p className="hint">{t("noMatchingPhotos")}</p>
+              )}
+              {!heroLoading && heroCandidates[card.id] && !heroCandidates[card.id].exact && heroCandidates[card.id].photos.length > 0 && (
+                <p className="hint">{t("heroPhotoNoExactMatch")}</p>
               )}
               <div className="hero-picker-grid">
                 {card.heroPhotoHash && (
@@ -227,7 +230,7 @@ export default function InfoCards({ storyId, stopId, suggestedPlaces, infoCards,
                     ✕
                   </button>
                 )}
-                {(heroCandidates[card.id] || []).map((p) => (
+                {(heroCandidates[card.id]?.photos || []).map((p) => (
                   <button
                     key={p.hash}
                     className={`hero-picker-thumb ${card.heroPhotoHash === p.hash ? "selected" : ""}`}
