@@ -201,7 +201,14 @@
   transition: width var(--duration) ease;
 }
 
-/* Modal - centered on desktop, bottom sheet on mobile. */
+/* Modal - centered, on both desktop and mobile (a bottom sheet was tried
+   on mobile first, per the original brief, but read as "stuck in a
+   corner" rather than a deliberate sheet once actually seen on a real
+   phone - centered with margin on every side reads more clearly as a
+   dialog). dvh/vh fallback pattern: a mobile browser's address bar
+   showing/hiding changes the *visible* height without changing 100vh, so
+   max-height needs dvh - the whole reason dvh exists - to avoid a gap
+   between the dialog and the screen's actual edges. */
 .ui-modal {
   border: none;
   padding: 0;
@@ -211,6 +218,7 @@
   box-shadow: var(--shadow);
   width: min(480px, calc(100vw - 2rem));
   max-height: min(640px, calc(100vh - 4rem));
+  max-height: min(640px, calc(100dvh - 4rem));
   overflow-y: auto;
 }
 
@@ -233,24 +241,6 @@
   justify-content: flex-end;
   gap: 0.6rem;
   padding: 0 1.25rem 1.1rem;
-}
-
-@media (max-width: 860px) {
-  .ui-modal {
-    position: fixed;
-    inset: auto 0 0 0;
-    margin: 0;
-    width: 100%;
-    /* dvh (falls back to vh where unsupported) rather than vh: a mobile
-       browser's address bar showing/hiding changes the *visible* height
-       without changing 100vh, so a vh-based max-height here would leave a
-       gap between the sheet and the screen's actual bottom edge whenever
-       the bar is showing - the whole reason dvh exists. */
-    max-height: min(80vh, calc(100vh - 2rem));
-    max-height: min(80dvh, calc(100dvh - 2rem));
-    border-radius: var(--radius) var(--radius) 0 0;
-    padding-bottom: env(safe-area-inset-bottom);
-  }
 }
 
 /* Toast */
