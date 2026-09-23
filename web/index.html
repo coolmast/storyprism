@@ -5,6 +5,22 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Story Builder</title>
+    <script>
+      // Applies a manually-forced theme (if any) before the stylesheet
+      // loads, so there's no flash of the wrong theme - this has to be an
+      // inline, synchronous script in <head>, not something React sets on
+      // mount (by then the browser has already painted once).
+      (function () {
+        try {
+          var saved = localStorage.getItem("story-builder-theme");
+          if (saved === "dark" || saved === "light") {
+            document.documentElement.setAttribute("data-theme", saved);
+          }
+        } catch (e) {
+          /* localStorage unavailable (private mode) - fall back to the OS setting */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

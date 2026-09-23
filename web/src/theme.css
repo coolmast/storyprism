@@ -1,0 +1,179 @@
+/* Design tokens for the editor app's own UI (the New Story / Library /
+   Editor screens under web/src). The exported story/deck/PDF output has its
+   own separate, per-story theme system (server/src/themes.js) and is
+   untouched by any of this - it's a different product with its own
+   deliberately warm, book-like design.
+
+   Every color/radius/shadow this app's components use should come from a
+   token here, never a hardcoded hex in a component's CSS. Old token names
+   (--ink, --paper, --terracotta, --teal, --sand, --line) are kept as
+   aliases onto the new semantic ones below so the rest of App.css didn't
+   need a wholesale rewrite - and, as a side effect, every existing rule
+   that already used them picks up dark mode for free. */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --bg: #faf6f0;
+  --surface: #ffffff;
+  --surface-2: #efe6d8;
+  --border: #d8cbb5;
+
+  /* Text */
+  --text: #2b2420;
+  --muted: #6b5d4d;
+
+  /* Brand accent (warm terracotta) + a soft tint for badges/highlights */
+  --accent: #c8703d;
+  --accent-soft: #f4e2d3;
+  --accent-text: #8a4321;
+
+  /* Secondary accent (the existing teal used for links/save button) */
+  --accent-2: #2f6f6a;
+  --accent-2-soft: #dcece9;
+  --accent-2-muted: #9fb8b5;
+
+  /* Status - every "good/caution/bad" indicator pulls from these, never a
+     one-off color. */
+  --ok: #3f8f5f;
+  --ok-soft: #e1f0e6;
+  --ok-text: #1f5c3a;
+  --warn: #b8792a;
+  --warn-soft: #f6e9d3;
+  --warn-text: #7a4e14;
+  --bad: #a13a2f;
+  --bad-soft: #f6dfdb;
+  --bad-text: #7d2a21;
+
+  /* Shape */
+  --radius: 14px;
+  --radius-sm: 8px;
+  --shadow-sm: 0 1px 2px rgba(43, 36, 32, 0.08);
+  --shadow: 0 4px 16px rgba(43, 36, 32, 0.12);
+
+  /* Motion (see prefers-reduced-motion override at the bottom) */
+  --duration: 160ms;
+
+  /* Old names, aliased - see file comment. */
+  --ink: var(--text);
+  --paper: var(--bg);
+  --sand: var(--surface-2);
+  --line: var(--border);
+  --terracotta: var(--accent);
+  --teal: var(--accent-2);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #1c1a17;
+    --surface: #2a2622;
+    --surface-2: #332e28;
+    --border: #47403686;
+    --text: #f1ece3;
+    --muted: #b7ab98;
+    --accent: #e08a52;
+    --accent-soft: #4a3324;
+    --accent-text: #f3c39c;
+    --accent-2: #6fc2bb;
+    --accent-2-soft: #24413e;
+    --accent-2-muted: #4d6663;
+    --ok: #6fcf8f;
+    --ok-soft: #1f3a2a;
+    --ok-text: #a8e6bc;
+    --warn: #e0ac5c;
+    --warn-soft: #40311a;
+    --warn-text: #f0c88e;
+    --bad: #e5776a;
+    --bad-soft: #442420;
+    --bad-text: #f4a99c;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+  }
+}
+
+/* Manual override, independent of OS setting - set synchronously in
+   index.html before the stylesheet loads, so there's no flash of the wrong
+   theme. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1c1a17;
+  --surface: #2a2622;
+  --surface-2: #332e28;
+  --border: #47403686;
+  --text: #f1ece3;
+  --muted: #b7ab98;
+  --accent: #e08a52;
+  --accent-soft: #4a3324;
+  --accent-text: #f3c39c;
+  --accent-2: #6fc2bb;
+  --accent-2-soft: #24413e;
+  --accent-2-muted: #4d6663;
+  --ok: #6fcf8f;
+  --ok-soft: #1f3a2a;
+  --ok-text: #a8e6bc;
+  --warn: #e0ac5c;
+  --warn-soft: #40311a;
+  --warn-text: #f0c88e;
+  --bad: #e5776a;
+  --bad-soft: #442420;
+  --bad-text: #f4a99c;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+}
+
+/* Always-dark surface for the printed-output live preview drawer
+   (PdfLivePreview) - a deliberate choice, not a token gap: it's previewing
+   print/photo pages, and keeping that viewer's own chrome dark regardless
+   of the app's light/dark setting is the same convention photo viewers and
+   print-preview panes generally use, for contrast against the pages
+   themselves. Still tokenized, just not tied to the app theme. */
+:root {
+  --preview-bg: #2e2e2e;
+  --preview-surface: #1f1f1f;
+  --preview-surface-2: #444;
+  --preview-border: #666;
+  --preview-border-strong: #777;
+  --preview-text: #eee;
+  --preview-muted: #aaa;
+  --preview-muted-2: #ccc;
+  --preview-ddd: #ddd;
+  --preview-bbb: #bbb;
+  --preview-ok: #7bc47f;
+  --preview-ok-text: #9fd6a2;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Accessible focus: never suppressed without a replacement. */
+:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

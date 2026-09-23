@@ -21,7 +21,7 @@
 }
 
 .app-header span {
-  color: #6b5d4d;
+  color: var(--muted);
   font-size: 0.9rem;
 }
 
@@ -57,7 +57,7 @@
   padding: 0.3rem 0.6rem;
   border: 1px solid var(--line);
   background: white;
-  color: #6b5d4d;
+  color: var(--muted);
   border-radius: 999px;
   cursor: pointer;
 }
@@ -157,7 +157,7 @@
   flex-direction: column;
   gap: 0.25rem;
   font-size: 0.8rem;
-  color: #6b5d4d;
+  color: var(--muted);
 }
 
 .date-range-field input {
@@ -186,11 +186,11 @@
 
 .hint,
 .error {
-  color: #6b5d4d;
+  color: var(--muted);
 }
 
 .error {
-  color: #a13a2f;
+  color: var(--bad);
 }
 
 .album-group-label {
@@ -199,7 +199,7 @@
   font-weight: bold;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #6b5d4d;
+  color: var(--muted);
   padding: 0.8rem 0.6rem 0.3rem;
 }
 
@@ -253,7 +253,7 @@
 .map-empty {
   padding: 2rem;
   text-align: center;
-  color: #6b5d4d;
+  color: var(--muted);
   border: 1px dashed var(--line);
   border-radius: 8px;
 }
@@ -335,7 +335,7 @@
 }
 
 .stop-meta span {
-  color: #6b5d4d;
+  color: var(--muted);
   font-size: 0.9rem;
 }
 
@@ -351,7 +351,7 @@
 }
 
 .save-btn:disabled {
-  background: #9fb8b5;
+  background: var(--accent-2-muted);
   cursor: default;
 }
 
@@ -391,14 +391,14 @@
 }
 
 .story-card-main span {
-  color: #6b5d4d;
+  color: var(--muted);
   font-size: 0.85rem;
 }
 
 .story-card-delete {
   border: none;
   background: none;
-  color: #a13a2f;
+  color: var(--bad);
   cursor: pointer;
   padding: 0 1rem;
   font-size: 1rem;
@@ -547,7 +547,7 @@
 
 .lang-picker-label {
   font-size: 0.8rem;
-  color: #6b5d4d;
+  color: var(--muted);
 }
 
 .lang-picker-btn {
@@ -628,7 +628,7 @@ textarea {
 
 .stop-chevron {
   display: inline-block;
-  color: #6b5d4d;
+  color: var(--muted);
   font-size: 0.75rem;
   transition: transform 0.15s ease;
   transform: rotate(-90deg);
@@ -680,7 +680,7 @@ textarea {
 .stop-summary-meta {
   margin-left: auto;
   flex: none;
-  color: #6b5d4d;
+  color: var(--muted);
   font-size: 0.85rem;
 }
 
@@ -704,7 +704,7 @@ textarea {
   font-weight: bold;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #6b5d4d;
+  color: var(--muted);
 }
 
 .stop-enrich {
@@ -732,7 +732,7 @@ textarea {
 }
 
 .stop-dates {
-  color: #6b5d4d;
+  color: var(--muted);
   font-size: 0.85rem;
   white-space: nowrap;
 }
@@ -749,7 +749,7 @@ textarea {
 }
 
 .link-btn.danger {
-  color: #a13a2f;
+  color: var(--bad);
 }
 
 .ai-btn.small {
@@ -905,7 +905,7 @@ textarea {
   justify-content: space-between;
   align-items: center;
   font-size: 0.9rem;
-  color: #6b5d4d;
+  color: var(--muted);
 }
 
 .stop-research {
@@ -971,7 +971,7 @@ textarea {
 
 .route-embed-hint {
   font-size: 0.8rem;
-  color: #6b5d4d;
+  color: var(--muted);
   margin: 0;
 }
 
@@ -1103,7 +1103,7 @@ textarea {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #6b5d4d;
+  color: var(--muted);
   flex: 1;
   min-width: 0;
   padding: 0.2rem 0.4rem;
@@ -1181,14 +1181,14 @@ textarea {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  color: #6b5d4d;
+  color: var(--muted);
 }
 
 .control-label {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #6b5d4d;
+  color: var(--muted);
 }
 
 .pdf-override-picker {
@@ -1292,7 +1292,7 @@ textarea {
   align-items: center;
   justify-content: center;
   border: 1px dashed var(--line);
-  color: #6b5d4d;
+  color: var(--muted);
   font-size: 1.2rem;
 }
 
@@ -1388,7 +1388,7 @@ textarea {
 .photo-count-hint {
   margin: 0;
   font-size: 0.85rem;
-  color: #6b5d4d;
+  color: var(--muted);
 }
 
 .more-photos {
@@ -1457,7 +1457,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  color: #6b5d4d;
+  color: var(--muted);
 }
 
 .feature-btn {
@@ -1491,7 +1491,7 @@ textarea {
   z-index: 50;
   display: flex;
   flex-direction: column;
-  background: #2e2e2e;
+  background: var(--preview-bg);
   box-shadow: -4px 0 18px rgba(0, 0, 0, 0.25);
 }
 
@@ -1513,7 +1513,7 @@ textarea {
   align-items: center;
   gap: 0.75rem;
   padding: 0.6rem 0.9rem;
-  color: #eee;
+  color: var(--preview-text);
 }
 
 .pdf-live-status {
@@ -1524,8 +1524,8 @@ textarea {
 .pdf-live-close {
   margin-left: auto;
   background: none;
-  border: 1px solid #777;
-  color: #eee;
+  border: 1px solid var(--preview-border-strong);
+  color: var(--preview-text);
   border-radius: 999px;
   width: 2rem;
   height: 2rem;
@@ -1552,22 +1552,22 @@ textarea {
   font-size: 0.85rem;
   padding: 0.3rem 0.5rem;
   border-radius: 6px;
-  border: 1px solid #666;
-  background: #444;
-  color: #eee;
+  border: 1px solid var(--preview-border);
+  background: var(--preview-surface-2);
+  color: var(--preview-text);
 }
 
 .pdf-live-frame {
   flex: 1;
   width: 100%;
   border: none;
-  background: #2e2e2e;
+  background: var(--preview-bg);
 }
 
 .pdf-live-tabs {
   display: flex;
   gap: 0.25rem;
-  background: #1f1f1f;
+  background: var(--preview-surface);
   border-radius: 999px;
   padding: 0.2rem;
 }
@@ -1577,15 +1577,15 @@ textarea {
   font-size: 0.85rem;
   border: none;
   background: none;
-  color: #ccc;
+  color: var(--preview-muted-2);
   padding: 0.3rem 0.8rem;
   border-radius: 999px;
   cursor: pointer;
 }
 
 .pdf-live-tabs button.active {
-  background: #eee;
-  color: #222;
+  background: var(--preview-text);
+  color: var(--preview-bg);
 }
 
 .pdf-live-export {
@@ -1594,7 +1594,7 @@ textarea {
   padding: 0.35rem 0.9rem;
   border-radius: 999px;
   border: none;
-  background: var(--terracotta, #c0623e);
+  background: var(--accent);
   color: white;
   cursor: pointer;
 }
@@ -1609,13 +1609,13 @@ textarea {
   flex-direction: column;
   gap: 0.35rem;
   padding: 0 0.9rem 0.7rem;
-  color: #ddd;
+  color: var(--preview-ddd);
   font-size: 0.85rem;
 }
 
 .pdf-live-progress {
   height: 6px;
-  background: #444;
+  background: var(--preview-surface-2);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -1623,12 +1623,12 @@ textarea {
 .pdf-live-progress span {
   display: block;
   height: 100%;
-  background: #7bc47f;
+  background: var(--preview-ok);
   transition: width 0.4s ease;
 }
 
 .pdf-live-download {
-  color: #9fd6a2;
+  color: var(--preview-ok-text);
   font-weight: 600;
   text-decoration: none;
   word-break: break-all;
@@ -1642,6 +1642,6 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  color: #bbb;
+  color: var(--preview-bbb);
   font-size: 0.8rem;
 }
