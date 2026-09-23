@@ -244,10 +244,10 @@ function collageOn(photos, box, { gap, fill = 0.9, variant = 0 }) {
 
 // Stop title in a page corner, handwritten, white on photos / accent on paper.
 export function titleElement(title, page, corner, ctx, { dark = false } = {}) {
-  const size = 34 * ctx.typeScale;
+  const size = 34 * ctx.typeScale * (ctx.textScale?.title || 1);
   const lineH = size * SAAL_LINE;
   const w = page.w * 0.5;
-  const h = lineH * 2.2;
+  const h = lineH * (estimateLines(title, w, size, ctx.fonts.title) + 0.3);
   const m = page.w * 0.07;
   const x = corner.includes("r") ? page.x + page.w - m - w : page.x + m;
   const y = corner.includes("b") ? page.y + page.h - m - h : page.y + m;
@@ -616,9 +616,9 @@ function estimateLines(text, widthUnits, size, font, bold = false) {
 
 // Fits title + body paragraphs into `frame`, shrinking the body size until
 // the estimated height fits (down to a floor).
-export function textBlock(frame, { title, subtitle, body = [], quote, color, accent, typeScale, fonts, titleSize = 30 }) {
-  let size = 10.5 * typeScale;
-  const tSize = titleSize * typeScale;
+export function textBlock(frame, { title, subtitle, body = [], quote, color, accent, typeScale, fonts, textScale, titleSize = 30 }) {
+  let size = 10.5 * typeScale * (textScale?.body || 1);
+  const tSize = titleSize * typeScale * (textScale?.title || 1);
   const measure = (s) => {
     let h = 0;
     const lines = (text, sz, font = fonts.body) => estimateLines(text, frame.w, sz, font) * sz * SAAL_LINE;
@@ -631,7 +631,7 @@ export function textBlock(frame, { title, subtitle, body = [], quote, color, acc
     // One spare line of slack against estimate error.
     return h + s * SAAL_LINE;
   };
-  while (size > 7.5 * typeScale && measure(size) > frame.h) size -= 0.5 * typeScale;
+  while (size > 6.5 * typeScale && measure(size) > frame.h) size -= 0.5 * typeScale;
   const paragraphs = [];
   const para = (p) => paragraphs.push({ ...p, font: roleFont(fonts, p.role) });
   if (title) para({ text: title, role: "title", size: tSize, color: accent || color, align: "left" });
@@ -671,6 +671,7 @@ export function chapterSpread(spread, ctx, { backdrop, title, narrative, pullQuo
         accent: ctx.accentColor,
         typeScale: ctx.typeScale,
         fonts: ctx.fonts,
+        textScale: ctx.textScale,
       }
     );
     // Shrink the panel to the text so short stories don't sit in a big box.
@@ -731,7 +732,9 @@ export function infoCardSpread(spread, ctx, { card, hero }) {
   const text = (frame, paragraphs) => ({ kind: "text", frame, paragraphs });
 
   const layout = (k) => {
-    const sz = { title: 30 * ts * k, sub: 11.5 * ts * k, body: 10.5 * ts * k, label: 7 * ts * k, value: 9.5 * ts * k };
+    const tt = ts * (ctx.textScale?.title || 1);
+    const tb = ts * (ctx.textScale?.body || 1);
+    const sz = { title: 30 * tt * k, sub: 11.5 * tb * k, body: 10.5 * tb * k, label: 7 * tb * k, value: 9.5 * tb * k };
     const gap = sz.body * SAAL_LINE * 0.9;
     const slack = sz.body * SAAL_LINE * 0.7;
     const els = [];
@@ -790,9 +793,12 @@ export function infoCardSpread(spread, ctx, { card, hero }) {
     return { els, height: y };
   };
 
-  let k = 1;
+  // Grow into free space (larger text and spacing, up to 140 %, filling
+  // at most ~72 % of the page - a fact sheet, not a wall of text); shrink
+  // only when the content doesn't fit the page at all.
+  let k = 1.4;
   let result = layout(k);
-  while (result.height > box.h && k > 0.6) {
+  while (k > 0.55 && result.height > (k > 1 ? 0.72 : 1) * box.h) {
     k -= 0.05;
     result = layout(k);
   }
@@ -813,19 +819,27 @@ export function coverSpread(cover, ctx, { backdrop, cards, title, subtitle }) {
   const frontW = cover.w - frontX - 60;
   const elements = [];
   if (backdrop) elements.push(image(backdrop, { x: 0, y: 0, w: cover.w, h: cover.h }, { background: true }));
-  const bandY = cover.h * 0.6;
-  const bandH = cover.h * 0.2;
+  const tSize = 40 * ctx.typeScale * (ctx.textScale?.title || 1);
+  const sSize = 13 * ctx.typeScale * (ctx.textScale?.body || 1);
+  const textW = frontW * 0.9;
+  // Band and title box sized to the measured text (a long title or a large
+  // text size wraps to more lines), centered on the band's usual position.
+  const textH =
+    estimateLines(title, textW, tSize, ctx.fonts.title) * tSize * SAAL_LINE +
+    (subtitle ? estimateLines(subtitle, textW, sSize, ctx.fonts.body) * sSize * SAAL_LINE : 0);
+  const padY = cover.h * 0.035;
+  const bandH = Math.max(cover.h * 0.2, textH + 2 * padY + tSize * SAAL_LINE * 0.3);
+  const bandY = Math.min(cover.h * 0.7 - bandH / 2, cover.h - 120 - bandH);
   // Dark band at 50 %: the calibration import showed 38 % disappears on
   // darker cover photos.
   elements.push({ kind: "panel", frame: { x: -4, y: bandY, w: cover.w + 8, h: bandH }, color: "#101018", opacity: 0.5 });
-  const tSize = 40 * ctx.typeScale;
   elements.push({
     kind: "text",
-    frame: { x: frontX + frontW * 0.05, y: bandY + bandH * 0.12, w: frontW * 0.9, h: bandH * 0.8 },
+    frame: { x: frontX + frontW * 0.05, y: bandY + (bandH - textH) / 2, w: textW, h: textH + tSize * SAAL_LINE * 0.3 },
     paragraphs: [
       { text: title, role: "title", font: ctx.fonts.title, size: tSize, color: "#ffffff", align: "center" },
       ...(subtitle
-        ? [{ text: subtitle, role: "subtitle", font: ctx.fonts.body, size: 13 * ctx.typeScale, color: "#ffffff", align: "center" }]
+        ? [{ text: subtitle, role: "subtitle", font: ctx.fonts.body, size: sSize, color: "#ffffff", align: "center" }]
         : []),
     ],
   });

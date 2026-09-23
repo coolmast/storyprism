@@ -334,6 +334,13 @@ useful for a second person to use the editor from their own device.
 - [x] Info cards as a fact sheet: name, italic subtitle, accent rule,
       summary, facts in two balanced columns (uppercase label over bold
       value), website domain; shrinks as a whole to fit
+- [x] Book text controls: heading/text size (80-160 %, per story);
+      intro, each stop's story text, each info card and the outro can be
+      removed from the book and re-added right in the preview (stored as
+      flags on the story/stop/card; info card ids now survive saves); info
+      cards grow into free space (up to 140 %, ~72 % of the page) and only
+      shrink when needed; cover band and title boxes sized from measured
+      text
 - [ ] Nice-to-have: people names from face markers for captions; retakes
       minutes apart (perceptual hashes) - low priority per user
 - [ ] More Saal fonts: only `Architects DaughterEmbedded` is confirmed to

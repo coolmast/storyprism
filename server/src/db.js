@@ -116,3 +116,10 @@ ensureColumn("stops", "book_spread_counts", "TEXT");
 ensureColumn("stories", "book_title_font", "TEXT");
 ensureColumn("stories", "book_body_font", "TEXT");
 ensureColumn("stories", "book_keep_bursts", "INTEGER NOT NULL DEFAULT 0");
+// Photobook: text parts left out of the book, and text size multipliers.
+ensureColumn("stories", "book_hide_intro", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn("stories", "book_hide_outro", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn("stops", "book_hide_text", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn("stop_info_cards", "book_hidden", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn("stories", "book_title_scale", "REAL NOT NULL DEFAULT 1");
+ensureColumn("stories", "book_body_scale", "REAL NOT NULL DEFAULT 1");

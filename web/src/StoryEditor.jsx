@@ -236,6 +236,23 @@ export default function StoryEditor({ story, onBack, onSaved }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Remove / re-add a text part of the printed book (from the preview).
+  const handleBookToggle = useCallback(({ target, stopId, cardIndex, hidden }) => {
+    if (target === "intro") markDirty((d) => ({ ...d, bookHideIntro: hidden }));
+    else if (target === "outro") markDirty((d) => ({ ...d, bookHideOutro: hidden }));
+    else if (target === "chapter") updateStop(stopId, { bookHideText: hidden });
+    else if (target === "info")
+      markDirty((d) => ({
+        ...d,
+        stops: d.stops.map((s) =>
+          s.id !== stopId
+            ? s
+            : { ...s, infoCards: (s.infoCards || []).map((c, i) => (i === cardIndex ? { ...c, bookHidden: hidden } : c)) }
+        ),
+      }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function handleSave() {
     setSaving(true);
     try {
@@ -286,6 +303,7 @@ export default function StoryEditor({ story, onBack, onSaved }) {
           onOverride={handlePdfOverride}
           onBookOverride={handleBookOverride}
           onBookSpreadCounts={handleBookSpreadCounts}
+          onBookToggle={handleBookToggle}
           onClose={() => setShowPdfPreview(false)}
         />
       )}

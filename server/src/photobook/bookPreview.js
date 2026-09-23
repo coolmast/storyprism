@@ -91,6 +91,13 @@ export function buildBookPreviewHtml(story) {
       </span>`;
   };
 
+  const toggleBtn = (toggle, hidden, text) =>
+    `<button type="button" class="bp-toggle${hidden ? "" : " bp-readd"}" data-toggle="${escapeHtml(JSON.stringify({ ...toggle, hidden }))}">${escapeHtml(text)}</button>`;
+  const hiddenChips = (items) =>
+    items.length
+      ? `<div class="bp-hidden">${items.map((h) => toggleBtn(h.toggle, false, `↺ ${h.label}`)).join("")}</div>`
+      : "";
+
   const spreadCard = (s, i) => {
     const label =
       s.kind === "photos"
@@ -98,7 +105,9 @@ export function buildBookPreviewHtml(story) {
         : KIND_LABEL[s.kind] || s.kind;
     return `<figure class="bp-spread">
       <div class="bp-canvas">${inlineSvg(s, plan.spreadSize, `spread-${i}`)}<span class="bp-fold"></span></div>
-      <figcaption><span>${i * 2 + 1}–${i * 2 + 2} · ${label}</span>${s.kind === "photos" ? pacingControls(s) : ""}</figcaption>
+      <figcaption><span>${i * 2 + 1}–${i * 2 + 2} · ${label}</span>${s.kind === "photos" ? pacingControls(s) : ""}${
+        s.toggle ? toggleBtn(s.toggle, true, "✕ Remove from book") : ""
+      }</figcaption>
     </figure>`;
   };
 
@@ -120,7 +129,8 @@ export function buildBookPreviewHtml(story) {
             </select>
           </div>`
         : "";
-      return `<section class="bp-group">${head}${g.items.map(({ s, i }) => spreadCard(s, i)).join("")}</section>`;
+      const hidden = stop ? plan.hiddenItems.filter((h) => h.stopId === stop.id) : [];
+      return `<section class="bp-group">${head}${hiddenChips(hidden)}${g.items.map(({ s, i }) => spreadCard(s, i)).join("")}</section>`;
     })
     .join("\n");
 
@@ -158,12 +168,18 @@ ${fontHead(plan.fonts)}
     border: 1px solid #777; background: #444; color: #fff; cursor: pointer;
   }
   .bp-pace button:disabled { opacity: 0.3; cursor: default; }
+  .bp-toggle { font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid #777; background: #3a3a3a; color: #ddd; cursor: pointer; }
+  .bp-toggle:hover { background: #555; }
+  .bp-readd { border-color: #7bc47f; color: #bfe8c1; }
+  .bp-hidden { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 2px 10px; }
+  .bp-hidden::before { content: "Not in the book:"; color: #aaa; font-size: 12px; align-self: center; }
   .bp-reset { width: auto; height: auto; border-radius: 999px; padding: 3px 9px; font-size: 12px; margin-left: 6px; font-weight: 400; }
 </style></head>
 <body>
   <p class="bp-summary"><b>${escapeHtml(plan.product.label)}</b> · ${plan.overflow ? plan.contentPages : plan.numPages} pages · ${plan.spreads.length} spreads${
     warn.length ? `<br><span class="bp-warn">⚠ ${warn.map(escapeHtml).join(" · ")}</span>` : ""
   }${notes.length ? `<br><span>${notes.map(escapeHtml).join(" · ")}</span>` : ""}</p>
+  ${hiddenChips(plan.hiddenItems.filter((h) => !h.stopId))}
   <section class="bp-group">
     <div class="bp-group-head"><span>Cover</span></div>
     <figure class="bp-spread bp-cover">
@@ -181,6 +197,11 @@ ${fontHead(plan.fonts)}
       var counts = JSON.parse(pace.dataset.counts).slice(0, index + 1);
       counts[index] = Math.max(1, counts[index] + Number(btn.dataset.delta));
       parent.postMessage({ type: "book-spread-counts", stopId: pace.dataset.stopId, counts: counts }, "*");
+      return;
+    }
+    var tog = e.target.closest && e.target.closest(".bp-toggle");
+    if (tog) {
+      parent.postMessage({ type: "book-toggle", toggle: JSON.parse(tog.dataset.toggle) }, "*");
       return;
     }
     var reset = e.target.closest && e.target.closest(".bp-reset");

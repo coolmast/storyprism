@@ -21,6 +21,7 @@ export default function PdfLivePreview({
   onOverride,
   onBookOverride,
   onBookSpreadCounts,
+  onBookToggle,
   onClose,
 }) {
   const { t } = useI18n();
@@ -92,10 +93,11 @@ export default function PdfLivePreview({
       if (e.data?.type === "book-spread-counts" && Array.isArray(e.data.counts)) {
         onBookSpreadCounts(e.data.stopId, e.data.counts);
       }
+      if (e.data?.type === "book-toggle" && e.data.toggle) onBookToggle(e.data.toggle);
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [onOverride, onBookOverride, onBookSpreadCounts]);
+  }, [onOverride, onBookOverride, onBookSpreadCounts, onBookToggle]);
 
   function restoreScroll() {
     iframeRef.current?.contentWindow?.scrollTo(0, scrollRef.current[mode] || 0);
@@ -167,6 +169,21 @@ export default function PdfLivePreview({
                   <option key={f.name} value={f.name}>
                     {f.name}
                     {f.kind === "script" && role === "body" ? " ✍" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+          {[
+            ["bookTitleScale", t("bookTitleSizeLabel")],
+            ["bookBodyScale", t("bookBodySizeLabel")],
+          ].map(([field, label]) => (
+            <label key={field} className="pdf-live-font">
+              <span>{label}</span>
+              <select value={String(draft[field] ?? 1)} onChange={(e) => onChange({ [field]: Number(e.target.value) })}>
+                {[0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6].map((v) => (
+                  <option key={v} value={String(v)}>
+                    {Math.round(v * 100)} %
                   </option>
                 ))}
               </select>

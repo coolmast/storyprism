@@ -36,6 +36,13 @@ function serializeSpreadCounts(counts) {
   return clean.length ? JSON.stringify(clean) : null;
 }
 
+// Text size multiplier for the printed book (50 %-200 %).
+function textScale(value, fallback) {
+  const v = Number(value);
+  if (Number.isFinite(v) && v >= 0.5 && v <= 2) return Math.round(v * 100) / 100;
+  return fallback ?? 1;
+}
+
 function validFont(name, fallback) {
   if (name === null) return null;
   if (name && BOOK_FONTS.some((f) => f.name === name)) return name;
@@ -204,6 +211,10 @@ export function getStory(id) {
     bookTitleFont: story.book_title_font || null,
     bookBodyFont: story.book_body_font || null,
     bookKeepBursts: !!story.book_keep_bursts,
+    bookHideIntro: !!story.book_hide_intro,
+    bookHideOutro: !!story.book_hide_outro,
+    bookTitleScale: story.book_title_scale ?? 1,
+    bookBodyScale: story.book_body_scale ?? 1,
     createdAt: story.created_at,
     updatedAt: story.updated_at,
     stops: stops.map((s) => {
@@ -225,6 +236,7 @@ export function getStory(id) {
         pdfTemplateOverride: s.pdf_template_override || null,
         bookLayoutOverride: s.book_layout_override || null,
         bookSpreadCounts: parseSpreadCounts(s.book_spread_counts),
+        bookHideText: !!s.book_hide_text,
         suggestedPlaces: suggestPlacesForStop(
           includedRows.map((p) => ({ title: p.title, placeLabel: p.place_label }))
         ),
@@ -249,6 +261,7 @@ export function getStory(id) {
         })),
         infoCards: infoCardStmt.all(s.id).map((c) => ({
           id: c.id,
+          bookHidden: !!c.book_hidden,
           placeName: c.place_name,
           subtitle: c.subtitle,
           summary: c.summary,
@@ -269,7 +282,7 @@ export function getStory(id) {
 }
 
 const updateStoryStmt = db.prepare(
-  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, content_language = @contentLanguage, pdf_layout_pack = @pdfLayoutPack, pdf_paper_size = @pdfPaperSize, book_product = @bookProduct, book_title_font = @bookTitleFont, book_body_font = @bookBodyFont, book_keep_bursts = @bookKeepBursts, updated_at = @now WHERE id = @id"
+  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, content_language = @contentLanguage, pdf_layout_pack = @pdfLayoutPack, pdf_paper_size = @pdfPaperSize, book_product = @bookProduct, book_title_font = @bookTitleFont, book_body_font = @bookBodyFont, book_keep_bursts = @bookKeepBursts, book_hide_intro = @bookHideIntro, book_hide_outro = @bookHideOutro, book_title_scale = @bookTitleScale, book_body_scale = @bookBodyScale, updated_at = @now WHERE id = @id"
 );
 // Upsert, not a plain UPDATE: the editor can now create brand-new stops
 // client-side (splitting one stop into two, or adding a blank section) and
@@ -278,8 +291,8 @@ const updateStoryStmt = db.prepare(
 // Position is included so inserting a stop in the middle (or reordering)
 // is reflected, same as photos already work.
 const upsertStopStmt = db.prepare(`
-  INSERT INTO stops (id, story_id, position, lat, lng, place_label, started_at, ended_at, heading, narrative, research, pull_quote, pdf_template_override, book_layout_override, book_spread_counts)
-  VALUES (@id, @storyId, @position, @lat, @lng, @placeLabel, @startedAt, @endedAt, @heading, @narrative, @research, @pullQuote, @pdfTemplateOverride, @bookLayoutOverride, @bookSpreadCounts)
+  INSERT INTO stops (id, story_id, position, lat, lng, place_label, started_at, ended_at, heading, narrative, research, pull_quote, pdf_template_override, book_layout_override, book_spread_counts, book_hide_text)
+  VALUES (@id, @storyId, @position, @lat, @lng, @placeLabel, @startedAt, @endedAt, @heading, @narrative, @research, @pullQuote, @pdfTemplateOverride, @bookLayoutOverride, @bookSpreadCounts, @bookHideText)
   ON CONFLICT(id) DO UPDATE SET
     position = excluded.position,
     lat = excluded.lat,
@@ -293,7 +306,8 @@ const upsertStopStmt = db.prepare(`
     pull_quote = excluded.pull_quote,
     pdf_template_override = excluded.pdf_template_override,
     book_layout_override = excluded.book_layout_override,
-    book_spread_counts = excluded.book_spread_counts
+    book_spread_counts = excluded.book_spread_counts,
+    book_hide_text = excluded.book_hide_text
 `);
 // Matched by id alone (a photo's id is globally unique, not just within its
 // stop) and stop_id is now part of the SET clause, not the WHERE - splitting
@@ -314,8 +328,8 @@ const insertEmbedStmt = db.prepare(`
 `);
 const deleteInfoCardsStmt = db.prepare("DELETE FROM stop_info_cards WHERE stop_id = @stopId");
 const insertInfoCardStmt = db.prepare(`
-  INSERT INTO stop_info_cards (id, stop_id, place_name, subtitle, summary, facts, position, placement, hero_photo_hash, website_url)
-  VALUES (@id, @stopId, @placeName, @subtitle, @summary, @facts, @position, @placement, @heroPhotoHash, @websiteUrl)
+  INSERT INTO stop_info_cards (id, stop_id, place_name, subtitle, summary, facts, position, placement, hero_photo_hash, website_url, book_hidden)
+  VALUES (@id, @stopId, @placeName, @subtitle, @summary, @facts, @position, @placement, @heroPhotoHash, @websiteUrl, @bookHidden)
 `);
 const touchStoryStmt = db.prepare("UPDATE stories SET updated_at = @now WHERE id = @id");
 
@@ -343,6 +357,10 @@ export function updateStory(id, data) {
       bookTitleFont: validFont(data.bookTitleFont, existing.bookTitleFont),
       bookBodyFont: validFont(data.bookBodyFont, existing.bookBodyFont),
       bookKeepBursts: (data.bookKeepBursts ?? existing.bookKeepBursts) ? 1 : 0,
+      bookHideIntro: (data.bookHideIntro ?? existing.bookHideIntro) ? 1 : 0,
+      bookHideOutro: (data.bookHideOutro ?? existing.bookHideOutro) ? 1 : 0,
+      bookTitleScale: textScale(data.bookTitleScale, existing.bookTitleScale),
+      bookBodyScale: textScale(data.bookBodyScale, existing.bookBodyScale),
       now,
     });
 
@@ -360,6 +378,7 @@ export function updateStory(id, data) {
         pdfTemplateOverride: PDF_TEMPLATE_IDS.includes(stop.pdfTemplateOverride) ? stop.pdfTemplateOverride : null,
         bookLayoutOverride: SPREAD_LAYOUT_IDS.includes(stop.bookLayoutOverride) ? stop.bookLayoutOverride : null,
         bookSpreadCounts: serializeSpreadCounts(stop.bookSpreadCounts),
+        bookHideText: stop.bookHideText ? 1 : 0,
         heading: stop.heading ?? "",
         narrative: stop.narrative ?? "",
         research: stop.research ?? "",
@@ -401,7 +420,10 @@ export function updateStory(id, data) {
       deleteInfoCardsStmt.run({ stopId: stop.id });
       (stop.infoCards ?? []).forEach((card, index) => {
         insertInfoCardStmt.run({
-          id: randomUUID(),
+          // Keep a card's id across saves (the book's per-card settings and
+          // the editor refer to it); only new cards get a fresh one.
+          id: typeof card.id === "string" && /^[0-9a-f-]{36}$/i.test(card.id) ? card.id : randomUUID(),
+          bookHidden: card.bookHidden ? 1 : 0,
           stopId: stop.id,
           placeName: card.placeName || "",
           subtitle: card.subtitle || "",

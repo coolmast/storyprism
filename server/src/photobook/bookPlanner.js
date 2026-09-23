@@ -155,7 +155,11 @@ export function planBook(story, { product: productId, strings } = {}) {
   let variant = 0;
   const nextVariant = () => variant++;
   const fonts = resolveFonts(story);
-  const baseCtx = { typeScale, accentColor: theme.accent, fonts };
+  // User text size choice (Photobook panel), on top of the product scale.
+  const textScale = { title: story.bookTitleScale || 1, body: story.bookBodyScale || 1 };
+  const baseCtx = { typeScale, accentColor: theme.accent, fonts, textScale };
+  // Text parts the user took out of the book (re-addable in the preview).
+  const hiddenItems = [];
 
   const spreads = [];
   let burstSkips = 0;
@@ -169,11 +173,13 @@ export function planBook(story, { product: productId, strings } = {}) {
   const coverPool = featured.length ? featured : allIncluded;
 
   // Intro spread: story title + intro text over a photo from the trip.
-  if (story.intro) {
+  if (story.intro && story.bookHideIntro) hiddenItems.push({ label: "Intro", toggle: { target: "intro" } });
+  if (story.intro && !story.bookHideIntro) {
     const backdrop = coverPool[1] || coverPool[0] || null;
     spreads.push({
       kind: "intro",
       label: "Intro",
+      toggle: { target: "intro" },
       ...chapterSpread(spreadSize, baseCtx, { backdrop, title: story.title, narrative: story.intro }),
       layoutId: "chapter",
     });
@@ -187,7 +193,10 @@ export function planBook(story, { product: productId, strings } = {}) {
       : skipBursts(allIncludedHere);
     burstSkips += skipped.length;
     const feat = included.find((p) => p.featured);
-    const hasText = Boolean(stop.narrative || stop.pullQuote);
+    const stopHasText = Boolean(stop.narrative || stop.pullQuote);
+    const hasText = stopHasText && !stop.bookHideText;
+    if (stopHasText && stop.bookHideText)
+      hiddenItems.push({ label: `Story text · ${stop.heading}`, stopId: stop.id, toggle: { target: "chapter", stopId: stop.id } });
     const tag = { stopId: stop.id, stopHeading: stop.heading };
     const stopSpreads = [];
 
@@ -202,6 +211,7 @@ export function planBook(story, { product: productId, strings } = {}) {
       stopSpreads.push({
         kind: "chapter",
         ...tag,
+        toggle: { target: "chapter", stopId: stop.id },
         ...chapterSpread(spreadSize, baseCtx, {
           backdrop,
           title: stop.heading,
@@ -229,10 +239,20 @@ export function planBook(story, { product: productId, strings } = {}) {
       })
     );
 
-    const cards = stop.infoCards || [];
+    const allCards = stop.infoCards || [];
+    allCards.forEach((card, cardIndex) => {
+      if (card.bookHidden)
+        hiddenItems.push({
+          label: `Info card · ${card.placeName}`,
+          stopId: stop.id,
+          toggle: { target: "info", stopId: stop.id, cardIndex },
+        });
+    });
+    const cards = allCards.filter((c) => !c.bookHidden);
     const infoSpread = (card) => ({
       kind: "info",
       ...tag,
+      toggle: { target: "info", stopId: stop.id, cardIndex: allCards.indexOf(card) },
       ...infoCardSpread(spreadSize, baseCtx, { card, hero: heroForCard(card, stop) || feat || included[0] || null }),
       layoutId: "info-card",
     });
@@ -253,10 +273,12 @@ export function planBook(story, { product: productId, strings } = {}) {
     );
   });
 
-  if (story.outro) {
+  if (story.outro && story.bookHideOutro) hiddenItems.push({ label: "Outro", toggle: { target: "outro" } });
+  if (story.outro && !story.bookHideOutro) {
     spreads.push({
       kind: "outro",
       label: "Outro",
+      toggle: { target: "outro" },
       ...chapterSpread(spreadSize, baseCtx, { backdrop: allIncluded.at(-1) || null, narrative: story.outro }),
       layoutId: "chapter",
     });
@@ -302,6 +324,7 @@ export function planBook(story, { product: productId, strings } = {}) {
     knownPageCounts: knownPageCounts(product),
     childArticleID: childArticleIdFor(product, numPages),
     blankSpreads: blanks,
+    hiddenItems,
     burstSkips,
   };
 }
