@@ -159,6 +159,31 @@ async function runChecksAtBreakpoint(browser, story, width, tag) {
   const themeStoryTitle = await page.locator(".story-title-input").inputValue().catch(() => null);
   check(`[${tag}] creating a yearbook story opens its editor`, !!themeStoryTitle);
   const themeStoryId = new URL(page.url()).pathname.split("/").pop();
+
+  // --- Section (stop) drag-reordering - this story is guaranteed several
+  // sections (a theme + a custom section + a chronological tail), unlike
+  // the small disposable album story used below.
+  await page.getByText("Alle einklappen").click();
+  await page.waitForTimeout(200);
+  const dragHandles = page.locator(".stop-drag-handle");
+  const dragHandleCount = await dragHandles.count();
+  if (dragHandleCount >= 2) {
+    const headingsBeforeDrag = await page.locator(".stop-summary-heading").allInnerTexts();
+    const firstBox = await dragHandles.nth(0).boundingBox();
+    const secondBox = await dragHandles.nth(1).boundingBox();
+    await page.mouse.move(firstBox.x + firstBox.width / 2, firstBox.y + firstBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(secondBox.x + secondBox.width / 2, secondBox.y + secondBox.height + 10, { steps: 10 });
+    await page.waitForTimeout(150);
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+    const headingsAfterDrag = await page.locator(".stop-summary-heading").allInnerTexts();
+    check(
+      `[${tag}] dragging a section's handle reorders the sections`,
+      headingsAfterDrag[0] === headingsBeforeDrag[1] && headingsAfterDrag.length === headingsBeforeDrag.length
+    );
+  }
+
   await jsonFetch(`${BACKEND_URL}/api/stories/${themeStoryId}`, { method: "DELETE" });
 
   // --- Open the disposable test story's editor ---

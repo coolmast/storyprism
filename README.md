@@ -193,9 +193,12 @@ view, a reveal.js presentation, or a printable PDF (either format).
 - `web/` — React (Vite) frontend: album picker + map (M1), story list +
   editor (M2/M3) with a theme/content-language/PDF-layout picker (now
   behind a "Story settings" modal, not inline - see below), drag-to-reorder
-  photo grid, featured-photo/pull-quote controls, a per-stop AI interview
-  panel (`InterviewPanel.jsx`), a per-stop route-embed manager
-  (`RouteEmbeds.jsx`), a per-stop info-card manager (`InfoCards.jsx`,
+  photo grid *and* drag-to-reorder sections themselves (same sortablejs
+  pattern, a dedicated `.stop-drag-handle` per section so dragging doesn't
+  fight the section's own inputs/buttons), featured-photo/pull-quote
+  controls, a per-stop AI interview panel (`InterviewPanel.jsx`), a
+  per-stop route-embed manager (`RouteEmbeds.jsx`), a per-stop info-card
+  manager (`InfoCards.jsx`,
   including the placement selector and hero-photo picker), and a
   story-level notes-import panel (`NotesImportPanel.jsx`), links out to
   view/present/PDF export (M4).
@@ -548,6 +551,9 @@ pick up `server.allowedHosts` changes on the fly.
       that updates as themes are picked - matching the preview the other
       two sources already had. See the Architecture section above
       (`server/src/photoThemes.js`)
+- [x] Drag-to-reorder for sections themselves, not just the photos inside
+      one - a `.stop-drag-handle` per section, same sortablejs pattern as
+      the photo grid
 
 ## Notes
 
@@ -781,6 +787,13 @@ pick up `server.allowedHosts` changes on the fly.
   `forceFallback: true` for consistent mouse/touch behavior) only reorders
   *included* photos; excluded ones keep their relative order, appended
   after. The new order is written back as each photo's `position` on save.
+- Sections themselves are drag-to-reorder too (`StoryEditor.jsx`, same
+  sortablejs setup, `.stop-drag-handle`), not just the photos inside one -
+  a real gap until now (only add/remove/split existed for sections). The
+  Sortable instance is re-created whenever the number of stops changes,
+  since it manages the section `<section>` elements as plain DOM nodes
+  during a drag rather than through React state - stale after an
+  add/remove/split otherwise.
 - Adding a theme (10 now, up from 4) is a single new entry in `THEMES` in
   `themes.js` — render.js, deck.js, the editor's theme picker, and the
   `/api/themes` endpoint all read from that one object, nothing else to

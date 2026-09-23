@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Sortable from "sortablejs";
 import { saveStory, draftCaption, researchPlace, fetchThemes, fetchLanguages, fetchPdfLayouts } from "./api.js";
 import IncludedPhotoGrid from "./IncludedPhotoGrid.jsx";
 import PdfLivePreview from "./PdfLivePreview.jsx";
@@ -46,6 +47,7 @@ export default function StoryEditor({ story, onSaved }) {
   const [showSettings, setShowSettings] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [pendingRemoveStopId, setPendingRemoveStopId] = useState(null);
+  const stopsListRef = useRef(null);
 
   async function handleCopyShareLink() {
     // No ?preview=1 here on purpose: that flag only exists to show the
@@ -140,6 +142,35 @@ export default function StoryEditor({ story, onSaved }) {
       }),
     }));
   }
+
+  function reorderStops(oldIndex, newIndex) {
+    markDirty((d) => {
+      const stops = [...d.stops];
+      const [moved] = stops.splice(oldIndex, 1);
+      stops.splice(newIndex, 0, moved);
+      return { ...d, stops };
+    });
+  }
+
+  // Sortable manages the stop <section> elements as plain DOM children (not
+  // through React state during a drag), so it has to be re-created whenever
+  // the number of stops changes - otherwise it keeps dragging stale nodes
+  // after a section is added/removed/split.
+  useEffect(() => {
+    if (!stopsListRef.current) return;
+    const sortable = Sortable.create(stopsListRef.current, {
+      animation: 150,
+      handle: ".stop-drag-handle",
+      forceFallback: true,
+      onEnd: (evt) => {
+        if (evt.oldIndex !== evt.newIndex) {
+          reorderStops(evt.oldIndex, evt.newIndex);
+        }
+      },
+    });
+    return () => sortable.destroy();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.stops.length]);
 
   // A blank stop the user inserts by hand, for a moment the automatic
   // time/distance clustering didn't split out on its own - a rest stop,
@@ -370,6 +401,7 @@ export default function StoryEditor({ story, onSaved }) {
         </button>
       </div>
 
+      <div className="stops-list" ref={stopsListRef}>
       {draft.stops.map((stop, i) => {
         const isCollapsed = collapsedStops.has(stop.id);
         const includedPhotos = stop.photos.filter((p) => p.included);
@@ -378,6 +410,11 @@ export default function StoryEditor({ story, onSaved }) {
         return (
           <section key={stop.id} className={`stop-editor ${isCollapsed ? "collapsed" : ""}`}>
             <div className="stop-summary-row">
+              {draft.stops.length > 1 && (
+                <span className="stop-drag-handle" title={t("dragHandleTitle")} aria-hidden="true">
+                  &#10021;
+                </span>
+              )}
               <button
                 type="button"
                 className="stop-collapse-toggle"
@@ -550,6 +587,7 @@ export default function StoryEditor({ story, onSaved }) {
           </section>
         );
       })}
+      </div>
 
       <textarea
         className="story-outro"
