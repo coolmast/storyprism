@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "smoke-test": "node scripts/ui-smoke-test.mjs"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",

@@ -285,6 +285,20 @@ Both servers bind to all interfaces, so on the LAN they're also reachable at
 this machine's IP (e.g. `http://192.168.42.213:5174` for the frontend) —
 useful for a second person to use the editor from their own device.
 
+### UI smoke test
+
+With both servers running, `npm run smoke-test --workspace server` drives
+the editor app end-to-end in headless Chrome (nav switching, the theme
+toggle + its persistence across a reload, the album year-group accordion,
+the Settings/Share & Export/delete/remove-section modals) at both the
+desktop and mobile breakpoints, and asserts no console errors and no
+horizontal overflow throughout. It creates one disposable story from
+whichever real album has the fewest photos and deletes it again when done
+(`server/scripts/ui-smoke-test.mjs`). Override the URLs it targets with
+`SMOKE_FRONTEND_URL`/`SMOKE_BACKEND_URL` if either isn't on its default port
+(Vite picks the next free port starting at 5173, so this is common when
+something else is already running).
+
 ### Exposing the dev server through a reverse proxy
 
 `npm run dev --workspace web` (what's actually run in production too, so
@@ -478,6 +492,8 @@ pick up `server.allowedHosts` changes on the fly.
       suggestion chip) doesn't exactly match any photo's place metadata -
       previously left the picker permanently empty for any manually-added
       card
+- [x] UI smoke test (`npm run smoke-test --workspace server`) - see
+      "Running locally" above
 
 ## Notes
 
