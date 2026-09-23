@@ -149,6 +149,16 @@
   --preview-ok-text: #9fd6a2;
 }
 
+/* Same idea as --preview-*, for the small icon buttons overlaid directly
+   on a photo thumbnail (drag handle, split-here) - a fixed light chip
+   with fixed dark ink reads against arbitrary photo content in a way a
+   theme-following color can't promise, so it deliberately doesn't switch
+   with data-theme either. */
+:root {
+  --photo-overlay-bg: rgba(255, 255, 255, 0.85);
+  --photo-overlay-text: #2b2420;
+}
+
 *,
 *::before,
 *::after {
