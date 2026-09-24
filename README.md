@@ -677,12 +677,12 @@ from nginx itself, not from this app). Raise it to match, e.g.
       Architecture section above and "Exposing the dev server through a
       reverse proxy" for the remaining reverse-proxy-side config a very
       large yearbook may still need
-- [ ] CEWE FOTOWELT export (`.mcfx`) for the three formats matching the
+- [x] CEWE FOTOWELT export (`.mcfx`) for the three formats matching the
       Saal ones, picked from the same product list (grouped by vendor) and
-      planned by the same layout engine. Container, geometry, rotation,
-      shadow and transparency verified by probes the real software opened;
-      a full generated book still needs a real-software check (fonts: CEWE
-      may substitute the planner's fonts, which changes text fit)
+      planned by the same layout engine. Verified in CEWE Fotowelt 8.1.3 with
+      a full generated book: cover, spreads, drop shadows, full-bleed
+      photos and translucent text panels as planned, fonts mapped to
+      CEWE-printable ones (no substitution warning), no crash
 
 ## Notes
 
