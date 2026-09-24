@@ -814,16 +814,28 @@ from nginx itself, not from this app). Raise it to match, e.g.
       iframe-able embed link no longer allows framing) is supported for the
       first time. See "Route embeds" further down for the mechanism per
       provider
-- [x] Photobook: a route embed with a derivable static map image (Komoot's
-      `image=1` endpoint) gets its own spread - the map contain-fit (not
-      cropped) on one page, a few of the stop's own photos on the other so
-      it doesn't read as an oddly empty page (`routeMapSpread` in
-      `spreadLayouts.js`, wired into `bookPlanner.js`). The photos come out
-      of that stop's normal photo pool first, so they don't also repeat in
-      a later grid spread. Verified against both the Saal and CEWE export
-      pipelines (a disposable story's real export, not just the preview) -
-      `exportShared.js` fetches a non-PhotoPrism image directly
-      (`photo.externalUrl`) the same way it fetches a PhotoPrism photo
+- [x] Photobook: a route embed gets its own spread - the map/activity image
+      contain-fit (not cropped) on one page, a couple of the stop's own
+      small photos sharing that same page below it (so the map doesn't have
+      to fill, and dominate, the whole page) plus a few more on the
+      opposite page as a small gallery (`routeMapSpread` in
+      `spreadLayouts.js`, wired into `bookPlanner.js`). Two embeds on one
+      stop each get their own spread and their own share of that stop's
+      photos, drawn from the same pool in turn. Those photos come out of
+      the stop's normal photo pool first, so they don't also repeat in a
+      later grid spread. Works for both providers with an image to show:
+      Komoot's static map (its `image=1` endpoint - see `embeds.js`) and,
+      since Strava has no such endpoint, a real headless-Chromium
+      screenshot of its own widget (`server/src/stravaWidget.js`, same
+      Playwright toolchain `pdf.js` already uses for PDF export - served at
+      `GET /api/embeds/strava-map`, cached in memory since the same
+      activity gets requested often but rarely changes). Verified against
+      both the Saal and CEWE export pipelines with a Komoot *and* a Strava
+      embed on the same stop (a disposable story's real export, not just
+      the preview) - `exportShared.js` fetches a non-PhotoPrism image
+      directly (`photo.externalUrl`) the same way for both, including the
+      screenshot endpoint's own internal `http://localhost:.../api/embeds/
+      strava-map` URL
 - [x] Resolution-aware photobook layout: a low-res photo (PhotoPrism's own
       width/height metadata, below ~3 effective megapixels) is scored down
       sharply as a candidate for any full-bleed/full-spread/hero placement
@@ -1022,7 +1034,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
     (`.../activities/:id?embed_token=...`) that `stravaActivityInfo` reads
     back at render time. The widget script is included at most once per
     page (`hasStravaWidget` in `render.js`/`deck.js`), however many Strava
-    embeds a story has.
+    embeds a story has. Unlike Komoot there's no static-image endpoint to
+    fall back on for print, so the photobook gets its picture a different
+    way - see `stravaWidget.js` below.
   - **Garmin Connect**: doesn't have as well-known an embed format as
     Strava/Komoot - needs the specific "Embed" share link the service
     itself generates (path or query containing "embed"); anything else

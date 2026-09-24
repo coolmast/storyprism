@@ -12,7 +12,7 @@ import {
 import { photoAspect, coverRetention } from "../pdfLayoutEngine.js";
 import { dateRange } from "../render.js";
 import { getTheme } from "../themes.js";
-import { komootImageUrl } from "../embeds.js";
+import { embedKind, komootImageUrl, stravaActivityInfo } from "../embeds.js";
 
 // Turns a story into a printed photobook: a wrap-around cover plus a list of
 // lay-flat spreads, each a list of positioned elements (see
@@ -133,21 +133,40 @@ function heroForCard(card, stop) {
   return stop.photos.find((p) => p.hash === card.heroPhotoHash || (p.thumbUrl || "").includes(card.heroPhotoHash)) || null;
 }
 
+// The server's own origin - needed only for the *export*'s server-side
+// fetch (exportShared.js's fetchExternalBuffer, plain node fetch, no
+// notion of "current page" to resolve a relative URL against). The live
+// preview's own fetch is a normal <img src>, which resolves a relative URL
+// against whatever page it's showing in just fine (see thumbUrl below).
+const SELF_ORIGIN = `http://localhost:${process.env.PORT || 3001}`;
+
 // A route embed's map, as a "photo" for the image element it's placed in -
 // not a PhotoPrism photo at all (see exportShared.js's fetchExternalBuffer
-// / photoKey, which key on this externalUrl when there's no hash). Only
-// Komoot has a static-image trick to derive one from; Strava/Garmin embeds
-// skip the photobook entirely for now, same as they already do in the
-// presentation deck.
+// / photoKey, which key on this externalUrl when there's no hash).
+// width/height are only ever a preview-time placement estimate (a real
+// tour's elevation profile, or a Strava widget's actual layout, varies the
+// image's exact proportions) - the actual export measures the real fetched
+// pixels instead of trusting these.
 function routeMapPhoto(embed) {
+  const kind = embedKind(embed.url);
+  if (kind === "strava-widget") {
+    const info = stravaActivityInfo(embed.url);
+    if (!info) return null;
+    const q = `activityId=${encodeURIComponent(info.activityId)}&token=${encodeURIComponent(info.token)}&style=${encodeURIComponent(info.style)}`;
+    return {
+      id: `route-${embed.id}`,
+      thumbUrl: `/api/embeds/strava-map?${q}`,
+      fullUrl: `/api/embeds/strava-map?${q}`,
+      externalUrl: `${SELF_ORIGIN}/api/embeds/strava-map?${q}`,
+      width: 700,
+      height: 900,
+    };
+  }
   const url = komootImageUrl(embed.url);
   // thumbUrl/fullUrl are what the live preview's inline SVG loads directly
   // in the browser (bookPreview.js's previewRef); externalUrl is what the
   // real Saal/CEWE export fetches server-side (exportShared.js) - both need
-  // to point at the same image. width/height are only ever a preview-time
-  // placement estimate (a real tour's elevation profile varies the image's
-  // exact proportions) - the actual export measures the real fetched pixels
-  // instead of trusting these.
+  // to point at the same image.
   return url ? { id: `route-${embed.id}`, externalUrl: url, thumbUrl: url, fullUrl: url, width: 1280, height: 1160 } : null;
 }
 
@@ -246,21 +265,33 @@ export function planBook(story, { product: productId, strings } = {}) {
       pool = [feat, ...included.filter((p) => p !== feat)];
     }
 
-    // Route map spreads - one per embed with a derivable map image. The
-    // first one also gets a few of the stop's own photos on its opposite
-    // page (see routeMapSpread) so it isn't just a mostly-empty page facing
-    // a map; those photos come out of `pool` *before* the normal photo-grid
-    // chunking below so they don't also repeat later in the book.
+    // Route map spreads - one per embed with a derivable map image. Each
+    // also gets a handful of the stop's own photos: 1-2 small ones sharing
+    // the map's own page (so the map doesn't have to fill, and dominate,
+    // the whole page) plus a few more on the opposite page (see
+    // routeMapSpread), so a route spread never reads as a mostly-empty
+    // page(s) facing a map. Every embed draws from the same shrinking
+    // `pool` in turn (not just the first) so two routes on one stop each
+    // still get their share, and none of these photos also repeat later in
+    // the normal photo-grid chunking below.
     const routeSpreads = (stop.embeds || [])
       .map((embed) => ({ embed, hero: routeMapPhoto(embed) }))
       .filter((r) => r.hero)
-      .map(({ embed, hero }, i) => {
-        const galleryPhotos = i === 0 ? pool.slice(0, Math.min(3, pool.length)) : [];
-        pool = pool.filter((p) => !galleryPhotos.includes(p));
+      .map(({ embed, hero }) => {
+        const picked = pool.slice(0, Math.min(5, pool.length));
+        pool = pool.filter((p) => !picked.includes(p));
+        const mapPagePhotos = picked.slice(0, Math.min(2, picked.length));
+        const galleryPhotos = picked.slice(mapPagePhotos.length);
         return {
           kind: "route",
           ...tag,
-          ...routeMapSpread(spreadSize, baseCtx, { hero, title: embed.title || null, photos: galleryPhotos, variant: nextVariant() }),
+          ...routeMapSpread(spreadSize, baseCtx, {
+            hero,
+            title: embed.title || null,
+            mapPagePhotos,
+            galleryPhotos,
+            variant: nextVariant(),
+          }),
           layoutId: "route-map",
         };
       });

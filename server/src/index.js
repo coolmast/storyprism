@@ -42,6 +42,7 @@ import { startBookExport, getBookJob } from "./photobook/bookExport.js";
 import { attachInsights } from "./photoInsights.js";
 import { THEMES } from "./themes.js";
 import { fetchArticleText } from "./article.js";
+import { stravaWidgetImage } from "./stravaWidget.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -91,6 +92,26 @@ app.get("/api/photo/dl/:hash", async (req, res) => {
     res.set("Content-Type", contentType).set("Cache-Control", "public, max-age=31536000, immutable").send(buffer);
   } catch (err) {
     sendPhotoError(res, err);
+  }
+});
+
+// A printable snapshot of a Strava activity embed (see stravaWidget.js) -
+// Strava's own placeholder-div+script mechanism only renders in a real
+// browser, so this headlessly renders and screenshots it server-side. Used
+// both by the photobook (as an "external" image, see exportShared.js) and
+// by its own live preview (a plain <img src> pointing straight here, see
+// bookPlanner.js's routeMapPhoto) - one code path either way, cached in
+// memory since the same activity gets requested often (every preview
+// reload) but rarely changes.
+app.get("/api/embeds/strava-map", async (req, res) => {
+  const { activityId, token, style } = req.query;
+  if (!activityId || !token) return res.status(400).json({ error: "activityId and token are required" });
+  try {
+    const buffer = await stravaWidgetImage({ activityId, token, style: style || "standard" });
+    res.set("Cache-Control", "public, max-age=3600").type("image/jpeg").send(buffer);
+  } catch (err) {
+    console.error(err);
+    res.status(502).json({ error: err.message });
   }
 });
 

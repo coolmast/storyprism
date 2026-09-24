@@ -872,37 +872,68 @@ export function infoCardSpread(spread, ctx, { card, hero }) {
   return { elements, paper: "#ffffff" };
 }
 
-// A route embed's map image (see embeds.js's komootImageUrl), one page of a
-// spread - contain-fit, not cropped, since it's a title + track +
-// elevation-profile composite where a cover-crop could easily slice off the
-// part that matters (see placePhotoContain). The other page takes a small
-// gallery of the stop's own photos (bookPlanner.js hands over a few, held
-// back from its normal photo-grid chunking so they don't also repeat
-// later) - a map spread with nothing else on it read as an oddly empty,
-// text-book-ish page; a couple of trail photos next to it reads as part of
-// the story instead.
-export function routeMapSpread(spread, ctx, { hero, title, photos = [], variant = 0 }) {
+// A route embed's map image (see embeds.js's komootImageUrl/stravaWidget.js),
+// one page of a spread - contain-fit, not cropped, since it's a composite
+// (title/track/elevation-profile for Komoot; a whole activity card for
+// Strava) where a cover-crop could easily slice off the part that matters
+// (see placePhotoContain). Deliberately not given the *whole* page: a couple
+// of the stop's own small photos share it below the map (mapPagePhotos), and
+// a few more take the opposite page as a small gallery (galleryPhotos,
+// bookPlanner.js holds these back from its normal photo-grid chunking so
+// they don't also repeat later) - a map spread with nothing else on it, or
+// a map blown up to fill an entire page on its own, read as an oddly empty,
+// text-book-ish spread; a few trail photos around it reads as part of the
+// story instead.
+export function routeMapSpread(spread, ctx, { hero, title, mapPagePhotos = [], galleryPhotos = [], variant = 0 }) {
   const mapSide = variant % 2 ? "right" : "left";
   const galSide = mapSide === "left" ? "right" : "left";
   const mapPage = pageBox(spread, mapSide);
   const margin = mapPage.w * 0.1;
-  const captionH = title ? mapPage.h * 0.13 : 0;
-  const mapBox = { x: mapPage.x + margin, y: mapPage.y + margin, w: mapPage.w - 2 * margin, h: mapPage.h - 2 * margin - captionH };
+  // titleElement sizes itself (it can wrap to 2-3 lines) and grows upward
+  // from this strip's bottom edge rather than clipping to captionH - too
+  // short a strip means the text creeps up into the map above it, not that
+  // it gets cut off. Generous enough for a wrapped multi-line title.
+  const captionH = title ? mapPage.h * 0.15 : 0;
+  // Reserved at the bottom of the map's own page, below the map (and the
+  // caption) - shrinks the map itself accordingly, rather than the map
+  // filling the page and these overlapping it.
+  const cardsH = mapPagePhotos.length ? mapPage.h * 0.22 : 0;
+  const mapBox = {
+    x: mapPage.x + margin,
+    y: mapPage.y + margin,
+    w: mapPage.w - 2 * margin,
+    h: mapPage.h - 2 * margin - captionH - cardsH,
+  };
 
   const elements = [];
   if (hero) elements.push(image(hero, mapBox, { fit: "contain" }));
   if (title) {
-    // In its own reserved strip below the image, not overlaid on it - so it
-    // can't land on top of the composite's own bottom edge, wherever that
-    // happens to fall once the image is contain-fit (its exact proportions
-    // vary per tour).
-    const capFrame = { x: mapPage.x + margin, y: mapPage.y + mapPage.h - captionH, w: mapPage.w - 2 * margin, h: captionH };
+    // In its own reserved strip, not overlaid on the map - so it can't land
+    // on top of the composite's own bottom edge, wherever that happens to
+    // fall once the image is contain-fit (its exact proportions vary per
+    // tour/provider).
+    const capFrame = {
+      x: mapPage.x + margin,
+      y: mapPage.y + mapPage.h - cardsH - captionH,
+      w: mapPage.w - 2 * margin,
+      h: captionH,
+    };
     elements.push(titleElement(title, capFrame, mapSide === "right" ? "br" : "bl", ctx, { dark: true }));
   }
-  if (photos.length) {
+  if (mapPagePhotos.length) {
+    const cardsBox = {
+      x: mapPage.x + margin,
+      y: mapPage.y + mapPage.h - cardsH,
+      w: mapPage.w - 2 * margin,
+      h: cardsH - margin * 0.3,
+    };
+    const frames = collageOn(mapPagePhotos, cardsBox, { gap: 50, fill: 0.9, variant });
+    elements.push(...mapPagePhotos.map((p, i) => image(p, frames[i], { shadow: true })));
+  }
+  if (galleryPhotos.length) {
     const gal = inset(pageBox(spread, galSide), mapPage.w * 0.06);
-    const frames = collageOn(photos, gal, { gap: 70, fill: 0.9, variant });
-    elements.push(...photos.map((p, i) => image(p, frames[i], { shadow: true })));
+    const frames = collageOn(galleryPhotos, gal, { gap: 70, fill: 0.9, variant });
+    elements.push(...galleryPhotos.map((p, i) => image(p, frames[i], { shadow: true })));
   }
   return { elements, paper: "#ffffff" };
 }
