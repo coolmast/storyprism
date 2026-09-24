@@ -46,6 +46,16 @@ async function isOpenModalVisible(page) {
   return (await page.locator(".ui-modal[open]").count()) > 0;
 }
 
+// A stop's heading renders as plain text (.stop-summary-heading) only while
+// collapsed - expanded (the default for a freshly added stop), it's the
+// value of an editable .stop-heading-input instead. Covers both so a check
+// doesn't care which state the stop happens to be in.
+async function currentStopHeadings(page) {
+  const collapsed = await page.locator(".stop-summary-heading").allInnerTexts();
+  const expanded = await page.locator(".stop-heading-input").evaluateAll((els) => els.map((el) => el.value));
+  return [...collapsed, ...expanded];
+}
+
 async function runChecksAtBreakpoint(browser, story, width, tag) {
   const context = await browser.newContext({ viewport: { width, height: 1000 } });
   const page = await context.newPage();
@@ -105,30 +115,42 @@ async function runChecksAtBreakpoint(browser, story, width, tag) {
     await page.waitForTimeout(200);
   }
 
-  // --- "Nach Themen" (yearbook) source: discover + select + create ---
+  // --- "Nach Themen" (yearbook) source: just a date range up front, story
+  // starts empty, sections are cherry-picked one at a time afterward in the
+  // editor's own Add Section panel (see ThemeSectionPanel.jsx) - replaced
+  // the old "discover everything, select some, create the whole plan at
+  // once" flow.
   await page.locator(".source-toggle button").nth(2).click();
   await page.waitForTimeout(200);
   const themeDateInputs = page.locator('.theme-source-picker input[type="date"]');
   // A full calendar year, not the entire library history: theme discovery's
-  // trip-cluster detection now correctly paginates through every photo in
-  // range (see getPhotosByDateRange) instead of silently stopping at an
-  // old fixed 3000-photo cap, so a range spanning this library's full
-  // multi-year history means genuinely paging through 100k+ photos here -
-  // correct, but far slower than a smoke test should be. One year is still
-  // wide enough to exercise real multi-theme discovery.
+  // trip-cluster detection paginates through every photo in range (see
+  // getPhotosByDateRange), so a range spanning this library's full
+  // multi-year history would mean genuinely paging through 100k+ photos
+  // here - correct, but far slower than a smoke test should be. One year is
+  // still wide enough to exercise real multi-theme discovery.
   await themeDateInputs.nth(0).fill("2026-01-01");
   await themeDateInputs.nth(1).fill("2026-12-31");
-  await page.locator(".theme-source-picker .ai-btn").click();
+  await page.locator(".theme-source-picker .save-btn").click();
+  await page.waitForTimeout(1200);
+  const themeStoryTitle = await page.locator(".story-title-input").inputValue().catch(() => null);
+  check(`[${tag}] creating a yearbook story opens its editor`, !!themeStoryTitle);
+  const themeStoryId = new URL(page.url()).pathname.split("/").pop();
+  check(`[${tag}] a freshly created yearbook story starts with no sections`, (await page.locator(".stop-editor").count()) === 0);
+
+  // --- Add Section panel: one click on a suggested theme chip, one
+  // hand-typed date sub-range, and "add remaining photos" - each reconciled
+  // into the story immediately (writes straight to the database, no
+  // separate "create" step to confirm first).
+  await page.locator(".settings-btn").click();
+  await page.locator(".theme-section-panel").waitFor({ state: "visible", timeout: 5000 });
   // Discovery is network-bound (probes dozens of label/subject candidates
-  // against PhotoPrism) - poll for the candidates Card instead of a fixed
-  // sleep, which was flaky under load.
-  await page.locator(".theme-candidates").waitFor({ state: "visible", timeout: 15000 });
+  // against PhotoPrism) - poll for the chips instead of a fixed sleep,
+  // which was flaky under load.
+  await page.waitForFunction(() => document.querySelectorAll(".theme-chip").length > 0, { timeout: 15000 });
   const themeChips = page.locator(".theme-chip");
   const themeChipCount = await themeChips.count();
-  check(`[${tag}] theme discovery returns candidates`, themeChipCount > 0);
-  await page.locator(".theme-preview .stop-list li").first().waitFor({ state: "visible", timeout: 10000 });
-  const stopCountBefore = await page.locator(".theme-preview .stop-list li").count();
-  check(`[${tag}] live preview shows the chronological plan before selecting anything`, stopCountBefore > 0);
+  check(`[${tag}] Add Section panel shows suggested theme chips`, themeChipCount > 0);
   if (themeChipCount > 0) {
     // The chip's title sits as a plain text node between its check-mark and
     // photo-count <span> children - read that node directly rather than
@@ -138,51 +160,53 @@ async function runChecksAtBreakpoint(browser, story, width, tag) {
       return textNode ? textNode.textContent.trim() : null;
     });
     await themeChips.nth(0).click();
-    await page.waitForTimeout(150);
-    check(`[${tag}] selecting a theme chip marks it active`, await themeChips.nth(0).evaluate((el) => el.classList.contains("active")));
-    // Over a huge (multi-year) range, splitting one small theme off the
-    // leftover doesn't reliably change its own cluster *count* (buildItinerary
-    // groups by time gaps, and removing one day's photos rarely creates or
-    // removes a gap boundary elsewhere) - so check for the concrete, actually-
-    // claimed behavior instead: the selected theme's own title appears as a
-    // section. A full year's worth of photos now genuinely gets refetched
-    // and replanned on each selection (no more silent truncation), so this
-    // can take a couple of seconds - poll for the heading instead of a fixed
-    // debounce sleep, which flaked once the refetch got slower for the
-    // right reason (fixing the truncation bug in getPhotosByDateRange).
-    let headingsAfter = [];
     let sawSection = false;
-    try {
-      await page
-        .locator(".theme-preview .stop-list h3", { hasText: firstChipTitle })
-        .first()
-        .waitFor({ state: "visible", timeout: 10000 });
-      sawSection = true;
-    } catch {
-      headingsAfter = await page.locator(".theme-preview .stop-list h3").allInnerTexts();
+    let headingsNow = [];
+    for (let i = 0; i < 20 && !sawSection; i++) {
+      headingsNow = await currentStopHeadings(page);
+      sawSection = headingsNow.some((h) => h === firstChipTitle);
+      if (!sawSection) await page.waitForTimeout(1000);
     }
     check(
-      `[${tag}] live preview gets a section for the selected theme`,
+      `[${tag}] clicking a theme chip adds it as a section right away`,
       sawSection,
-      sawSection ? firstChipTitle : `${firstChipTitle} - got [${headingsAfter.join(", ")}]`
+      sawSection ? firstChipTitle : `${firstChipTitle} - got [${headingsNow.join(", ")}]`
     );
   }
 
   // Custom date sub-range (e.g. "a few days around a birthday") - not a
-  // discovered candidate, hand-entered, removable, still folds into the plan.
-  const customDateInputs = page.locator('.theme-custom-form input[type="date"]');
+  // discovered candidate, hand-typed, added the same way as a chip.
+  const customDateInputs = page.locator('.theme-custom-form:not(.theme-query-form) input[type="date"]');
   await customDateInputs.nth(0).fill("2026-03-10");
   await customDateInputs.nth(1).fill("2026-03-13");
-  await page.locator('.theme-custom-form input[type="text"]').fill("Smoke test birthday");
-  await page.locator(".theme-custom-form .ai-btn").click();
-  await page.waitForTimeout(150);
-  check(`[${tag}] adding a custom section shows it as a removable chip`, (await page.locator(".theme-candidate-group .ui-chip").count()) === 1);
+  await page.locator('.theme-custom-form:not(.theme-query-form) input[type="text"]').fill("Smoke test birthday");
+  await page.getByRole("button", { name: "Abschnitt hinzufügen", exact: true }).click();
+  let sawCustomSection = false;
+  let headingsNow2 = [];
+  for (let i = 0; i < 15 && !sawCustomSection; i++) {
+    headingsNow2 = await currentStopHeadings(page);
+    sawCustomSection = headingsNow2.some((h) => h === "Smoke test birthday");
+    if (!sawCustomSection) await page.waitForTimeout(1000);
+  }
+  check(
+    `[${tag}] adding a custom date sub-range adds it as a section`,
+    sawCustomSection,
+    sawCustomSection ? "" : `got [${headingsNow2.join(", ")}]`
+  );
 
-  await page.locator(".theme-candidates .save-btn").click();
-  await page.waitForTimeout(2500);
-  const themeStoryTitle = await page.locator(".story-title-input").inputValue().catch(() => null);
-  check(`[${tag}] creating a yearbook story opens its editor`, !!themeStoryTitle);
-  const themeStoryId = new URL(page.url()).pathname.split("/").pop();
+  // "Add remaining photos" - the explicit catch-all for a cherry-picked
+  // book, replacing the old always-on chronological tail.
+  const stopCountBeforeLeftover = await page.locator(".stop-editor").count();
+  await page.getByRole("button", { name: "Restliche Fotos hinzufügen (nach Monat)", exact: true }).click();
+  let stopCountAfterLeftover = stopCountBeforeLeftover;
+  for (let i = 0; i < 15 && stopCountAfterLeftover <= stopCountBeforeLeftover; i++) {
+    await page.waitForTimeout(1000);
+    stopCountAfterLeftover = await page.locator(".stop-editor").count();
+  }
+  check(`[${tag}] "add remaining photos" appends the monthly catch-all sections`, stopCountAfterLeftover > stopCountBeforeLeftover);
+
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
 
   // --- Cross-section photo drag: dragging a photo card into a *different*
   // stop's grid moves it there (the rare-EXIF-timestamp fix). Real regression

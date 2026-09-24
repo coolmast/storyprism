@@ -6,6 +6,7 @@ import {
   getPhotosByDateRange,
   getPhotosByLabel,
   getPhotosBySubject,
+  getPhotosByQuery,
   thumbUrl,
 } from "./photoprism.js";
 import { buildItinerary } from "./itinerary.js";
@@ -207,19 +208,25 @@ export async function createStoryFromDateRange(from, to, title, contentLanguage 
 }
 
 // "Yearbook" mode: instead of one chronological itinerary, a date range's
-// photos are split into theme sections the user picked from suggested
-// candidates (see photoThemes.js) - or hand-defined custom date sub-ranges,
-// which are just a type: "trip" theme whose from/to came from the user
-// instead of detection - in the order trip -> content -> person, followed
-// by one ordinary chronological tail for whatever no theme claimed. A photo
+// photos are split into theme sections cherry-picked one at a time in the
+// editor's Add Section panel (see ThemeSectionPanel.jsx / addThemeToStory in
+// storyUpdate.js) from suggested candidates (see photoThemes.js), hand-typed
+// custom date sub-ranges - just a type: "trip" theme whose from/to came from
+// the user instead of detection - or a free-text PhotoPrism search
+// (type: "query", see getPhotosByQuery in photoprism.js). Themes are ordered
+// trip -> content -> person -> query regardless of the order they were
+// added in, and a "leftover" pseudo-theme (added via the panel's "Add
+// remaining photos" button, not a real theme to fetch) appends one ordinary
+// chronological tail, by month, for whatever no added theme claimed. A photo
 // can belong to more than one selected theme (an "airport" beach-vacation
 // shot can be both the trip and a "Beach" content theme) - intentional
 // per-theme duplication, not deduped against other themes - but only ever
-// appears once more, in the chronological tail, if no theme claimed it at
-// all. Split out from story creation so the exact same planning logic
-// backs both the live preview (GET /api/theme-plan-preview) and actually
-// creating the story - the preview is never a guess at what creation will
-// do, it's a dry run of the same code.
+// appears once more, in the leftover tail, if no theme claimed it at all
+// and the leftover pseudo-theme was added. This function is called fresh on
+// every single "add section" click with the story's current theme list plus
+// the one just added - reconcileThemePlan (storyUpdate.js) matches the
+// result back against already-existing stops by theme_id so only the
+// genuinely new stop/photos get written.
 // A popular label (or a long vacation) can pull in far more photos than
 // any one book section should reasonably hold - a "Camping" theme matched
 // 405 photos across one real 9-month range, ballooning that one story to
@@ -287,8 +294,17 @@ export async function planThemeStops({ from, to, themes }) {
   const claimed = new Set();
   const themeStops = [];
 
-  const typeOrder = { trip: 0, content: 1, person: 2 };
-  const orderedThemes = [...themes].sort((a, b) => (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9));
+  // "leftover" is a pseudo-theme, not a real one to fetch: it means "also
+  // work out the by-month catch-all for whatever the *other* themes below
+  // don't claim" (see below). Added explicitly by the editor's "Add
+  // remaining photos" action - a yearbook built by cherry-picking sections
+  // one at a time has no automatic catch-all otherwise, unlike the original
+  // all-at-once design this replaced.
+  const realThemes = themes.filter((t) => t.type !== "leftover");
+  const wantsLeftover = themes.some((t) => t.type === "leftover");
+
+  const typeOrder = { trip: 0, content: 1, person: 2, query: 3 };
+  const orderedThemes = [...realThemes].sort((a, b) => (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9));
 
   for (const theme of orderedThemes) {
     let photos;
@@ -303,6 +319,8 @@ export async function planThemeStops({ from, to, themes }) {
       photos = await getPhotosByLabel(theme.slug, from, to);
     } else if (theme.type === "person") {
       photos = await getPhotosBySubject(theme.subjectUid, from, to);
+    } else if (theme.type === "query") {
+      photos = await getPhotosByQuery(theme.query, from, to);
     } else {
       continue;
     }
@@ -329,8 +347,7 @@ export async function planThemeStops({ from, to, themes }) {
   // - unlike the theme cap, where the overflow still shows up in whichever
   // month it belongs to. A busy month can still run large, but every one
   // of its photos is genuinely in the book somewhere.
-  const leftoverPhotos = rangePhotos.filter((p) => !claimed.has(p.uid));
-  const leftoverStops = groupLeftoverByMonth(leftoverPhotos);
+  const leftoverStops = wantsLeftover ? groupLeftoverByMonth(rangePhotos.filter((p) => !claimed.has(p.uid))) : [];
   const allStops = [...themeStops, ...leftoverStops];
 
   // Same shape buildItinerary itself returns, so the New Story preview
@@ -352,28 +369,30 @@ export async function planThemeStops({ from, to, themes }) {
   }));
 }
 
-export async function createStoryFromThemePlan({ from, to, title, contentLanguage = DEFAULT_LANGUAGE, themes }) {
-  const allStops = await planThemeStops({ from, to, themes });
-
+// Starts completely empty - just the date range remembered as the story's
+// source. Sections are added one at a time afterward, in the editor's "Add
+// section" panel (ThemeSectionPanel.jsx / addThemeToStory in
+// storyUpdate.js), which reuses this same date range for every candidate it
+// suggests. This replaced picking every theme upfront on the New Story
+// page: cherry-picking sections while already looking at the book in
+// progress (and being able to preview/undo one at a time) works better than
+// committing to a whole plan before seeing any of it.
+export async function createStoryFromThemePlan({ from, to, title, contentLanguage = DEFAULT_LANGUAGE }) {
   const storyId = randomUUID();
   const now = new Date().toISOString();
   const storyTitle = (title || "").trim() || `Yearbook ${from} – ${to}`;
 
-  const tx = db.transaction(() => {
-    insertStory.run({
-      id: storyId,
-      albumUid: "",
-      albumTitle: storyTitle,
-      title: storyTitle,
-      theme: DEFAULT_THEME,
-      contentLanguage,
-      sourceType: "theme_plan",
-      sourceConfig: JSON.stringify({ from, to, themes }),
-      now,
-    });
-    insertStops(storyId, allStops);
+  insertStory.run({
+    id: storyId,
+    albumUid: "",
+    albumTitle: storyTitle,
+    title: storyTitle,
+    theme: DEFAULT_THEME,
+    contentLanguage,
+    sourceType: "theme_plan",
+    sourceConfig: JSON.stringify({ from, to, themes: [] }),
+    now,
   });
-  tx();
 
   return getStory(storyId);
 }
@@ -421,6 +440,11 @@ export function getStory(id) {
     // exist at all (storyUpdate.js). Empty for anything older than that
     // feature, which just hides the button rather than guessing at a source.
     sourceType: story.source_type || "",
+    // Parsed, not the raw JSON string - the editor's "Add section" panel
+    // (theme_plan only) needs the story's own from/to to scope its
+    // suggestions, and its already-added `themes` to filter them out of
+    // that list, without callers having to know this is stringified JSON.
+    sourceConfig: story.source_config ? JSON.parse(story.source_config) : null,
     pdfLayoutPack: story.pdf_layout_pack,
     pdfPaperSize: story.pdf_paper_size,
     bookProduct: story.book_product,

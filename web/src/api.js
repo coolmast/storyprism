@@ -15,13 +15,6 @@ export const fetchItineraryByDate = (from, to) =>
 export const fetchThemeCandidates = (from, to) =>
   fetch(`/api/theme-candidates?from=${from}&to=${to}`).then(json);
 
-export const fetchThemePlanPreview = (from, to, themes) =>
-  fetch("/api/theme-plan-preview", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ from, to, themes }),
-  }).then(json);
-
 export const fetchThemes = () => fetch("/api/themes").then(json);
 export const fetchLanguages = () => fetch("/api/languages").then(json);
 export const fetchPdfLayouts = () => fetch("/api/pdf-layouts").then(json);
@@ -57,6 +50,13 @@ export const deleteStory = (id) =>
 
 export const checkStoryUpdates = (id) =>
   fetch(`/api/stories/${id}/check-updates`, { method: "POST" }).then(json);
+
+export const addThemeSection = (id, theme) =>
+  fetch(`/api/stories/${id}/theme-sections`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ theme }),
+  }).then(json);
 
 export const draftCaption = (storyId, stopId, photoId) =>
   fetch(`/api/stories/${storyId}/stops/${stopId}/photos/${photoId}/draft-caption`, {

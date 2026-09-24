@@ -29,69 +29,91 @@ view, a reveal.js presentation, or a printable PDF (either format).
     a story, for when the natural grouping for a date range (e.g. a whole
     year) isn't one chronological trip but a mix of recurring themes - "all
     the zoo photos," "every visit to the grandparents regardless of
-    location," one whole vacation as its own section. Suggests candidates
-    from data PhotoPrism already computes for free: content themes from its
-    Labels ("Zoo", "Dining", "Camping", ...; `all=true` is required to see
-    location-derived ones like "Zoo" at all - PhotoPrism's default listing
-    hides negative-priority labels), person themes from its named Subjects
-    (face recognition - works regardless of where/when a photo was taken),
-    and trip themes from a home-distance-based clustering (most common
-    rough location = "home"; contiguous-in-time photos far from it = a
-    trip) that's independent of the regular per-stop itinerary clustering.
-    A trip cluster's title (`tripTitle`) prefers its single most-photographed
-    city, but falls back to the cluster's dominant *country*
-    (`Intl.DisplayNames`) once no city reaches a real majority - a multi-town
-    trip (a road trip, island-hopping) can have one country clearly
-    dominate even though no single city does, and titling by raw per-city
-    count alone crowns whichever place got the most photos, which is easily
-    a transit stop rather than the destination (a three-week Italy trip
-    through dozens of towns, that also passed through one Danish ferry
+    location," one whole vacation as its own section. Creating one
+    (`createStoryFromThemePlan`) only asks for the book's overall date range
+    (and a title) - it starts out completely **empty**, with that range
+    remembered as `source_config.from`/`.to`. Every section is cherry-picked
+    afterward, one at a time, in the editor's own "Add section" panel
+    (`ThemeSectionPanel.jsx`, inside Story settings) rather than picked
+    upfront on the creation page - seeing the book actually fill in section
+    by section (and being able to stop whenever it's enough) works better
+    than committing to a whole plan before seeing any of it. Each click on a
+    suggested chip, a hand-typed date sub-range, or a custom search calls
+    `POST /api/stories/:id/theme-sections`, which appends that one theme to
+    `source_config.themes` and reconciles the story against the new (one
+    theme longer) list right away - `addThemeToStory` in
+    `server/src/storyUpdate.js`, sharing the exact same `reconcileThemePlan`
+    machinery "check for new photos" uses (see below), just called with a
+    longer `themes` list instead of the stored one unchanged.
+    The panel suggests candidates from data PhotoPrism already computes for
+    free: content themes from its Labels ("Zoo", "Dining", "Camping", ...;
+    `all=true` is required to see location-derived ones like "Zoo" at all -
+    PhotoPrism's default listing hides negative-priority labels), person
+    themes from its named Subjects (face recognition - works regardless of
+    where/when a photo was taken), and trip themes from a home-distance-based
+    clustering (most common rough location = "home"; contiguous-in-time
+    photos far from it = a trip) that's independent of the regular per-stop
+    itinerary clustering. A trip cluster's title (`tripTitle`) prefers its
+    single most-photographed city, but falls back to the cluster's dominant
+    *country* (`Intl.DisplayNames`) once no city reaches a real majority - a
+    multi-town trip (a road trip, island-hopping) can have one country
+    clearly dominate even though no single city does, and titling by raw
+    per-city count alone crowns whichever place got the most photos, which is
+    easily a transit stop rather than the destination (a three-week Italy
+    trip through dozens of towns, that also passed through one Danish ferry
     port, got titled after the ferry port - its own concentrated photo
     burst outnumbered any single Italian town's, even though nearly the
     whole trip was in Italy).
-    Alongside the suggested candidates, any number of hand-defined custom
-    date sub-ranges can be added too (e.g. "3 days around a birthday in
-    March") - not detected, just a title + from/to date the user types in;
-    these are handled identically to a detected trip theme end to end
-    (same `type: "trip"` shape, same date-range photo lookup), the only
-    difference is where the from/to came from. Candidate discovery only
-    ever asks PhotoPrism "does this candidate clear
-    N photos" (`count=N` + the `X-Count` response header, which reports how
-    many rows a request actually returned, not an independent total - so
-    getting a true "at least N" signal means requesting exactly N) rather
-    than fetching full photo data for every candidate. A theme's own section
-    is capped at `MAX_THEME_STOP_PHOTOS` (120, evenly sampled across the
-    theme's date span) - a popular label or a long trip can otherwise match
-    hundreds of photos, and Saal export sends a book's entire draft in one
-    request, so an uncapped section risked tripping a reverse proxy's
-    request-size limit (see "Exposing the dev server through a reverse
-    proxy" below). The overflow isn't dropped, just not under that one
-    heading: a photo can also end up in more than one selected theme
-    (duplicated on purpose - e.g. a beach photo during a vacation can be
-    both the trip and a "Beach" theme), and whatever no selected theme
-    claims falls to a chronological tail, grouped one section per calendar
-    month (`groupLeftoverByMonth` in `stories.js`) rather than the regular
-    flow's finer-grained `buildItinerary` clustering, which is tuned for
-    telling apart the legs of one trip, not for a whole year - applied
-    across a full year of an active family's everyday photos it turned
-    every separate outing in the same home city into its own stop (100+ for
-    one real range). Unlike the theme-stop cap, this leftover tail is never
-    capped - there's no further fallback tier for an overflowing month to
-    land in, so capping it would silently drop photos instead of just
-    moving them. `getPhotosByDateRange` (and every other photo listing call)
-    pages through PhotoPrism's results (`fetchAllPages`) rather than
-    fetching a single fixed-size page - PhotoPrism's `count` is a hard
-    per-request ceiling it silently truncates to with no error, which one
-    real yearbook query surfaced concretely: a busy year has more than
-    3,000 photos, so "oldest 3,000" stopped in April even though a
-    whole-year range had been selected, and a trip actually in the
-    truncated tail (each still-selected theme's date span - a spring trip
-    to Italy, in the same real example) never appeared as a candidate at
-    all. Live preview (map + stop list, matching what the "Aus
-    Album"/"Eigener Zeitraum" sources already show) re-fetches
-    `POST /api/theme-plan-preview` on every selection change - this and
-    actual story creation both call the same extracted `planThemeStops()`,
-    so the preview is never a guess at what creating the story will do.
+    Alongside the suggested candidates, the panel offers two more ways to add
+    a section no suggestion covers: a hand-defined custom date sub-range
+    (e.g. "3 days around a birthday in March" - not detected, just a title +
+    from/to date typed in, handled identically to a detected trip theme end
+    to end, same `type: "trip"` shape and date-range photo lookup, the only
+    difference is where the from/to came from), and a free-text PhotoPrism
+    search (`type: "query"`, e.g. `person:Anne person:Peter`, or any other
+    tag/filter combination PhotoPrism's own search syntax accepts - see
+    `getPhotosByQuery` in `photoprism.js`) for a person combination or tag
+    that never made it into the suggestions. Candidate discovery only ever
+    asks PhotoPrism "does this candidate clear N photos" (`count=N` + the
+    `X-Count` response header, which reports how many rows a request
+    actually returned, not an independent total - so getting a true "at
+    least N" signal means requesting exactly N) rather than fetching full
+    photo data for every candidate; a candidate already added to the story
+    is filtered out of the panel's suggestions so it can't be added twice.
+    A theme's own section is capped at `MAX_THEME_STOP_PHOTOS` (120, evenly
+    sampled across the theme's date span) - a popular label or a long trip
+    can otherwise match hundreds of photos, and Saal export sends a book's
+    entire draft in one request, so an uncapped section risked tripping a
+    reverse proxy's request-size limit (see "Exposing the dev server
+    through a reverse proxy" below). The overflow isn't dropped, just not
+    under that one heading: a photo can also end up in more than one added
+    theme (duplicated on purpose - e.g. a beach photo during a vacation can
+    be both the trip and a "Beach" theme), and since a cherry-picked book has
+    no automatic catch-all otherwise, the panel's own "Add remaining photos"
+    button explicitly adds one - a `{type: "leftover"}` pseudo-theme that
+    tells `planThemeStops` to also compute the chronological tail (whatever
+    no *added* theme has claimed), grouped one section per calendar month
+    (`groupLeftoverByMonth` in `stories.js`) rather than the regular flow's
+    finer-grained `buildItinerary` clustering, which is tuned for telling
+    apart the legs of one trip, not for a whole year - applied across a full
+    year of an active family's everyday photos it turned every separate
+    outing in the same home city into its own stop (100+ for one real
+    range). Unlike the theme-stop cap, this leftover tail is never capped -
+    there's no further fallback tier for an overflowing month to land in, so
+    capping it would silently drop photos instead of just moving them.
+    `getPhotosByDateRange` (and every other photo listing call) pages
+    through PhotoPrism's results (`fetchAllPages`) rather than fetching a
+    single fixed-size page - PhotoPrism's `count` is a hard per-request
+    ceiling it silently truncates to with no error, which one real yearbook
+    query surfaced concretely: a busy year has more than 3,000 photos, so
+    "oldest 3,000" stopped in April even though a whole-year range had been
+    selected, and a trip actually in the truncated tail (each added theme's
+    own date span - a spring trip to Italy, in the same real example) never
+    appeared as a candidate at all. A story created under the old "pick
+    everything upfront" model still works unchanged (view/edit/export/"check
+    for new photos"), and also gains the new "Add section" panel as a bonus,
+    since it already has `source_type: "theme_plan"` and a non-empty
+    `source_config.themes`.
   - **The browser never talks to PhotoPrism directly.** Every photo URL this
     app hands out (`thumbUrl`/`fullUrl` on a story's photos, info-card hero
     photos, ...) is a path on this server, `/api/photo/t/:hash/:size` or
@@ -135,6 +157,10 @@ view, a reveal.js presentation, or a printable PDF (either format).
     (`curatedIncluded`); a few new photos landing in an *existing* stop are
     simply included, a smaller and different event. Stories from before
     this shipped have an empty `source_type` and just don't get the button.
+    The matching/reconciliation logic for a "Nach Themen" story
+    (`reconcileThemePlan`) is factored out specifically so the editor's "Add
+    section" panel (see "Yearbook" mode above) can call the exact same code
+    with one theme appended to the list, instead of duplicating it.
   - AI assist behind a provider interface (`server/src/ai/`); OpenAI is
     wired up (vision captioning, web-search-backed place research, and a
     ghostwriter interview - see below).
@@ -748,6 +774,29 @@ from nginx itself, not from this app). Raise it to match, e.g.
       the way (only reproducible via an actual browser drag, not a same-list
       one): see "A photo can also be dragged straight into a *different*
       section's grid" below for the fix and how it's smoke-tested
+- [x] Reworked "Nach Themen" creation from "pick every theme upfront, create
+      a fully-populated book in one step" to "set the book's overall date
+      range, start empty, cherry-pick sections one at a time in the editor."
+      The New Story page (`ThemeStoryPicker.jsx`) is now just a title +
+      from/to date picker; everything that used to live there (suggested
+      theme chips, the custom date sub-range form, the live preview) moved
+      into a new "Add section" panel in the editor's Story settings
+      (`ThemeSectionPanel.jsx`), which also gained a free-text PhotoPrism
+      search box (`type: "query"` - any search PhotoPrism's own syntax
+      accepts, e.g. `person:Anne person:Peter`, for a person combination or
+      tag no suggestion covers) and an explicit "Add remaining photos (by
+      month)" button, replacing the old always-on chronological catch-all
+      now that a cherry-picked book has no automatic one. Every "add"
+      appends one theme to `source_config.themes` and reconciles
+      immediately via the same `reconcileThemePlan` "check for new photos"
+      already used (`addThemeToStory`, `storyUpdate.js`) - no separate
+      preview/create step, and a story from before this shipped gains the
+      new panel as a bonus once it's opened. `POST /api/theme-plan-preview`
+      (the old creation-time live preview) was removed as dead code along
+      with it. Verified end to end via disposable test stories (both a
+      fresh empty book and an old-style pre-populated one) and the UI smoke
+      test, which now drives this flow through the browser instead of the
+      old one-step creation
 
 ## Notes
 

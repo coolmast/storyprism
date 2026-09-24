@@ -18,14 +18,13 @@ import {
   createStoryFromAlbums,
   createStoryFromDateRange,
   createStoryFromThemePlan,
-  planThemeStops,
   listStories,
   getStory,
   updateStory,
   deleteStory,
   getMatchingPhotosForPlace,
 } from "./stories.js";
-import { checkStoryUpdates } from "./storyUpdate.js";
+import { checkStoryUpdates, addThemeToStory } from "./storyUpdate.js";
 import { LANGUAGES, NATIVE_LANGUAGE_NAMES, languageName } from "./i18n.js";
 import { getProvider } from "./ai/index.js";
 import { renderStoryHtml } from "./render.js";
@@ -252,31 +251,6 @@ app.get("/api/theme-candidates", async (req, res) => {
   }
 });
 
-// Live preview for the currently-selected/added themes in "Nach Themen",
-// mirroring the map + stop-list preview the "Aus Album"/"Eigener Zeitraum"
-// sources already show before a story is created. Reuses the exact same
-// planThemeStops() that creation itself calls, so the preview is never a
-// guess at what creating the story will actually produce.
-app.post("/api/theme-plan-preview", async (req, res) => {
-  try {
-    const { from, to, themes } = req.body;
-    if (!from || !to) {
-      return res.status(400).json({ error: "from and to are required (YYYY-MM-DD)" });
-    }
-    const stops = await planThemeStops({ from, to, themes: themes || [] });
-    const withThumbs = stops.map((s) => ({
-      ...s,
-      photos: s.photos
-        .slice(0, PREVIEW_PHOTO_SAMPLE)
-        .map((p) => ({ ...p, thumbUrl: p.thumbHash ? thumbUrl(p.thumbHash) : null })),
-    }));
-    res.json(withThumbs);
-  } catch (err) {
-    console.error(err);
-    res.status(502).json({ error: err.message });
-  }
-});
-
 app.get("/api/stories", (req, res) => {
   res.json(listStories());
 });
@@ -290,7 +264,7 @@ app.post("/api/stories", async (req, res) => {
     if (themePlan) {
       return res
         .status(201)
-        .json(await createStoryFromThemePlan({ ...themePlan, contentLanguage }));
+        .json(await createStoryFromThemePlan({ ...themePlan, title, contentLanguage }));
     }
     if (dateFrom && dateTo) {
       return res
@@ -329,6 +303,26 @@ app.delete("/api/stories/:id", (req, res) => {
 app.post("/api/stories/:id/check-updates", async (req, res) => {
   try {
     const result = await checkStoryUpdates(req.params.id);
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Cherry-picking one section into a "Nach Themen" story that started out
+// empty (just its date range - see createStoryFromThemePlan). `theme` is one
+// of the same shapes /api/theme-candidates suggests (trip/content/person),
+// or a hand-typed { type: "query", query, title } free-text search, or the
+// { type: "leftover" } marker for "add whatever nothing else has claimed" -
+// planThemeStops (stories.js) is what actually understands each shape.
+app.post("/api/stories/:id/theme-sections", async (req, res) => {
+  try {
+    const { theme } = req.body;
+    if (!theme || !theme.id || !theme.type) {
+      return res.status(400).json({ error: "theme (with id and type) is required" });
+    }
+    const result = await addThemeToStory(req.params.id, theme);
     res.json(result);
   } catch (err) {
     console.error(err);

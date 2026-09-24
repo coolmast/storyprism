@@ -15,6 +15,7 @@ import InterviewPanel from "./InterviewPanel.jsx";
 import RouteEmbeds from "./RouteEmbeds.jsx";
 import NotesImportPanel from "./NotesImportPanel.jsx";
 import InfoCards from "./InfoCards.jsx";
+import ThemeSectionPanel from "./ThemeSectionPanel.jsx";
 import { useI18n } from "./i18n.jsx";
 import { uid } from "./uid.js";
 import { Modal, SegmentedControl, useToast } from "./ui/index.js";
@@ -367,6 +368,15 @@ export default function StoryEditor({ story, onSaved }) {
     }
   }
 
+  // A section was just added straight to the database (see
+  // ThemeSectionPanel.jsx) - swap it into the editor the same way
+  // handleCheckUpdates does with its own freshly reconciled story.
+  function handleThemeSectionAdded({ summary, story: updated }) {
+    setDraft(updated);
+    onSaved?.(updated);
+    showToast(t("newPhotosFound", summary.newPhotoCount, summary.newStopCount), { tone: "ok" });
+  }
+
   async function handleDraftCaption(stopId, photoId) {
     setBusy(photoId);
     setAiError(null);
@@ -700,6 +710,20 @@ export default function StoryEditor({ story, onSaved }) {
               {checkingUpdates ? t("checkingUpdates") : t("checkUpdatesBtn")}
             </button>
             {dirty && <p className="route-embed-hint">{t("checkUpdatesDirtyHint")}</p>}
+          </div>
+        )}
+
+        {draft.sourceType === "theme_plan" && draft.sourceConfig && (
+          <div className="settings-section">
+            <span className="control-label">{t("addSectionLabel")}</span>
+            <ThemeSectionPanel
+              storyId={draft.id}
+              from={draft.sourceConfig.from}
+              to={draft.sourceConfig.to}
+              existingThemeIds={new Set((draft.sourceConfig.themes || []).map((th) => th.id))}
+              disabled={dirty}
+              onAdded={handleThemeSectionAdded}
+            />
           </div>
         )}
 

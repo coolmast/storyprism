@@ -122,12 +122,88 @@ function applyStopOrder(storyId, order) {
   });
 }
 
-export async function checkStoryUpdates(storyId) {
-  const raw = db.prepare("SELECT * FROM stories WHERE id = ?").get(storyId);
-  if (!raw) throw new Error("Story not found");
-  if (!raw.source_type) throw new Error("This story wasn't created from a saved search, so it can't check for new photos.");
-  const config = JSON.parse(raw.source_config || "{}");
+// Shared by "check for new photos" (re-runs the story's *stored* themes
+// list unchanged) and addThemeToStory (re-runs it with one theme just
+// appended) - either way, this is "given this exact theme list, make the
+// story's stops match it," never touching a stop nothing in the list
+// affects.
+async function reconcileThemePlan(storyId, config, existingStops, existingRows) {
+  let newPhotoCount = 0;
+  const touchedStopIds = new Set();
+  let newStopCount = 0;
 
+  const freshGroups = await planThemeStops(config);
+  const existingByThemeId = new Map(existingStops.filter((s) => s.themeId).map((s) => [s.themeId, s]));
+  const rowsByStop = new Map();
+  for (const r of existingRows) {
+    if (!rowsByStop.has(r.stopId)) rowsByStop.set(r.stopId, new Set());
+    rowsByStop.get(r.stopId).add(r.photoUid);
+  }
+
+  const order = existingStops.map((s) => ({ existingId: s.id }));
+  const commit = db.transaction(() => {
+    freshGroups.forEach((group, i) => {
+      const match = existingByThemeId.get(group.themeId);
+      if (match) {
+        const known = rowsByStop.get(match.id) || new Set();
+        const fresh = group.photos.filter((p) => !known.has(p.uid));
+        if (fresh.length === 0) return;
+        newPhotoCount += fresh.length;
+        touchedStopIds.add(match.id);
+        // Appended after the stop's existing photos, not re-sorted in
+        // among them: a theme stop's photo set can be an evenly-sampled
+        // subset capped at MAX_THEME_STOP_PHOTOS (stories.js), and
+        // re-running that sample against a now-larger candidate pool can
+        // legitimately pick different representative photos than last
+        // time - reconciling the *whole* set against that shifting sample
+        // risked quietly reshuffling or dropping already-placed photos.
+        // Only ever adding whatever's genuinely new to *this* stop keeps
+        // every existing photo and its position exactly as the user left
+        // it, at the cost of a still-growing theme not always surfacing
+        // every single new import the moment it lands (only whichever
+        // ones this run's sample happens to surface) - an honest
+        // limitation, not silent data loss.
+        fresh.forEach((p, i) => {
+          insertPhotoRow.run({
+            id: randomUUID(),
+            stopId: match.id,
+            photoUid: p.uid,
+            hash: p.thumbHash,
+            width: p.width || null,
+            height: p.height || null,
+            position: known.size + i,
+            included: 1,
+            title: p.title || "",
+            placeLabel: p.placeLabel || "",
+          });
+        });
+        return;
+      }
+      // A theme that just now cleared the photo threshold, or a month
+      // that just got its first photo - insert after whichever earlier
+      // theme (in the plan's own order) already has a stop, so it lands
+      // somewhere sensible relative to the user's current arrangement
+      // rather than always at the very end.
+      newStopCount += 1;
+      newPhotoCount += group.photos.length;
+      let anchorId = null;
+      for (let j = i - 1; j >= 0; j--) {
+        const m = existingByThemeId.get(freshGroups[j].themeId);
+        if (m) {
+          anchorId = m.id;
+          break;
+        }
+      }
+      const at = anchorId ? order.findIndex((e) => e.existingId === anchorId) + 1 : 0;
+      order.splice(at, 0, { draft: group });
+    });
+    applyStopOrder(storyId, order);
+  });
+  commit();
+  return { newPhotoCount, updatedStopCount: touchedStopIds.size, newStopCount };
+}
+
+function loadExistingStopState(storyId) {
   const existingStops = db
     .prepare("SELECT id, started_at as startedAt, ended_at as endedAt, theme_id as themeId FROM stops WHERE story_id = ? ORDER BY position")
     .all(storyId);
@@ -138,81 +214,56 @@ export async function checkStoryUpdates(storyId) {
        WHERE st.story_id = ?`
     )
     .all(storyId);
+  return { existingStops, existingRows };
+}
+
+// Adds one theme to a "Nach Themen" story's source_config.themes and
+// reconciles the story against the new (longer) list via the same
+// reconcileThemePlan checkStoryUpdates uses - the only difference from a
+// plain "check for new photos" run is that the list being re-run against is
+// one theme longer than what's currently stored. Idempotent on theme.id: an
+// "Add remaining" click after an earlier one, or a double-submit, just
+// re-reconciles the same list instead of appending a duplicate.
+export async function addThemeToStory(storyId, theme) {
+  const raw = db.prepare("SELECT * FROM stories WHERE id = ?").get(storyId);
+  if (!raw) throw new Error("Story not found");
+  if (raw.source_type !== "theme_plan") throw new Error("This story isn't a yearbook, so it can't have theme sections added.");
+  const config = JSON.parse(raw.source_config || "{}");
+
+  if (!config.themes.some((t) => t.id === theme.id)) {
+    config.themes = [...config.themes, theme];
+    db.prepare("UPDATE stories SET source_config = ? WHERE id = ?").run(JSON.stringify(config), storyId);
+  }
+
+  const { existingStops, existingRows } = loadExistingStopState(storyId);
+  const result = await reconcileThemePlan(storyId, config, existingStops, existingRows);
+
+  if (result.newPhotoCount > 0) {
+    db.prepare("UPDATE stories SET updated_at = ? WHERE id = ?").run(new Date().toISOString(), storyId);
+  }
+
+  return { summary: result, story: getStory(storyId) };
+}
+
+export async function checkStoryUpdates(storyId) {
+  const raw = db.prepare("SELECT * FROM stories WHERE id = ?").get(storyId);
+  if (!raw) throw new Error("Story not found");
+  if (!raw.source_type) throw new Error("This story wasn't created from a saved search, so it can't check for new photos.");
+  const config = JSON.parse(raw.source_config || "{}");
+
+  const { existingStops, existingRows } = loadExistingStopState(storyId);
   const existingUidToRow = new Map(existingRows.map((r) => [r.photoUid, r]));
 
   let newPhotoCount = 0;
-  const touchedStopIds = new Set();
+  let updatedStopCount = 0;
   let newStopCount = 0;
+  const touchedStopIds = new Set();
 
   if (raw.source_type === "theme_plan") {
-    const freshGroups = await planThemeStops(config);
-    const existingByThemeId = new Map(existingStops.filter((s) => s.themeId).map((s) => [s.themeId, s]));
-    const rowsByStop = new Map();
-    for (const r of existingRows) {
-      if (!rowsByStop.has(r.stopId)) rowsByStop.set(r.stopId, new Set());
-      rowsByStop.get(r.stopId).add(r.photoUid);
-    }
-
-    const order = existingStops.map((s) => ({ existingId: s.id }));
-    const run = db.transaction(() => {
-      freshGroups.forEach((group, i) => {
-        const match = existingByThemeId.get(group.themeId);
-        if (match) {
-          const known = rowsByStop.get(match.id) || new Set();
-          const fresh = group.photos.filter((p) => !known.has(p.uid));
-          if (fresh.length === 0) return;
-          newPhotoCount += fresh.length;
-          touchedStopIds.add(match.id);
-          // Appended after the stop's existing photos, not re-sorted in
-          // among them: a theme stop's photo set can be an evenly-sampled
-          // subset capped at MAX_THEME_STOP_PHOTOS (stories.js), and
-          // re-running that sample against a now-larger candidate pool can
-          // legitimately pick different representative photos than last
-          // time - reconciling the *whole* set against that shifting sample
-          // risked quietly reshuffling or dropping already-placed photos.
-          // Only ever adding whatever's genuinely new to *this* stop keeps
-          // every existing photo and its position exactly as the user left
-          // it, at the cost of a still-growing theme not always surfacing
-          // every single new import the moment it lands (only whichever
-          // ones this run's sample happens to surface) - an honest
-          // limitation, not silent data loss.
-          fresh.forEach((p, i) => {
-            insertPhotoRow.run({
-              id: randomUUID(),
-              stopId: match.id,
-              photoUid: p.uid,
-              hash: p.thumbHash,
-              width: p.width || null,
-              height: p.height || null,
-              position: known.size + i,
-              included: 1,
-              title: p.title || "",
-              placeLabel: p.placeLabel || "",
-            });
-          });
-          return;
-        }
-        // A theme that just now cleared the photo threshold, or a month
-        // that just got its first photo - insert after whichever earlier
-        // theme (in the plan's own order) already has a stop, so it lands
-        // somewhere sensible relative to the user's current arrangement
-        // rather than always at the very end.
-        newStopCount += 1;
-        newPhotoCount += group.photos.length;
-        let anchorId = null;
-        for (let j = i - 1; j >= 0; j--) {
-          const m = existingByThemeId.get(freshGroups[j].themeId);
-          if (m) {
-            anchorId = m.id;
-            break;
-          }
-        }
-        const at = anchorId ? order.findIndex((e) => e.existingId === anchorId) + 1 : 0;
-        order.splice(at, 0, { draft: group });
-      });
-      applyStopOrder(storyId, order);
-    });
-    run();
+    const result = await reconcileThemePlan(storyId, config, existingStops, existingRows);
+    newPhotoCount = result.newPhotoCount;
+    updatedStopCount = result.updatedStopCount;
+    newStopCount = result.newStopCount;
   } else {
     const candidates =
       raw.source_type === "albums" ? await mergeAlbumPhotos(config.albumUids) : await getPhotosByDateRange(config.from, config.to);
@@ -271,6 +322,7 @@ export async function checkStoryUpdates(storyId) {
       applyStopOrder(storyId, order);
     });
     run();
+    updatedStopCount = touchedStopIds.size;
   }
 
   if (newPhotoCount > 0) {
@@ -278,7 +330,7 @@ export async function checkStoryUpdates(storyId) {
   }
 
   return {
-    summary: { newPhotoCount, updatedStopCount: touchedStopIds.size, newStopCount },
+    summary: { newPhotoCount, updatedStopCount, newStopCount },
     story: getStory(storyId),
   };
 }

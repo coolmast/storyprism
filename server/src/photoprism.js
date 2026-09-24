@@ -272,6 +272,21 @@ export async function getPhotosBySubject(uid, from, to) {
   return photos.map(mapPhoto);
 }
 
+// A hand-typed PhotoPrism search ("person:Anne person:Peter", "label:beach",
+// whatever PhotoPrism's own query syntax accepts) for a theme section no
+// suggested candidate covers. `q=` combines cleanly with the usual
+// after/before range filter; an unrecognized filter comes back as a plain
+// 400 from PhotoPrism itself (ppRequest turns that into a thrown error the
+// route handler surfaces to the user - PhotoPrism's own error text is too
+// generic to say which part of the query was wrong, so the UI just asks
+// them to check it).
+export async function getPhotosByQuery(query, from, to) {
+  const photos = await fetchAllPages(
+    `/api/v1/photos?q=${encodeURIComponent(query)}&after=${from}&before=${inclusiveBefore(to)}&order=oldest&merged=true`
+  );
+  return photos.map(mapPhoto);
+}
+
 // Full photo details (used for face markers, labels, capture time - see
 // photoInsights.js), authenticated the same way as everything else here.
 export async function getPhotoDetails(uid) {
