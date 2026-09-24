@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { ceweFont } from "./ceweExport.js";
+import { CEWE_FONT_FOR } from "./spreadLayouts.js";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { planBook, MAX_PHOTOS_PER_SPREAD } from "./bookPlanner.js";
@@ -141,8 +141,9 @@ export function buildBookPreviewHtml(story) {
   const warn = [];
   const notes = [];
   if (plan.product.vendor === "cewe") {
-    const mapped = [...new Set([plan.fonts.title, plan.fonts.body].map((f) => `${f.name} → ${ceweFont(f)}`))];
-    notes.push(`CEWE prints with its own fonts: ${mapped.join(", ")}`);
+    const mapped = [story.bookTitleFont, story.bookBodyFont].filter((n) => n && CEWE_FONT_FOR[n]);
+    if (mapped.length)
+      notes.push(`CEWE prints with its own fonts: ${[...new Set(mapped)].map((n) => `${n} → ${CEWE_FONT_FOR[n]}`).join(", ")}`);
   }
   if (plan.burstSkips) notes.push(`${plan.burstSkips} burst shot(s) left out (photos taken within 3 s of a kept one)`);
   if (plan.overflow) {

@@ -31,12 +31,50 @@ export const BOOK_FONTS = JSON.parse(readFileSync(new URL("./bookFonts.json", im
 export const DEFAULT_TITLE_FONT = "Architects Daughter";
 export const DEFAULT_BODY_FONT = "Architects Daughter";
 
-export function fontInfo(name) {
-  return BOOK_FONTS.find((f) => f.name === name) || BOOK_FONTS.find((f) => f.name === DEFAULT_TITLE_FONT);
+// CEWE books print with macOS system fonts on CEWE's printable list instead
+// (ceweFonts.json, measured by tools/cewe_font_metrics.mjs); every Saal font
+// has a closest CEWE counterpart, so a story's font choice carries over when
+// switching vendor - in both directions.
+export const CEWE_FONTS = JSON.parse(readFileSync(new URL("./ceweFonts.json", import.meta.url), "utf8")).fonts;
+export const CEWE_FONT_FOR = {
+  "Architects Daughter": "Chalkboard",
+  Allison: "Apple Chancery",
+  Allura: "Apple Chancery",
+  Babylonica: "Apple Chancery",
+  Explora: "Apple Chancery",
+  "Great Vibes": "Apple Chancery",
+  "Lavishly Yours": "Apple Chancery",
+  Tangerine: "Apple Chancery",
+  Waterfall: "Apple Chancery",
+  Bainsley: "Brush Script MT",
+  "Butterfly Kids": "Brush Script MT",
+  "Grand Hotel": "Brush Script MT",
+  Amarante: "Big Caslon",
+  "Anonymous Pro": "Andale Mono",
+  Bellota: "Gill Sans",
+  "Brygada 1918": "Baskerville",
+  Berenika: "Hoefler Text",
+  Clara: "Didot",
+  Coelacanth: "Cochin",
+  Exo: "Futura",
+};
+
+export function fontInfo(name, vendor = "saal") {
+  if (vendor === "cewe") {
+    const cewe = (n) => CEWE_FONTS.find((f) => f.name === n);
+    return cewe(name) || cewe(CEWE_FONT_FOR[name]) || cewe(CEWE_FONT_FOR[DEFAULT_TITLE_FONT]);
+  }
+  const saalName = BOOK_FONTS.some((f) => f.name === name)
+    ? name
+    : Object.keys(CEWE_FONT_FOR).find((k) => CEWE_FONT_FOR[k] === name);
+  return BOOK_FONTS.find((f) => f.name === saalName) || BOOK_FONTS.find((f) => f.name === DEFAULT_TITLE_FONT);
 }
 
-export function resolveFonts(story) {
-  return { title: fontInfo(story.bookTitleFont || DEFAULT_TITLE_FONT), body: fontInfo(story.bookBodyFont || DEFAULT_BODY_FONT) };
+export function resolveFonts(story, vendor = "saal") {
+  return {
+    title: fontInfo(story.bookTitleFont || DEFAULT_TITLE_FONT, vendor),
+    body: fontInfo(story.bookBodyFont || DEFAULT_BODY_FONT, vendor),
+  };
 }
 
 // Saal's text metrics: a TLF fontSize unit is 4.15 Saal units of em size

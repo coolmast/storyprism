@@ -1,4 +1,4 @@
-import { getBookProduct, coverSize, resolvePageCount, knownPageCounts, childArticleIdFor } from "./products.js";
+import { getBookProduct, vendorOf, coverSize, resolvePageCount, knownPageCounts, childArticleIdFor } from "./products.js";
 import {
   SPREAD_LAYOUTS,
   DEFAULT_SPREAD_WEIGHTS,
@@ -154,7 +154,7 @@ export function planBook(story, { product: productId, strings } = {}) {
   const typeScale = Math.min(spreadSize.w / 2, spreadSize.h) / 2730;
   let variant = 0;
   const nextVariant = () => variant++;
-  const fonts = resolveFonts(story);
+  const fonts = resolveFonts(story, vendorOf(product));
   // User text size choice (Photobook panel), on top of the product scale.
   const textScale = { title: story.bookTitleScale || 1, body: story.bookBodyScale || 1 };
   const baseCtx = { typeScale, accentColor: theme.accent, fonts, textScale };

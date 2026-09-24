@@ -382,12 +382,15 @@ probes that the real software opened without complaint.
 - **Text**: Qt rich text HTML (in CDATA or escaped), font sizes in pt -
   the planner's size unit × 4.15 / 3.528. CEWE only prints fonts on its
   `fonts-mac.xml` "good" list (plus its bundled ones) and substitutes
-  anything else with a warning on open; none of the book's Google fonts are
-  on it, so `ceweExport.js` maps each to the closest font that ships with
-  every Mac and is on the list (script → Apple Chancery / Brush Script MT,
-  serifs → Baskerville / Hoefler Text / Didot / Cochin, …). The book preview
-  names the mapping for CEWE products. Text frames are still planned with
-  the original font's metrics, so fit can differ slightly.
+  anything else with a warning on open, so CEWE books are planned with
+  their own font set: 16 macOS system fonts on that list
+  (`ceweFonts.json`), measured from the real font files by
+  `tools/cewe_font_metrics.mjs` (widths + natural line spacing; only the
+  numbers are committed). For a CEWE product the font pickers offer these,
+  and a Saal font chosen earlier maps to its closest CEWE counterpart (and
+  back). CEWE's line height is a percentage of the font's natural line
+  spacing, so each paragraph gets `1.2 em / lineSpacing` to land on the
+  planner's 1.2 em pitch (e.g. Cochin 105 %, Futura 90 %).
 - **Effects**: drop shadow is `<decoration><shadow …/></decoration>` (CEWE's
   own preset reused verbatim). Transparency has no XML attribute - CEWE
   bakes it into an RGBA PNG row - so translucent panels are exported as a

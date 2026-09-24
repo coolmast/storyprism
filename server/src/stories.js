@@ -17,7 +17,7 @@ import { PDF_TEMPLATE_IDS } from "./pdfTemplates.js";
 import { PDF_LAYOUT_PACKS, DEFAULT_LAYOUT_PACK } from "./pdfLayoutPacks.js";
 import { PDF_PAPER_SIZES, DEFAULT_PAPER_SIZE } from "./pdfPaperSizes.js";
 import { BOOK_PRODUCTS, DEFAULT_BOOK_PRODUCT } from "./photobook/products.js";
-import { SPREAD_LAYOUT_IDS, BOOK_FONTS } from "./photobook/spreadLayouts.js";
+import { SPREAD_LAYOUT_IDS, BOOK_FONTS, CEWE_FONTS } from "./photobook/spreadLayouts.js";
 
 // The AI always returns a full https:// URL when it includes one at all, but
 // a human editing/adding this field by hand will often just type
@@ -52,7 +52,7 @@ function textScale(value, fallback) {
 
 function validFont(name, fallback) {
   if (name === null) return null;
-  if (name && BOOK_FONTS.some((f) => f.name === name)) return name;
+  if (name && [...BOOK_FONTS, ...CEWE_FONTS].some((f) => f.name === name)) return name;
   return fallback || null;
 }
 

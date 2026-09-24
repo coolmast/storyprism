@@ -42,7 +42,7 @@ export default function PdfLivePreview({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [bookProducts, setBookProducts] = useState([]);
-  const [bookFonts, setBookFonts] = useState({ fonts: [], defaultFonts: {} });
+  const [bookFonts, setBookFonts] = useState({ fonts: [], ceweFonts: [], ceweFontFor: {}, defaultFonts: {} });
   const [job, setJob] = useState(null);
   const iframeRef = useRef(null);
   const scrollRef = useRef({ book: 0, pdf: 0 });
@@ -52,7 +52,12 @@ export default function PdfLivePreview({
     fetchBookProducts()
       .then((r) => {
         setBookProducts(r.products);
-        setBookFonts({ fonts: r.fonts || [], defaultFonts: r.defaultFonts || {} });
+        setBookFonts({
+          fonts: r.fonts || [],
+          ceweFonts: r.ceweFonts || [],
+          ceweFontFor: r.ceweFontFor || {},
+          defaultFonts: r.defaultFonts || {},
+        });
       })
       .catch(() => {});
     return () => clearTimeout(pollRef.current);
@@ -130,6 +135,14 @@ export default function PdfLivePreview({
   }
 
   const isCewe = bookProducts.find((p) => p.id === (draft.bookProduct || "saal-square-28"))?.vendor === "cewe";
+  // CEWE books print with CEWE's own (macOS) fonts; a font chosen for the
+  // other vendor shows - and is used - as its closest counterpart.
+  const effectiveFont = (name) => {
+    const list = isCewe ? bookFonts.ceweFonts : bookFonts.fonts;
+    if (list.some((f) => f.name === name)) return name;
+    if (isCewe) return bookFonts.ceweFontFor[name] || list[0]?.name || "";
+    return Object.keys(bookFonts.ceweFontFor).find((k) => bookFonts.ceweFontFor[k] === name) || list[0]?.name || "";
+  };
   const progress = job?.total ? Math.round((job.done / job.total) * 100) : 0;
 
   return (
@@ -175,10 +188,10 @@ export default function PdfLivePreview({
             <label key={field} className="pdf-live-font">
               <span>{label}</span>
               <select
-                value={draft[field] || bookFonts.defaultFonts[role] || ""}
+                value={effectiveFont(draft[field] || bookFonts.defaultFonts[role] || "")}
                 onChange={(e) => onChange({ [field]: e.target.value })}
               >
-                {bookFonts.fonts.map((f) => (
+                {(isCewe ? bookFonts.ceweFonts : bookFonts.fonts).map((f) => (
                   <option key={f.name} value={f.name}>
                     {f.name}
                     {f.kind === "script" && role === "body" ? " ✍" : ""}

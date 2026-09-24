@@ -86,33 +86,15 @@ function imageArea(el, ref, dx, dy, z) {
 `;
 }
 
-// CEWE only prints fonts it knows (its fonts-mac.xml "good" list plus its own
-// bundled ones) and silently substitutes anything else. None of the book's
-// Google fonts are on that list, so each maps to the closest font that ships
-// with every Mac *and* is on the list.
-const CEWE_FONT = {
-  "Architects Daughter": "Chalkboard",
-  Allison: "Apple Chancery",
-  Allura: "Apple Chancery",
-  Babylonica: "Apple Chancery",
-  Explora: "Apple Chancery",
-  "Great Vibes": "Apple Chancery",
-  "Lavishly Yours": "Apple Chancery",
-  Tangerine: "Apple Chancery",
-  Waterfall: "Apple Chancery",
-  Bainsley: "Brush Script MT",
-  "Butterfly Kids": "Brush Script MT",
-  "Grand Hotel": "Brush Script MT",
-  Amarante: "Big Caslon",
-  "Anonymous Pro": "Andale Mono",
-  Bellota: "Gill Sans",
-  "Brygada 1918": "Baskerville",
-  Berenika: "Hoefler Text",
-  Clara: "Didot",
-  Coelacanth: "Cochin",
-  Exo: "Futura",
-};
-export const ceweFont = (font) => CEWE_FONT[font?.name] || "Baskerville";
+// The planner already plans CEWE books with CEWE's own fonts (fontInfo in
+// spreadLayouts.js), measured from the real font files - so text is written
+// in exactly the font it was sized for.
+const fontName = (font) => font?.name || "CEWE Head";
+
+// Planned line pitch is 1.2 em; CEWE's proportional line height is relative
+// to the font's natural line spacing (hhea ascent + descent + gap), which
+// differs per font (Hoefler Text 1.0 em, Apple Chancery 1.58 em).
+const lineHeightPct = (font) => Math.round((1.2 / (font?.lineSpacing || 1.2)) * 100);
 
 const alignOf = (a) => (a === "center" ? "center" : a === "right" ? "right" : "left");
 
@@ -121,9 +103,9 @@ const alignOf = (a) => (a === "center" ? "center" : a === "right" ? "right" : "l
 function qtHtml(paragraphs) {
   const ps = paragraphs
     .map((p) => {
-      const font = ceweFont(p.font);
+      const font = fontName(p.font);
       const pt = Math.round(p.size * PT_PER_SIZE * 10) / 10;
-      return `<p align="${alignOf(p.align)}" style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; line-height:120%;"><span style=" font-family:'${font}'; font-size:${pt}pt; font-weight:${p.bold ? 700 : 400}; font-style:${p.italic ? "italic" : "normal"}; color:${p.color || "#000000"};">${htmlText(p.text)}</span></p>`;
+      return `<p align="${alignOf(p.align)}" style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; line-height:${lineHeightPct(p.font)}%; -qt-line-height-type:proportional-height;"><span style=" font-family:'${font}'; font-size:${pt}pt; font-weight:${p.bold ? 700 : 400}; font-style:${p.italic ? "italic" : "normal"}; color:${p.color || "#000000"};">${htmlText(p.text)}</span></p>`;
     })
     .join("");
   return `<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0//EN" "http://www.w3.org/TR/REC-html40/strict.dtd"><html><head><meta name="qrichtext" content="1" /><meta charset="utf-8" /><style type="text/css">p, li { white-space: pre-wrap; }</style></head><body style=" font-family:'CEWE Head'; font-size:12pt; font-weight:400; font-style:normal;">${ps}</body></html>`;
@@ -131,13 +113,12 @@ function qtHtml(paragraphs) {
 
 function textArea(el, dx, dy, z) {
   if (!el.paragraphs?.length) return "";
-  // Frames are sized for Saal's 1.2 em line pitch; CEWE's line spacing
-  // depends on the font's own metrics. Grow the (transparent, top-aligned)
-  // box by a line so a font with looser spacing doesn't clip its last line.
+  // Small bottom margin (transparent, top-aligned box) so rounding in CEWE's
+  // own text layout never clips the last planned line.
   const first = el.paragraphs[0];
-  const frame = { ...el.frame, h: el.frame.h + first.size * SAAL_LINE };
+  const frame = { ...el.frame, h: el.frame.h + first.size * SAAL_LINE * 0.3 };
   const box = areaBox(frame, el.rotation, dx, dy);
-  const font = ceweFont(first.font);
+  const font = fontName(first.font);
   const pt = Math.round(first.size * PT_PER_SIZE);
   return `        <area areatype="textarea">
             ${position(box, z)}

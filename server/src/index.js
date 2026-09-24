@@ -35,7 +35,7 @@ import { PDF_TEMPLATES } from "./pdfTemplates.js";
 import { PDF_LAYOUT_PACKS } from "./pdfLayoutPacks.js";
 import { PDF_PAPER_SIZES } from "./pdfPaperSizes.js";
 import { BOOK_PRODUCTS } from "./photobook/products.js";
-import { SPREAD_LAYOUTS, BOOK_FONTS, DEFAULT_TITLE_FONT, DEFAULT_BODY_FONT } from "./photobook/spreadLayouts.js";
+import { SPREAD_LAYOUTS, BOOK_FONTS, CEWE_FONTS, CEWE_FONT_FOR, DEFAULT_TITLE_FONT, DEFAULT_BODY_FONT } from "./photobook/spreadLayouts.js";
 import { buildBookPreviewHtml } from "./photobook/bookPreview.js";
 import { startBookExport, getBookJob } from "./photobook/bookExport.js";
 import { attachInsights } from "./photoInsights.js";
@@ -141,6 +141,8 @@ app.get("/api/book-products", (req, res) => {
     products: Object.entries(BOOK_PRODUCTS).map(([id, p]) => ({ id, label: p.label, vendor: p.vendor || "saal" })),
     layouts: Object.entries(SPREAD_LAYOUTS).map(([id, l]) => ({ id, label: l.label })),
     fonts: BOOK_FONTS.map((f) => ({ name: f.name, kind: f.kind, google: f.google })),
+    ceweFonts: CEWE_FONTS.map((f) => ({ name: f.name, kind: f.kind })),
+    ceweFontFor: CEWE_FONT_FOR,
     defaultFonts: { title: DEFAULT_TITLE_FONT, body: DEFAULT_BODY_FONT },
   });
 });
