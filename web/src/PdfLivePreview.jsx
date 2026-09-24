@@ -42,6 +42,7 @@ export default function PdfLivePreview({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [bookProducts, setBookProducts] = useState([]);
+  const [bookLayoutPacks, setBookLayoutPacks] = useState([]);
   const [bookFonts, setBookFonts] = useState({ fonts: [], ceweFonts: [], ceweFontFor: {}, defaultFonts: {} });
   const [job, setJob] = useState(null);
   const iframeRef = useRef(null);
@@ -52,6 +53,7 @@ export default function PdfLivePreview({
     fetchBookProducts()
       .then((r) => {
         setBookProducts(r.products);
+        setBookLayoutPacks(r.packs || []);
         setBookFonts({
           fonts: r.fonts || [],
           ceweFonts: r.ceweFonts || [],
@@ -164,6 +166,17 @@ export default function PdfLivePreview({
 
       {mode === "book" ? (
         <div className="pdf-live-controls">
+          <div className="pdf-live-packs">
+            {bookLayoutPacks.map((p) => (
+              <button
+                key={p.id}
+                className={`lang-picker-btn ${(draft.bookLayoutPack || "photobook") === p.id ? "active" : ""}`}
+                onClick={() => onChange({ bookLayoutPack: p.id })}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
           <select
             value={draft.bookProduct || "saal-square-28"}
             onChange={(e) => onChange({ bookProduct: e.target.value })}

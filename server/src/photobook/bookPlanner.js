@@ -1,7 +1,7 @@
 import { getBookProduct, vendorOf, coverSize, resolvePageCount, knownPageCounts, childArticleIdFor } from "./products.js";
+import { getBookLayoutPack } from "./bookLayoutPacks.js";
 import {
   SPREAD_LAYOUTS,
-  DEFAULT_SPREAD_WEIGHTS,
   chapterSpread,
   infoCardSpread,
   coverSpread,
@@ -155,6 +155,7 @@ export function planBook(story, { product: productId, strings } = {}) {
   let variant = 0;
   const nextVariant = () => variant++;
   const fonts = resolveFonts(story, vendorOf(product));
+  const layoutPack = getBookLayoutPack(story.bookLayoutPack);
   // User text size choice (Photobook panel), on top of the product scale.
   const textScale = { title: story.bookTitleScale || 1, body: story.bookBodyScale || 1 };
   const baseCtx = { typeScale, accentColor: theme.accent, fonts, textScale };
@@ -227,7 +228,7 @@ export function planBook(story, { product: productId, strings } = {}) {
     const weights =
       stop.bookLayoutOverride && SPREAD_LAYOUTS[stop.bookLayoutOverride]
         ? { [stop.bookLayoutOverride]: 1, panorama: 0.01 }
-        : DEFAULT_SPREAD_WEIGHTS;
+        : layoutPack.templates;
     const photoSpreads = chunkIntoSpreads(pool, weights, spreadSize, nextVariant, stop.bookSpreadCounts || []).map(
       (s, idx) => ({
         kind: "photos",
@@ -314,6 +315,7 @@ export function planBook(story, { product: productId, strings } = {}) {
 
   return {
     product,
+    layoutPack,
     spreadSize,
     cover,
     spreads,

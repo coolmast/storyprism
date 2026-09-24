@@ -15,6 +15,7 @@ import { suggestPlacesForStop, photosMatchingPlace } from "./places.js";
 import { DEFAULT_LANGUAGE } from "./i18n.js";
 import { PDF_TEMPLATE_IDS } from "./pdfTemplates.js";
 import { PDF_LAYOUT_PACKS, DEFAULT_LAYOUT_PACK } from "./pdfLayoutPacks.js";
+import { BOOK_LAYOUT_PACKS, DEFAULT_BOOK_LAYOUT_PACK } from "./photobook/bookLayoutPacks.js";
 import { PDF_PAPER_SIZES, DEFAULT_PAPER_SIZE } from "./pdfPaperSizes.js";
 import { BOOK_PRODUCTS, DEFAULT_BOOK_PRODUCT } from "./photobook/products.js";
 import { SPREAD_LAYOUT_IDS, BOOK_FONTS, CEWE_FONTS } from "./photobook/spreadLayouts.js";
@@ -399,6 +400,7 @@ export function getStory(id) {
     pdfLayoutPack: story.pdf_layout_pack,
     pdfPaperSize: story.pdf_paper_size,
     bookProduct: story.book_product,
+    bookLayoutPack: story.book_layout_pack,
     bookTitleFont: story.book_title_font || null,
     bookBodyFont: story.book_body_font || null,
     bookKeepBursts: !!story.book_keep_bursts,
@@ -473,7 +475,7 @@ export function getStory(id) {
 }
 
 const updateStoryStmt = db.prepare(
-  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, content_language = @contentLanguage, pdf_layout_pack = @pdfLayoutPack, pdf_paper_size = @pdfPaperSize, book_product = @bookProduct, book_title_font = @bookTitleFont, book_body_font = @bookBodyFont, book_keep_bursts = @bookKeepBursts, book_hide_intro = @bookHideIntro, book_hide_outro = @bookHideOutro, book_title_scale = @bookTitleScale, book_body_scale = @bookBodyScale, updated_at = @now WHERE id = @id"
+  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, content_language = @contentLanguage, pdf_layout_pack = @pdfLayoutPack, pdf_paper_size = @pdfPaperSize, book_product = @bookProduct, book_layout_pack = @bookLayoutPack, book_title_font = @bookTitleFont, book_body_font = @bookBodyFont, book_keep_bursts = @bookKeepBursts, book_hide_intro = @bookHideIntro, book_hide_outro = @bookHideOutro, book_title_scale = @bookTitleScale, book_body_scale = @bookBodyScale, updated_at = @now WHERE id = @id"
 );
 // Upsert, not a plain UPDATE: the editor can now create brand-new stops
 // client-side (splitting one stop into two, or adding a blank section) and
@@ -545,6 +547,10 @@ export function updateStory(id, data) {
         data.pdfPaperSize in PDF_PAPER_SIZES ? data.pdfPaperSize : existing.pdfPaperSize || DEFAULT_PAPER_SIZE,
       bookProduct:
         data.bookProduct in BOOK_PRODUCTS ? data.bookProduct : existing.bookProduct || DEFAULT_BOOK_PRODUCT,
+      bookLayoutPack:
+        data.bookLayoutPack in BOOK_LAYOUT_PACKS
+          ? data.bookLayoutPack
+          : existing.bookLayoutPack || DEFAULT_BOOK_LAYOUT_PACK,
       bookTitleFont: validFont(data.bookTitleFont, existing.bookTitleFont),
       bookBodyFont: validFont(data.bookBodyFont, existing.bookBodyFont),
       bookKeepBursts: (data.bookKeepBursts ?? existing.bookKeepBursts) ? 1 : 0,

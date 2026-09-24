@@ -171,7 +171,17 @@ view, a reveal.js presentation, or a printable PDF (either format).
     backgrounds + cards, mosaic on both pages, hero page + gallery, scattered
     prints, full-spread panorama) are chosen per spread *and* per photo count
     by scoring the actual photo shapes, reusing the aspect-true geometry of
-    `pdfLayoutEngine.js`. `saalSvg.js` renders every spread either as Saal's
+    `pdfLayoutEngine.js` — which spread layout wins for a given photo count
+    is a weighted competition, and the weights are the book's **layout pack**
+    (`bookLayoutPacks.js`; same 4 named packs and ids as the PDF export's own
+    `pdfLayoutPacks.js`, but as a weight table over *this* pipeline's spread
+    templates rather than a port of the PDF pack's page templates — the two
+    pipelines plan different canvases, a lay-flat/glued spread with a fold
+    vs. a single printed page, and reusing the existing content-aware
+    templates needed no writer changes at all, since `saalSvg.js`/
+    `ceweExport.js` only ever read a spread's plain element list, never which
+    template produced it). A per-stop layout pin (`bookLayoutOverride`) still
+    overrides the pack for that one stop. `saalSvg.js` renders every spread either as Saal's
     own SVG dialect or as a browser preview from the same element list, so
     the editor's live "Photobook" preview (`bookPreview.js`) is exactly what
     gets exported. Export jobs (`bookExport.js`) plan the book once and hand
@@ -686,6 +696,13 @@ from nginx itself, not from this app). Raise it to match, e.g.
       a full generated book: cover, spreads, drop shadows, full-bleed
       photos and translucent text panels as planned, fonts mapped to
       CEWE-printable ones (no substitution warning), no crash
+- [x] The Saal/CEWE photobook picked up the PDF export's 4 named layout
+      packs (Photobook/Classic/Gallery/Mosaic) — same picker, same ids,
+      now next to the product picker in the "Photobook" preview tab.
+      `bookLayoutPacks.js` reuses `spreadLayouts.js`'s existing 6 templates
+      with a different weight table per pack rather than porting the PDF
+      pipeline's own page templates, so no vendor-writer changes were
+      needed. A per-stop layout pin still wins over the story's pack
 
 ## Notes
 

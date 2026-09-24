@@ -111,6 +111,7 @@ ensureColumn("stories", "pdf_paper_size", "TEXT NOT NULL DEFAULT 'a4-portrait'")
 // layout. Non-NULL pins every photo page for this stop to one template.
 ensureColumn("stops", "pdf_template_override", "TEXT");
 ensureColumn("stories", "book_product", "TEXT NOT NULL DEFAULT 'saal-square-28'");
+ensureColumn("stories", "book_layout_pack", "TEXT NOT NULL DEFAULT 'photobook'");
 ensureColumn("stops", "book_layout_override", "TEXT");
 ensureColumn("stops", "book_spread_counts", "TEXT");
 ensureColumn("stories", "book_title_font", "TEXT");
