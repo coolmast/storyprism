@@ -154,6 +154,22 @@ app.get("/api/albums", async (req, res) => {
   }
 });
 
+// A live preview's map pin and stop-list card only ever show a handful of
+// thumbnails per stop (ItineraryMap: the first photo; StopList: the first
+// four) - `photoCount` already carries the true total separately, so
+// sending literally every photo in every stop over the network here is
+// pure waste. Harmless for a small album, but getPhotosByDateRange no
+// longer silently truncates a busy range (see fetchAllPages) - so a wide
+// "Eigener Zeitraum"/"Nach Themen" range can now correctly gather
+// thousands of real photos, and without this trim a preview response can
+// balloon to multiple megabytes of photo metadata never actually rendered,
+// slow enough on a real mobile connection to look like the preview simply
+// never showed up.
+const PREVIEW_PHOTO_SAMPLE = 4;
+function trimForPreview(stops) {
+  return stops.map((s) => ({ ...s, photos: s.photos.slice(0, PREVIEW_PHOTO_SAMPLE) }));
+}
+
 // One or several albums/moments, merged - the New Story picker's live
 // preview (map + stop list) for the current selection, before a story is
 // actually created. Dedupes by photo UID so a photo present in more than
@@ -180,7 +196,7 @@ app.get("/api/albums/itinerary", async (req, res) => {
       ...p,
       thumbUrl: p.thumbHash ? thumbUrl(p.thumbHash) : null,
     }));
-    res.json(buildItinerary(withThumbs));
+    res.json(trimForPreview(buildItinerary(withThumbs)));
   } catch (err) {
     console.error(err);
     res.status(502).json({ error: err.message });
@@ -198,7 +214,7 @@ app.get("/api/itinerary/by-date", async (req, res) => {
       ...p,
       thumbUrl: p.thumbHash ? thumbUrl(p.thumbHash) : null,
     }));
-    res.json(buildItinerary(withThumbs));
+    res.json(trimForPreview(buildItinerary(withThumbs)));
   } catch (err) {
     console.error(err);
     res.status(502).json({ error: err.message });
@@ -245,7 +261,9 @@ app.post("/api/theme-plan-preview", async (req, res) => {
     const stops = await planThemeStops({ from, to, themes: themes || [] });
     const withThumbs = stops.map((s) => ({
       ...s,
-      photos: s.photos.map((p) => ({ ...p, thumbUrl: p.thumbHash ? thumbUrl(p.thumbHash) : null })),
+      photos: s.photos
+        .slice(0, PREVIEW_PHOTO_SAMPLE)
+        .map((p) => ({ ...p, thumbUrl: p.thumbHash ? thumbUrl(p.thumbHash) : null })),
     }));
     res.json(withThumbs);
   } catch (err) {
