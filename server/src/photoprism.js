@@ -91,6 +91,35 @@ function inclusiveBefore(to) {
   return beforeDate.toISOString().slice(0, 10);
 }
 
+// A single request's `count` is a hard ceiling PhotoPrism silently
+// truncates to - a busy year can easily have more photos than that,  and
+// what comes back is just however many happen to sort first ("oldest"
+// order landing on "everything up to April" for a photo-heavy family, with
+// no error or warning). Real fix is pagination, not a bigger fixed number.
+//
+// The paging arithmetic only works with `merged=true` (photo bursts/RAW+JPEG
+// pairs collapsed into one result) because of a real quirk: `offset` and the
+// X-Count header both index into the *unmerged* row count, while the actual
+// returned array is shorter (merged) - so a page can come back with fewer
+// rows than requested purely from merging, with more still waiting after
+// it. Advancing by the requested page size (not by how many rows a page
+// actually returned) and stopping only once X-Count itself comes back
+// below that page size are both required for this to terminate correctly
+// instead of stopping early or skipping/re-fetching photos.
+async function fetchAllPages(pathWithoutPaging, pageSize = 1000) {
+  const results = [];
+  let offset = 0;
+  for (;;) {
+    const res = await ppRequest(`${pathWithoutPaging}&count=${pageSize}&offset=${offset}`);
+    const page = await res.json();
+    results.push(...page);
+    const remaining = Number(res.headers.get("x-count") || 0);
+    if (remaining < pageSize) break;
+    offset += pageSize;
+  }
+  return results;
+}
+
 // Called once at server startup: logs in if credentials are configured, and
 // warms the preview/download tokens PhotoPrism needs for image requests
 // (see fetchThumbBuffer/fetchOriginalBuffer below) so those stay plain,
@@ -163,22 +192,19 @@ function mapPhoto(p) {
   };
 }
 
-export async function getAlbumPhotos(albumUid, { count = 1000 } = {}) {
-  const photos = await ppFetch(
-    `/api/v1/photos?album=${albumUid}&count=${count}&order=oldest&merged=true`
-  );
+export async function getAlbumPhotos(albumUid) {
+  const photos = await fetchAllPages(`/api/v1/photos?album=${albumUid}&order=oldest&merged=true`);
   return photos.map(mapPhoto);
 }
 
 // A custom snapshot across the whole library by date, for trips that don't
 // fit a single album or PhotoPrism "moment" - e.g. one spanning New Year's
 // (splits across two yearly moments) or a multi-country trip (splits across
-// several country moments).
-export async function getPhotosByDateRange(from, to, { count = 3000 } = {}) {
+// several country moments) - and for "Nach Themen" (yearbook), where the
+// range is often a whole year.
+export async function getPhotosByDateRange(from, to) {
   const before = inclusiveBefore(to);
-  const photos = await ppFetch(
-    `/api/v1/photos?after=${from}&before=${before}&count=${count}&order=oldest&merged=true`
-  );
+  const photos = await fetchAllPages(`/api/v1/photos?after=${from}&before=${before}&order=oldest&merged=true`);
   return photos.map(mapPhoto);
 }
 
@@ -232,16 +258,16 @@ export async function countPhotosBySubject(uid, from, to, sampleSize) {
   );
 }
 
-export async function getPhotosByLabel(slug, from, to, { count = 500 } = {}) {
-  const photos = await ppFetch(
-    `/api/v1/photos?label=${slug}&after=${from}&before=${inclusiveBefore(to)}&count=${count}&order=oldest&merged=true`
+export async function getPhotosByLabel(slug, from, to) {
+  const photos = await fetchAllPages(
+    `/api/v1/photos?label=${slug}&after=${from}&before=${inclusiveBefore(to)}&order=oldest&merged=true`
   );
   return photos.map(mapPhoto);
 }
 
-export async function getPhotosBySubject(uid, from, to, { count = 500 } = {}) {
-  const photos = await ppFetch(
-    `/api/v1/photos?subject=${uid}&after=${from}&before=${inclusiveBefore(to)}&count=${count}&order=oldest&merged=true`
+export async function getPhotosBySubject(uid, from, to) {
+  const photos = await fetchAllPages(
+    `/api/v1/photos?subject=${uid}&after=${from}&before=${inclusiveBefore(to)}&order=oldest&merged=true`
   );
   return photos.map(mapPhoto);
 }

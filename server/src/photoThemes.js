@@ -127,18 +127,52 @@ function findHomeCoord(geotaggedPhotos) {
   return best ? { lat: best.latSum / best.count, lng: best.lngSum / best.count } : null;
 }
 
+// A single city dominating the cluster (a concentrated destination) makes a
+// better, more specific title than the country it's in - "Silkeborg", not
+// "Denmark". But a real trip can be one continuous "away from home" stretch
+// that passes through many different towns (a road trip, island-hopping) -
+// no single city dominates even though one *country* clearly does, and
+// picking by raw per-city photo count instead just crowns whichever single
+// place got the most photos, which is easily a transit stop rather than the
+// actual destination (a three-week Italy trip that also passed through one
+// Danish ferry port got titled "Rødbyhavn" this way - the ferry port's own
+// photos outnumbered any single Italian town's, even though nearly the
+// whole trip was in Italy). Falling back to the dominant country once no
+// city reaches a real majority fixes that without losing the more specific
+// city name for the common case of one concentrated destination.
 function tripTitle(photos) {
-  const counts = new Map();
+  const cityCounts = new Map();
+  const countryCounts = new Map();
   for (const p of photos) {
-    const name = p.placeCity || p.placeCountry;
-    if (!name) continue;
-    counts.set(name, (counts.get(name) || 0) + 1);
+    if (p.placeCity) cityCounts.set(p.placeCity, (cityCounts.get(p.placeCity) || 0) + 1);
+    if (p.placeCountry && p.placeCountry !== "zz") {
+      countryCounts.set(p.placeCountry, (countryCounts.get(p.placeCountry) || 0) + 1);
+    }
   }
-  let best = null;
-  for (const [name, count] of counts) {
-    if (!best || count > best.count) best = name;
+
+  let bestCity = null;
+  for (const [name, count] of cityCounts) {
+    if (!bestCity || count > bestCity.count) bestCity = { name, count };
   }
-  return best || "Trip";
+  const totalWithCity = [...cityCounts.values()].reduce((a, b) => a + b, 0);
+  if (bestCity && bestCity.count / totalWithCity >= 0.5) {
+    return bestCity.name;
+  }
+
+  let bestCountry = null;
+  for (const [code, count] of countryCounts) {
+    if (!bestCountry || count > bestCountry.count) bestCountry = { code, count };
+  }
+  if (bestCountry) {
+    try {
+      const name = new Intl.DisplayNames(["en"], { type: "region" }).of(bestCountry.code.toUpperCase());
+      if (name) return name;
+    } catch {
+      // Unrecognized region code - fall through to whatever city name we have.
+    }
+  }
+
+  return bestCity ? bestCity.name : "Trip";
 }
 
 // Operates on an already-fetched photo list (no extra PhotoPrism calls) -

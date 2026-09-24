@@ -38,6 +38,17 @@ view, a reveal.js presentation, or a printable PDF (either format).
     and trip themes from a home-distance-based clustering (most common
     rough location = "home"; contiguous-in-time photos far from it = a
     trip) that's independent of the regular per-stop itinerary clustering.
+    A trip cluster's title (`tripTitle`) prefers its single most-photographed
+    city, but falls back to the cluster's dominant *country*
+    (`Intl.DisplayNames`) once no city reaches a real majority - a multi-town
+    trip (a road trip, island-hopping) can have one country clearly
+    dominate even though no single city does, and titling by raw per-city
+    count alone crowns whichever place got the most photos, which is easily
+    a transit stop rather than the destination (a three-week Italy trip
+    through dozens of towns, that also passed through one Danish ferry
+    port, got titled after the ferry port - its own concentrated photo
+    burst outnumbered any single Italian town's, even though nearly the
+    whole trip was in Italy).
     Alongside the suggested candidates, any number of hand-defined custom
     date sub-ranges can be added too (e.g. "3 days around a birthday in
     March") - not detected, just a title + from/to date the user types in;
@@ -48,13 +59,36 @@ view, a reveal.js presentation, or a printable PDF (either format).
     N photos" (`count=N` + the `X-Count` response header, which reports how
     many rows a request actually returned, not an independent total - so
     getting a true "at least N" signal means requesting exactly N) rather
-    than fetching full photo data for every candidate. A photo can end up in
-    more than one selected theme (duplicated on purpose - e.g. a beach photo
-    during a vacation can be both the trip and a "Beach" theme); whatever no
-    selected theme claims still gets an ordinary chronological tail section,
-    via the exact same `buildItinerary` the default flow uses, so nothing is
-    ever silently dropped. Live preview (map + stop list, matching what the
-    "Aus Album"/"Eigener Zeitraum" sources already show) re-fetches
+    than fetching full photo data for every candidate. A theme's own section
+    is capped at `MAX_THEME_STOP_PHOTOS` (120, evenly sampled across the
+    theme's date span) - a popular label or a long trip can otherwise match
+    hundreds of photos, and Saal export sends a book's entire draft in one
+    request, so an uncapped section risked tripping a reverse proxy's
+    request-size limit (see "Exposing the dev server through a reverse
+    proxy" below). The overflow isn't dropped, just not under that one
+    heading: a photo can also end up in more than one selected theme
+    (duplicated on purpose - e.g. a beach photo during a vacation can be
+    both the trip and a "Beach" theme), and whatever no selected theme
+    claims falls to a chronological tail, grouped one section per calendar
+    month (`groupLeftoverByMonth` in `stories.js`) rather than the regular
+    flow's finer-grained `buildItinerary` clustering, which is tuned for
+    telling apart the legs of one trip, not for a whole year - applied
+    across a full year of an active family's everyday photos it turned
+    every separate outing in the same home city into its own stop (100+ for
+    one real range). Unlike the theme-stop cap, this leftover tail is never
+    capped - there's no further fallback tier for an overflowing month to
+    land in, so capping it would silently drop photos instead of just
+    moving them. `getPhotosByDateRange` (and every other photo listing call)
+    pages through PhotoPrism's results (`fetchAllPages`) rather than
+    fetching a single fixed-size page - PhotoPrism's `count` is a hard
+    per-request ceiling it silently truncates to with no error, which one
+    real yearbook query surfaced concretely: a busy year has more than
+    3,000 photos, so "oldest 3,000" stopped in April even though a
+    whole-year range had been selected, and a trip actually in the
+    truncated tail (each still-selected theme's date span - a spring trip
+    to Italy, in the same real example) never appeared as a candidate at
+    all. Live preview (map + stop list, matching what the "Aus
+    Album"/"Eigener Zeitraum" sources already show) re-fetches
     `POST /api/theme-plan-preview` on every selection change - this and
     actual story creation both call the same extracted `planThemeStops()`,
     so the preview is never a guess at what creating the story will do.
@@ -357,6 +391,17 @@ echo "ALLOWED_HOSTS=story.example.com" >> web/.env
 for more than one.) Restart the dev server after changing it - Vite doesn't
 pick up `server.allowedHosts` changes on the fly.
 
+A reverse proxy in front of this app also needs a generous request body-size
+limit: the Saal book export and the PDF export both send the editor's entire
+draft (every stop, every photo's metadata) in one request, and a large
+"Yearbook" mode story (a full year, several theme sections) can be a few
+megabytes even after capping individual theme sections - comfortably under
+this app's own `express.json({ limit: "20mb" })` in `index.js`, but over a
+typical reverse proxy default (nginx's `client_max_body_size` defaults to
+1MB, which surfaces as an opaque "413 Request Entity Too Large" HTML page
+from nginx itself, not from this app). Raise it to match, e.g.
+`client_max_body_size 20m;`.
+
 ## Status
 
 - [x] M0 — repo scaffold, PhotoPrism client
@@ -554,6 +599,22 @@ pick up `server.allowedHosts` changes on the fly.
 - [x] Drag-to-reorder for sections themselves, not just the photos inside
       one - a `.stop-drag-handle` per section, same sortablejs pattern as
       the photo grid
+- [x] Fixed three "Yearbook" mode bugs a real full-year story hit at once:
+      photo listing silently truncated to a single fixed-size page (a busy
+      year has more than PhotoPrism's per-request cap, so a whole-year range
+      only ever covered its earliest ~3,000 photos - through April, not
+      September, and a real spring trip candidate in the truncated tail
+      never showed up); trip-cluster titles picked by raw per-city photo
+      count, mistitling a multi-town trip after a transit stop that
+      happened to have a concentrated photo burst; and Saal export sending
+      an uncapped theme section (hundreds of photos matching one popular
+      label) tripped a reverse proxy's request-size limit. Fixed via proper
+      pagination (`fetchAllPages`), a country-level title fallback
+      (`tripTitle`), and a per-theme-section photo cap with overflow
+      falling through to a monthly-grouped leftover tail - see the
+      Architecture section above and "Exposing the dev server through a
+      reverse proxy" for the remaining reverse-proxy-side config a very
+      large yearbook may still need
 
 ## Notes
 

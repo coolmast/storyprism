@@ -208,6 +208,67 @@ export async function createStoryFromDateRange(from, to, title, contentLanguage 
 // backs both the live preview (GET /api/theme-plan-preview) and actually
 // creating the story - the preview is never a guess at what creation will
 // do, it's a dry run of the same code.
+// A popular label (or a long vacation) can pull in far more photos than
+// any one book section should reasonably hold - a "Camping" theme matched
+// 405 photos across one real 9-month range, ballooning that one story to
+// >1MB and tripping a reverse proxy's request-size limit on export. Rather
+// than dropping the overflow, only the evenly-sampled highlights become
+// this theme's own section; the rest are left unclaimed, so they still
+// show up in whichever chronological stop they naturally belong to
+// instead of vanishing - same "nothing is silently dropped" guarantee,
+// just not all under this one heading.
+const MAX_THEME_STOP_PHOTOS = 120;
+
+function sampleEvenly(photos, max) {
+  if (photos.length <= max) return photos;
+  const step = photos.length / max;
+  const sampled = [];
+  for (let i = 0; i < max; i++) {
+    sampled.push(photos[Math.floor(i * step)]);
+  }
+  return sampled;
+}
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+// buildItinerary's per-stop clustering (a few hours/km apart = a new stop)
+// is tuned for telling apart the distinct legs of *one* trip - across a
+// whole yearbook range it does something different and much less useful:
+// every separate errand/outing anywhere in a family's home city over 9
+// months becomes its own stop, one real case going from a reasonable-
+// sounding "31 stops" (only because photo fetching was silently truncated
+// to April - see getPhotosByDateRange) to 100+ once that was fixed and the
+// whole year was actually considered. That also matches what was actually
+// asked for: "I'd put leftovers in *a* chronological section" - singular,
+// not a rediscovered day-by-day itinerary. One section per calendar month
+// is simple, predictable (at most 12 for a full year), and keeps a
+// yearbook's non-thematic content readable as a monthly diary instead of
+// a wall of tiny same-city stops.
+function groupLeftoverByMonth(photos) {
+  const sorted = [...photos].sort((a, b) => new Date(a.takenAt) - new Date(b.takenAt));
+  const byMonth = new Map();
+  for (const p of sorted) {
+    const key = p.takenAt.slice(0, 7); // YYYY-MM
+    if (!byMonth.has(key)) byMonth.set(key, []);
+    byMonth.get(key).push(p);
+  }
+  return [...byMonth.entries()].map(([key, monthPhotos]) => {
+    const [year, month] = key.split("-");
+    return {
+      photos: monthPhotos,
+      lat: null,
+      lng: null,
+      placeLabel: `${MONTH_NAMES[Number(month) - 1]} ${year}`,
+      placeCity: null,
+      startedAt: monthPhotos[0].takenAt,
+      endedAt: monthPhotos[monthPhotos.length - 1].takenAt,
+    };
+  });
+}
+
 export async function planThemeStops({ from, to, themes }) {
   const rangePhotos = await getPhotosByDateRange(from, to);
   const claimed = new Set();
@@ -235,6 +296,7 @@ export async function planThemeStops({ from, to, themes }) {
     if (photos.length === 0) continue;
 
     photos = [...photos].sort((a, b) => new Date(a.takenAt) - new Date(b.takenAt));
+    photos = sampleEvenly(photos, MAX_THEME_STOP_PHOTOS);
     for (const p of photos) claimed.add(p.uid);
     themeStops.push({
       photos,
@@ -247,8 +309,14 @@ export async function planThemeStops({ from, to, themes }) {
     });
   }
 
+  // Deliberately *not* capped like the theme stops above: there's no
+  // further fallback tier left for a leftover photo to land in, so capping
+  // it here would actually drop it from the story rather than just move it
+  // - unlike the theme cap, where the overflow still shows up in whichever
+  // month it belongs to. A busy month can still run large, but every one
+  // of its photos is genuinely in the book somewhere.
   const leftoverPhotos = rangePhotos.filter((p) => !claimed.has(p.uid));
-  const leftoverStops = buildItinerary(leftoverPhotos);
+  const leftoverStops = groupLeftoverByMonth(leftoverPhotos);
   const allStops = [...themeStops, ...leftoverStops];
 
   // Same shape buildItinerary itself returns, so the New Story preview

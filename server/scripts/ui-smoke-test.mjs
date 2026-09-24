@@ -109,7 +109,14 @@ async function runChecksAtBreakpoint(browser, story, width, tag) {
   await page.locator(".source-toggle button").nth(2).click();
   await page.waitForTimeout(200);
   const themeDateInputs = page.locator('.theme-source-picker input[type="date"]');
-  await themeDateInputs.nth(0).fill("2015-01-01");
+  // A full calendar year, not the entire library history: theme discovery's
+  // trip-cluster detection now correctly paginates through every photo in
+  // range (see getPhotosByDateRange) instead of silently stopping at an
+  // old fixed 3000-photo cap, so a range spanning this library's full
+  // multi-year history means genuinely paging through 100k+ photos here -
+  // correct, but far slower than a smoke test should be. One year is still
+  // wide enough to exercise real multi-theme discovery.
+  await themeDateInputs.nth(0).fill("2026-01-01");
   await themeDateInputs.nth(1).fill("2026-12-31");
   await page.locator(".theme-source-picker .ai-btn").click();
   // Discovery is network-bound (probes dozens of label/subject candidates
@@ -133,15 +140,32 @@ async function runChecksAtBreakpoint(browser, story, width, tag) {
     await themeChips.nth(0).click();
     await page.waitForTimeout(150);
     check(`[${tag}] selecting a theme chip marks it active`, await themeChips.nth(0).evaluate((el) => el.classList.contains("active")));
-    await page.waitForTimeout(600); // debounce + refetch
-    const headingsAfter = await page.locator(".theme-preview .stop-list h3").allInnerTexts();
     // Over a huge (multi-year) range, splitting one small theme off the
     // leftover doesn't reliably change its own cluster *count* (buildItinerary
     // groups by time gaps, and removing one day's photos rarely creates or
     // removes a gap boundary elsewhere) - so check for the concrete, actually-
     // claimed behavior instead: the selected theme's own title appears as a
-    // section.
-    check(`[${tag}] live preview gets a section for the selected theme`, headingsAfter.includes(firstChipTitle), firstChipTitle);
+    // section. A full year's worth of photos now genuinely gets refetched
+    // and replanned on each selection (no more silent truncation), so this
+    // can take a couple of seconds - poll for the heading instead of a fixed
+    // debounce sleep, which flaked once the refetch got slower for the
+    // right reason (fixing the truncation bug in getPhotosByDateRange).
+    let headingsAfter = [];
+    let sawSection = false;
+    try {
+      await page
+        .locator(".theme-preview .stop-list h3", { hasText: firstChipTitle })
+        .first()
+        .waitFor({ state: "visible", timeout: 10000 });
+      sawSection = true;
+    } catch {
+      headingsAfter = await page.locator(".theme-preview .stop-list h3").allInnerTexts();
+    }
+    check(
+      `[${tag}] live preview gets a section for the selected theme`,
+      sawSection,
+      sawSection ? firstChipTitle : `${firstChipTitle} - got [${headingsAfter.join(", ")}]`
+    );
   }
 
   // Custom date sub-range (e.g. "a few days around a birthday") - not a
