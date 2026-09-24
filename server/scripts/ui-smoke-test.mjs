@@ -184,6 +184,74 @@ async function runChecksAtBreakpoint(browser, story, width, tag) {
   check(`[${tag}] creating a yearbook story opens its editor`, !!themeStoryTitle);
   const themeStoryId = new URL(page.url()).pathname.split("/").pop();
 
+  // --- Cross-section photo drag: dragging a photo card into a *different*
+  // stop's grid moves it there (the rare-EXIF-timestamp fix). Real regression
+  // coverage for a real bug found only through actual browser testing: since
+  // sortablejs physically relocates the DOM node into the other grid's own
+  // React-rendered subtree, React's next reconcile crashed trying to remove
+  // a child that was no longer there unless that raw DOM move is reverted
+  // in onEnd first - a mistake a within-one-list drag (reordering, or moving
+  // sections) can't surface at all, since it never touches more than one
+  // React-owned parent. Stops start expanded, before "Alle einklappen"
+  // below collapses them - a collapsed stop renders no photo grid at all.
+  const photoGrids = page.locator(".photo-grid");
+  const gridCount = await photoGrids.count();
+  let sourceGridIndex = -1;
+  for (let i = 0; i < gridCount; i++) {
+    if ((await photoGrids.nth(i).locator(".photo-card").count()) > 0) {
+      sourceGridIndex = i;
+      break;
+    }
+  }
+  if (sourceGridIndex !== -1 && gridCount >= 2) {
+    const targetGridIndex = sourceGridIndex === 0 ? 1 : 0;
+    const sourceCard = photoGrids.nth(sourceGridIndex).locator(".photo-card").first();
+    const movedPhotoId = await sourceCard.getAttribute("data-photo-id");
+    const targetLocator = photoGrids.nth(targetGridIndex);
+
+    // The source card can easily be off-screen (above the viewport, e.g.
+    // right after the page navigated here) or sitting right under a sticky
+    // header at y=0 - either way, boundingBox() still reports its (wrong
+    // for clicking) position, so the drag silently never starts. Scroll it
+    // to the middle of the viewport first and re-measure.
+    await sourceCard.scrollIntoViewIfNeeded();
+    await page.evaluate(() => window.scrollBy(0, -200));
+    await page.waitForTimeout(50);
+    const handleBox = await sourceCard.locator(".drag-handle").boundingBox();
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handleBox.x + handleBox.width / 2 + 6, handleBox.y + handleBox.height / 2 + 6);
+    await page.waitForTimeout(60);
+
+    // The target stop's grid can easily be thousands of pixels below the
+    // handle (a whole month's worth of photos in between) - scroll toward
+    // it a bit at a time while the drag is held, nudging the mouse after
+    // each scroll so sortablejs's fallback drag re-evaluates the cursor's
+    // position against the new scroll offset, the same way its own
+    // near-the-edge autoscroll would if a real mouse just sat there.
+    const viewport = page.viewportSize();
+    let targetBox = await targetLocator.boundingBox();
+    for (let i = 0; i < 40 && !(targetBox && targetBox.y >= 0 && targetBox.y < viewport.height - 40); i++) {
+      await page.evaluate((dy) => window.scrollBy(0, dy), 400);
+      // A mousemove to the *same* viewport coordinate as last time is a
+      // no-op as far as the browser is concerned - nothing moved under the
+      // cursor from its own point of view, even though the page just
+      // scrolled underneath it, so sortablejs never gets a fresh event to
+      // re-evaluate hit-testing against the new scroll position. Alternating
+      // the target y by a pixel forces a real mousemove every iteration.
+      await page.mouse.move(handleBox.x + handleBox.width / 2 + 6, viewport.height - 60 + (i % 2));
+      await page.waitForTimeout(40);
+      targetBox = await targetLocator.boundingBox();
+    }
+    await page.mouse.move(targetBox.x + 20, targetBox.y + 20, { steps: 5 });
+    await page.waitForTimeout(150);
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+
+    const landedInTarget = await targetLocator.locator(`[data-photo-id="${movedPhotoId}"]`).count();
+    check(`[${tag}] dragging a photo into another section's grid moves it there`, landedInTarget === 1);
+  }
+
   // --- Section (stop) drag-reordering - this story is guaranteed several
   // sections (a theme + a custom section + a chronological tail), unlike
   // the small disposable album story used below.

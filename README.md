@@ -740,6 +740,14 @@ from nginx itself, not from this app). Raise it to match, e.g.
       Themen" story via `theme_id` matching (an existing theme stop, and a
       leftover month that previously had no photos at all). Stories from
       before this shipped have no stored source and don't show the button
+- [x] A photo can be dragged straight into a *different* section's grid, not
+      just reordered within one (`IncludedPhotoGrid.jsx` sharing one
+      sortablejs `group` across every stop) - the fix for a photo whose EXIF
+      timestamp is off enough that automatic clustering put it in the wrong
+      stop entirely. Caught and fixed a real sortablejs+React crash along
+      the way (only reproducible via an actual browser drag, not a same-list
+      one): see "A photo can also be dragged straight into a *different*
+      section's grid" below for the fix and how it's smoke-tested
 
 ## Notes
 
@@ -980,6 +988,30 @@ from nginx itself, not from this app). Raise it to match, e.g.
   since it manages the section `<section>` elements as plain DOM nodes
   during a drag rather than through React state - stale after an
   add/remove/split otherwise.
+- A photo can also be dragged straight into a *different* section's grid,
+  not just reordered within one - the fix for the rare photo whose EXIF
+  timestamp is off enough that automatic clustering put it in the wrong
+  stop entirely. Every stop's grid shares one sortablejs `group` name so
+  items can move between them; `onEnd` tells a same-stop reorder from a
+  cross-stop move via `evt.from`/`evt.to`. The real trap: sortablejs
+  physically relocates the dragged DOM node into the *other* grid's own
+  React-rendered subtree, and React's next reconcile (triggered by the
+  resulting state update) crashes trying to remove a child that's no
+  longer where it left it ("Failed to execute 'removeChild'") - only
+  reproducible via an actual drag in a real browser, not caught by the
+  build or a same-list drag. Fixed the standard way for sortablejs across
+  more than one React-owned list: put the node back where React last
+  rendered it (`evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex])`)
+  *before* handing the real move to React via state, so React's own
+  reconcile - not sortablejs's raw DOM surgery - is what actually moves it.
+  Clears the moved photo's `featured` flag (it was that flag *for the old
+  stop*, unrelated to whichever stop it's joining, and leaving it set could
+  silently unseat the new stop's own hero photo). Smoke-tested with a
+  scroll-during-drag helper, since the target stop can be thousands of
+  pixels below the source in a real yearbook - a plain single mouse-move
+  doesn't reach it, and neither does repeating a `mouse.move` at an
+  unchanged viewport coordinate after scrolling (the browser doesn't fire a
+  new event just because the page moved under a stationary cursor).
 - Adding a theme (10 now, up from 4) is a single new entry in `THEMES` in
   `themes.js` — render.js, deck.js, the editor's theme picker, and the
   `/api/themes` endpoint all read from that one object, nothing else to

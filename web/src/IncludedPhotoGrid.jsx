@@ -8,6 +8,7 @@ export default function IncludedPhotoGrid({
   stopId,
   photos,
   onReorder,
+  onMove,
   onUpdatePhoto,
   onToggleFeatured,
   onDraftCaption,
@@ -19,12 +20,31 @@ export default function IncludedPhotoGrid({
 
   useEffect(() => {
     if (!gridRef.current) return;
+    // Shared group name across every stop's grid, so a photo can be dragged
+    // out of one section and dropped straight into another - the rare fix
+    // for a photo whose EXIF timestamp put it in the wrong stop to begin
+    // with. Same handle as a same-stop reorder; sortablejs tells the two
+    // apart itself via evt.from/evt.to.
     const sortable = Sortable.create(gridRef.current, {
       animation: 150,
       handle: ".drag-handle",
       forceFallback: true,
+      group: "included-photos",
       onEnd: (evt) => {
-        if (evt.oldIndex !== evt.newIndex) {
+        const fromStopId = evt.from.dataset.stopId;
+        const toStopId = evt.to.dataset.stopId;
+        if (fromStopId !== toStopId) {
+          // sortablejs physically relocated evt.item into the other grid's
+          // DOM subtree - React still thinks it owns that node under the
+          // *old* parent, and its next reconcile (triggered by the state
+          // update below) crashes trying to remove a child that's no
+          // longer there ("Failed to execute 'removeChild'..."). Put the
+          // node back where React last rendered it before handing the
+          // actual move to React via state, the standard fix for
+          // sortablejs across more than one React-owned list.
+          evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex] || null);
+          onMove(evt.item.dataset.photoId, fromStopId, toStopId, evt.newIndex);
+        } else if (evt.oldIndex !== evt.newIndex) {
           onReorder(stopId, evt.oldIndex, evt.newIndex);
         }
       },
@@ -34,9 +54,9 @@ export default function IncludedPhotoGrid({
   }, [stopId]);
 
   return (
-    <div className="photo-grid" ref={gridRef}>
+    <div className="photo-grid" ref={gridRef} data-stop-id={stopId}>
       {photos.map((photo, i) => (
-        <div className={`photo-card ${photo.featured ? "featured" : ""}`} key={photo.id}>
+        <div className={`photo-card ${photo.featured ? "featured" : ""}`} key={photo.id} data-photo-id={photo.id}>
           <span className="drag-handle" title={t("dragHandleTitle")}>
             &#10021;
           </span>

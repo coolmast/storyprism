@@ -152,6 +152,34 @@ export default function StoryEditor({ story, onSaved }) {
     }));
   }
 
+  // The rare fix this exists for: a photo's EXIF timestamp is off, so
+  // automatic clustering put it in the wrong stop entirely - dragging it
+  // into the right one is the whole fix, no manual timestamp editing needed
+  // anywhere. Clears `featured`: that flag made it the *old* stop's hero,
+  // which has nothing to do with the stop it's joining (and could silently
+  // unseat that stop's own hero photo if left set).
+  function movePhoto(photoId, fromStopId, toStopId, newIndex) {
+    markDirty((d) => {
+      const fromIdx = d.stops.findIndex((s) => s.id === fromStopId);
+      const toIdx = d.stops.findIndex((s) => s.id === toStopId);
+      if (fromIdx === -1 || toIdx === -1) return d;
+      const fromStop = d.stops[fromIdx];
+      const photo = fromStop.photos.find((p) => p.id === photoId);
+      if (!photo) return d;
+
+      const stops = [...d.stops];
+      stops[fromIdx] = { ...fromStop, photos: fromStop.photos.filter((p) => p.id !== photoId) };
+
+      const toStop = d.stops[toIdx];
+      const toIncluded = toStop.photos.filter((p) => p.included);
+      const toExcluded = toStop.photos.filter((p) => !p.included);
+      toIncluded.splice(newIndex, 0, { ...photo, included: true, featured: false });
+      stops[toIdx] = { ...toStop, photos: [...toIncluded, ...toExcluded] };
+
+      return { ...d, stops };
+    });
+  }
+
   function reorderStops(oldIndex, newIndex) {
     markDirty((d) => {
       const stops = [...d.stops];
@@ -580,6 +608,7 @@ export default function StoryEditor({ story, onSaved }) {
                     stopId={stop.id}
                     photos={includedPhotos}
                     onReorder={reorderPhotos}
+                    onMove={movePhoto}
                     onUpdatePhoto={updatePhoto}
                     onToggleFeatured={toggleFeatured}
                     onDraftCaption={handleDraftCaption}

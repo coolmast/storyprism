@@ -137,7 +137,7 @@ const DICT = {
     themeAdventure: "Adventure",
     themeNordic: "Nordic Mist",
 
-    dragHandleTitle: "Drag to reorder",
+    dragHandleTitle: "Drag to reorder, or into another section to move it there",
     include: "include",
     featuredTitle: "Featured photo for this stop",
     makeFeaturedTitle: "Make this the featured photo",
@@ -347,7 +347,7 @@ const DICT = {
     themeAdventure: "Abenteuer",
     themeNordic: "Nordischer Nebel",
 
-    dragHandleTitle: "Zum Sortieren ziehen",
+    dragHandleTitle: "Zum Sortieren ziehen, oder in einen anderen Abschnitt verschieben",
     include: "einbeziehen",
     featuredTitle: "Hervorgehobenes Foto für diesen Stopp",
     makeFeaturedTitle: "Als hervorgehobenes Foto festlegen",
@@ -558,7 +558,7 @@ const DICT = {
     themeAdventure: "Eventyr",
     themeNordic: "Nordisk Tåge",
 
-    dragHandleTitle: "Træk for at sortere",
+    dragHandleTitle: "Træk for at sortere, eller til et andet afsnit for at flytte det",
     include: "medtag",
     featuredTitle: "Fremhævet billede for dette stop",
     makeFeaturedTitle: "Gør dette til det fremhævede billede",
