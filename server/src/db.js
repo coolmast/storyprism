@@ -124,3 +124,18 @@ ensureColumn("stops", "book_hide_text", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("stop_info_cards", "book_hidden", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("stories", "book_title_scale", "REAL NOT NULL DEFAULT 1");
 ensureColumn("stories", "book_body_scale", "REAL NOT NULL DEFAULT 1");
+// The query that created this story - re-run later by "check for new
+// photos" (storyUpdate.js) to pull in anything imported to PhotoPrism
+// since. Empty on stories from before this shipped, which just hides that
+// button rather than guessing at a source. source_config is JSON: album
+// UIDs, a date range, or a theme plan - whatever that source_type's create
+// function originally took as its own arguments.
+ensureColumn("stories", "source_type", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("stories", "source_config", "TEXT NOT NULL DEFAULT ''");
+// Set only for a "Nach Themen" story's stops - the originating theme's own
+// id (a label slug, subject UID, trip id, or "leftover-YYYY-MM" for a
+// monthly bucket), stable across re-runs of the same theme plan. Lets an
+// update match a freshly recomputed theme group back to the existing stop
+// holding that theme's edits, the same way a chronological story's stops
+// are matched by time range instead.
+ensureColumn("stops", "theme_id", "TEXT");

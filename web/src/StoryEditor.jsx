@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Sortable from "sortablejs";
-import { saveStory, draftCaption, researchPlace, fetchThemes, fetchLanguages, fetchPdfLayouts } from "./api.js";
+import {
+  saveStory,
+  draftCaption,
+  researchPlace,
+  fetchThemes,
+  fetchLanguages,
+  fetchPdfLayouts,
+  checkStoryUpdates,
+} from "./api.js";
 import IncludedPhotoGrid from "./IncludedPhotoGrid.jsx";
 import PdfLivePreview from "./PdfLivePreview.jsx";
 import InterviewPanel from "./InterviewPanel.jsx";
@@ -36,6 +44,7 @@ export default function StoryEditor({ story, onSaved }) {
   const showToast = useToast();
   const [draft, setDraft] = useState(story);
   const [saving, setSaving] = useState(false);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(null); // id of photo/stop currently asking AI
   const [aiError, setAiError] = useState(null);
@@ -303,6 +312,30 @@ export default function StoryEditor({ story, onSaved }) {
       setAiError(e.message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  // Re-runs the search that created this story and merges in anything new
+  // (see storyUpdate.js) - writes straight to the database, so it's blocked
+  // while there are unsaved local edits rather than risking silently
+  // discarding them when the fresh story replaces `draft`.
+  async function handleCheckUpdates() {
+    setCheckingUpdates(true);
+    setAiError(null);
+    try {
+      const { summary, story: updated } = await checkStoryUpdates(draft.id);
+      setDraft(updated);
+      onSaved?.(updated);
+      showToast(
+        summary.newPhotoCount === 0
+          ? t("noNewPhotosFound")
+          : t("newPhotosFound", summary.newPhotoCount, summary.newStopCount),
+        { tone: "ok" }
+      );
+    } catch (e) {
+      setAiError(e.message);
+    } finally {
+      setCheckingUpdates(false);
     }
   }
 
@@ -624,6 +657,23 @@ export default function StoryEditor({ story, onSaved }) {
           </button>
         }
       >
+        {draft.sourceType && (
+          <div className="settings-section">
+            <span className="control-label">{t("checkUpdatesLabel")}</span>
+            <p className="route-embed-hint">{t("checkUpdatesHint")}</p>
+            <button
+              type="button"
+              className="ai-btn"
+              onClick={handleCheckUpdates}
+              disabled={checkingUpdates || dirty}
+              title={dirty ? t("checkUpdatesDirtyHint") : undefined}
+            >
+              {checkingUpdates ? t("checkingUpdates") : t("checkUpdatesBtn")}
+            </button>
+            {dirty && <p className="route-embed-hint">{t("checkUpdatesDirtyHint")}</p>}
+          </div>
+        )}
+
         <div className="settings-section">
           <span className="control-label">{t("themeLabel")}</span>
           <div className="theme-picker">

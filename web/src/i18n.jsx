@@ -94,6 +94,16 @@ const DICT = {
     saving: "Saving…",
     saveChanges: "Save changes",
     saved: "Saved",
+    checkUpdatesLabel: "New photos",
+    checkUpdatesHint: "Pull in any photos imported to PhotoPrism since this story was created, if they still match how it was made (the same album(s), date range, or theme selection).",
+    checkUpdatesBtn: "Check for new photos",
+    checkingUpdates: "Checking…",
+    checkUpdatesDirtyHint: "Save your changes first - this writes straight to the story.",
+    noNewPhotosFound: "No new photos found.",
+    newPhotosFound: (photos, stops) =>
+      stops > 0
+        ? `${photos} new photo${photos === 1 ? "" : "s"} added, ${stops} new section${stops === 1 ? "" : "s"}.`
+        : `${photos} new photo${photos === 1 ? "" : "s"} added.`,
     storySettings: "Story settings",
     themeLabel: "Theme",
     shareExport: "Share & Export",
@@ -294,6 +304,16 @@ const DICT = {
     saving: "Wird gespeichert…",
     saveChanges: "Änderungen speichern",
     saved: "Gespeichert",
+    checkUpdatesLabel: "Neue Fotos",
+    checkUpdatesHint: "Fotos übernehmen, die seit Erstellung dieser Story neu in PhotoPrism importiert wurden - sofern sie weiterhin zur ursprünglichen Auswahl passen (dieselben Alben, derselbe Zeitraum oder dieselbe Themenauswahl).",
+    checkUpdatesBtn: "Nach neuen Fotos suchen",
+    checkingUpdates: "Suche läuft…",
+    checkUpdatesDirtyHint: "Bitte zuerst speichern - das schreibt direkt in die Story.",
+    noNewPhotosFound: "Keine neuen Fotos gefunden.",
+    newPhotosFound: (photos, stops) =>
+      stops > 0
+        ? `${photos} neue${photos === 1 ? "s" : ""} Foto${photos === 1 ? "" : "s"} hinzugefügt, ${stops} neue${stops === 1 ? "r" : ""} Abschnitt${stops === 1 ? "" : "e"}.`
+        : `${photos} neue${photos === 1 ? "s" : ""} Foto${photos === 1 ? "" : "s"} hinzugefügt.`,
     storySettings: "Story-Einstellungen",
     themeLabel: "Design",
     shareExport: "Teilen & Export",
@@ -495,6 +515,16 @@ const DICT = {
     saving: "Gemmer…",
     saveChanges: "Gem ændringer",
     saved: "Gemt",
+    checkUpdatesLabel: "Nye fotos",
+    checkUpdatesHint: "Hent fotos, der er importeret til PhotoPrism, siden denne historie blev oprettet, hvis de stadig matcher, hvordan den blev lavet (samme album(er), tidsrum eller temavalg).",
+    checkUpdatesBtn: "Tjek for nye fotos",
+    checkingUpdates: "Tjekker…",
+    checkUpdatesDirtyHint: "Gem dine ændringer først - dette skriver direkte til historien.",
+    noNewPhotosFound: "Ingen nye fotos fundet.",
+    newPhotosFound: (photos, stops) => {
+      const p = `${photos} ${photos === 1 ? "nyt foto" : "nye fotos"} tilføjet`;
+      return stops > 0 ? `${p}, ${stops} ${stops === 1 ? "nyt afsnit" : "nye afsnit"}.` : `${p}.`;
+    },
     storySettings: "Historieindstillinger",
     themeLabel: "Tema",
     shareExport: "Del & eksporter",

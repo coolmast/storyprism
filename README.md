@@ -108,6 +108,33 @@ view, a reveal.js presentation, or a printable PDF (either format).
   - Stores stories (per-stop headings, narrative, pull quotes, per-photo
     captions/order/include/feature flags) in SQLite — `server/src/db.js`,
     `server/src/stories.js`.
+  - **"Check for new photos"** (`server/src/storyUpdate.js`): re-runs the
+    query that created a story - the album UID(s), date range, or theme plan
+    are persisted at creation as `source_type`/`source_config` specifically
+    for this - and merges in whatever now matches PhotoPrism but didn't
+    before, almost always photos imported after the story was started but
+    still within the same trip's window. Additive only (a photo that no
+    longer matches, e.g. removed from an album, is left exactly where it
+    is; a photo the user excluded via the include toggle is still "known,"
+    so it's never silently re-included), and a stop is only ever touched if
+    a new photo actually belongs in it - re-clustering the whole photo set
+    from scratch the way creation does would scramble the mapping to
+    already-written narrative/heading edits on every *other* stop. A
+    chronological story (albums/date range) matches a new photo to an
+    existing stop by its taken-at falling inside that stop's
+    `[startedAt, endedAt]`; anything left over is clustered on its own
+    (`buildItinerary`, the same function creation uses) and spliced in as
+    new stops at the right chronological position. A "Nach Themen" story
+    matches by `theme_id` instead - a column set on each stop at creation
+    time to the id of the theme (or `leftover-YYYY-MM` bucket) that
+    produced it - so re-running the exact same theme plan and matching by
+    that id gives an equivalent "append new photos to a matched stop,
+    insert a stop for a theme that just cleared the photo threshold"
+    result. A brand-new stop gets the same curated (not-everything-included)
+    pre-selection a freshly-created story's own stops get
+    (`curatedIncluded`); a few new photos landing in an *existing* stop are
+    simply included, a smaller and different event. Stories from before
+    this shipped have an empty `source_type` and just don't get the button.
   - AI assist behind a provider interface (`server/src/ai/`); OpenAI is
     wired up (vision captioning, web-search-backed place research, and a
     ghostwriter interview - see below).
@@ -703,6 +730,16 @@ from nginx itself, not from this app). Raise it to match, e.g.
       with a different weight table per pack rather than porting the PDF
       pipeline's own page templates, so no vendor-writer changes were
       needed. A per-stop layout pin still wins over the story's pack
+- [x] "Check for new photos" (`storyUpdate.js`) - re-runs a story's original
+      album/date-range/theme-plan query and merges in anything imported to
+      PhotoPrism since, without touching any stop nothing new landed in.
+      Verified against disposable copies of real data (never the real
+      stories): photos deleted from an existing stop reappear there, an
+      entire deleted stop is correctly re-clustered and re-inserted at its
+      right chronological position, and the same two cases for a "Nach
+      Themen" story via `theme_id` matching (an existing theme stop, and a
+      leftover month that previously had no photos at all). Stories from
+      before this shipped have no stored source and don't show the button
 
 ## Notes
 

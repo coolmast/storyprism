@@ -55,6 +55,9 @@ export const saveStory = (id, data) =>
 export const deleteStory = (id) =>
   fetch(`/api/stories/${id}`, { method: "DELETE" }).then(json);
 
+export const checkStoryUpdates = (id) =>
+  fetch(`/api/stories/${id}/check-updates`, { method: "POST" }).then(json);
+
 export const draftCaption = (storyId, stopId, photoId) =>
   fetch(`/api/stories/${storyId}/stops/${stopId}/photos/${photoId}/draft-caption`, {
     method: "POST",

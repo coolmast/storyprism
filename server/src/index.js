@@ -25,6 +25,7 @@ import {
   deleteStory,
   getMatchingPhotosForPlace,
 } from "./stories.js";
+import { checkStoryUpdates } from "./storyUpdate.js";
 import { LANGUAGES, NATIVE_LANGUAGE_NAMES, languageName } from "./i18n.js";
 import { getProvider } from "./ai/index.js";
 import { renderStoryHtml } from "./render.js";
@@ -319,6 +320,20 @@ app.delete("/api/stories/:id", (req, res) => {
   const ok = deleteStory(req.params.id);
   if (!ok) return res.status(404).json({ error: "Not found" });
   res.status(204).end();
+});
+
+// Re-runs the query that created this story (see storyUpdate.js) and merges
+// in whatever now matches but didn't before - photos imported to PhotoPrism
+// after the story was started. Additive only, and only ever touches a stop
+// that actually gained something.
+app.post("/api/stories/:id/check-updates", async (req, res) => {
+  try {
+    const result = await checkStoryUpdates(req.params.id);
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ error: err.message });
+  }
 });
 
 app.post("/api/stories/:id/stops/:stopId/photos/:photoId/draft-caption", async (req, res) => {

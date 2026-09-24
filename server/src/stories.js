@@ -65,17 +65,29 @@ function normalizeWebsiteUrl(url) {
 }
 
 const insertStory = db.prepare(`
-  INSERT INTO stories (id, album_uid, album_title, title, intro, outro, theme, content_language, pdf_layout_pack, created_at, updated_at)
-  VALUES (@id, @albumUid, @albumTitle, @title, '', '', @theme, @contentLanguage, '${DEFAULT_LAYOUT_PACK}', @now, @now)
+  INSERT INTO stories (id, album_uid, album_title, title, intro, outro, theme, content_language, pdf_layout_pack, source_type, source_config, created_at, updated_at)
+  VALUES (@id, @albumUid, @albumTitle, @title, '', '', @theme, @contentLanguage, '${DEFAULT_LAYOUT_PACK}', @sourceType, @sourceConfig, @now, @now)
 `);
 const insertStop = db.prepare(`
-  INSERT INTO stops (id, story_id, position, lat, lng, place_label, started_at, ended_at, heading, narrative)
-  VALUES (@id, @storyId, @position, @lat, @lng, @placeLabel, @startedAt, @endedAt, @heading, '')
+  INSERT INTO stops (id, story_id, position, lat, lng, place_label, started_at, ended_at, heading, narrative, theme_id)
+  VALUES (@id, @storyId, @position, @lat, @lng, @placeLabel, @startedAt, @endedAt, @heading, '', @themeId)
 `);
 const insertPhoto = db.prepare(`
   INSERT INTO stop_photos (id, stop_id, photo_uid, hash, width, height, position, caption, included, title, place_label)
   VALUES (@id, @stopId, @photoUid, @hash, @width, @height, @position, '', @included, @title, @placeLabel)
 `);
+
+// Stops from a real trip can have 50-100+ photos; defaulting all of them to
+// "included" would make the editor an unusable wall of caption boxes.
+// Pre-select a spread across the stop's time range so it starts curated,
+// and let the user add more. Shared with storyUpdate.js: a brand-new stop
+// discovered by "check for new photos" is exactly the same situation a
+// freshly-created story's own stop is in, and deserves the same treatment.
+const CURATED_PER_STOP = 20;
+export function curatedIncluded(photoCount, index) {
+  const step = Math.max(1, Math.floor(photoCount / CURATED_PER_STOP));
+  return index % step === 0;
+}
 
 function insertStops(storyId, stops) {
   stops.forEach((stop, i) => {
@@ -90,13 +102,8 @@ function insertStops(storyId, stops) {
       startedAt: stop.startedAt,
       endedAt: stop.endedAt,
       heading: stop.placeCity || stop.placeLabel || `Stop ${i + 1}`,
+      themeId: stop.themeId || null,
     });
-    // Stops from a real trip can have 50-100+ photos; defaulting all of
-    // them to "included" would make the editor an unusable wall of
-    // caption boxes. Pre-select a spread across the stop's time range so
-    // the story starts curated, and let the user add more.
-    const CURATED_PER_STOP = 20;
-    const step = Math.max(1, Math.floor(stop.photos.length / CURATED_PER_STOP));
 
     stop.photos.forEach((p, j) => {
       insertPhoto.run({
@@ -107,7 +114,7 @@ function insertStops(storyId, stops) {
         width: p.width || null,
         height: p.height || null,
         position: j,
-        included: j % step === 0 ? 1 : 0,
+        included: curatedIncluded(stop.photos.length, j) ? 1 : 0,
         title: p.title || "",
         placeLabel: p.placeLabel || "",
       });
@@ -154,6 +161,8 @@ export async function createStoryFromAlbums(albumUids, title, contentLanguage = 
       title: storyTitle,
       theme: DEFAULT_THEME,
       contentLanguage,
+      sourceType: "albums",
+      sourceConfig: JSON.stringify({ albumUids }),
       now,
     });
     insertStops(storyId, stops);
@@ -186,6 +195,8 @@ export async function createStoryFromDateRange(from, to, title, contentLanguage 
       title: storyTitle,
       theme: DEFAULT_THEME,
       contentLanguage,
+      sourceType: "date_range",
+      sourceConfig: JSON.stringify({ from, to }),
       now,
     });
     insertStops(storyId, stops);
@@ -266,6 +277,7 @@ function groupLeftoverByMonth(photos) {
       placeCity: null,
       startedAt: monthPhotos[0].takenAt,
       endedAt: monthPhotos[monthPhotos.length - 1].takenAt,
+      themeId: `leftover-${key}`,
     };
   });
 }
@@ -307,6 +319,7 @@ export async function planThemeStops({ from, to, themes }) {
       placeCity: null,
       startedAt: photos[0].takenAt,
       endedAt: photos[photos.length - 1].takenAt,
+      themeId: theme.id,
     });
   }
 
@@ -321,7 +334,10 @@ export async function planThemeStops({ from, to, themes }) {
   const allStops = [...themeStops, ...leftoverStops];
 
   // Same shape buildItinerary itself returns, so the New Story preview
-  // (ItineraryMap/StopList) can render theme-plan stops with zero changes.
+  // (ItineraryMap/StopList) can render theme-plan stops with zero changes -
+  // plus themeId, ignored by that preview, which is what lets a later
+  // "check for new photos" match a freshly recomputed group back to the
+  // existing stop that holds its narrative/heading edits (storyUpdate.js).
   return allStops.map((s, i) => ({
     index: i,
     lat: s.lat,
@@ -332,6 +348,7 @@ export async function planThemeStops({ from, to, themes }) {
     endedAt: s.endedAt,
     photoCount: s.photos.length,
     photos: s.photos,
+    themeId: s.themeId,
   }));
 }
 
@@ -350,6 +367,8 @@ export async function createStoryFromThemePlan({ from, to, title, contentLanguag
       title: storyTitle,
       theme: DEFAULT_THEME,
       contentLanguage,
+      sourceType: "theme_plan",
+      sourceConfig: JSON.stringify({ from, to, themes }),
       now,
     });
     insertStops(storyId, allStops);
@@ -397,6 +416,11 @@ export function getStory(id) {
     outro: story.outro,
     theme: story.theme,
     contentLanguage: story.content_language,
+    // Non-empty only for a story created from a saved search (album(s), a
+    // date range, or a theme plan) - what "check for new photos" needs to
+    // exist at all (storyUpdate.js). Empty for anything older than that
+    // feature, which just hides the button rather than guessing at a source.
+    sourceType: story.source_type || "",
     pdfLayoutPack: story.pdf_layout_pack,
     pdfPaperSize: story.pdf_paper_size,
     bookProduct: story.book_product,
