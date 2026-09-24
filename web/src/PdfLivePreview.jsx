@@ -15,6 +15,11 @@ import { Toggle } from "./ui/index.js";
 //     Software (cover + spreads), with product choice, per-stop layout
 //     pickers inside the preview and the .sswprm export
 //   - PDF: the paginated PDF export with its layout packs / paper sizes
+const VENDORS = [
+  ["saal", "Saal Digital"],
+  ["cewe", "CEWE"],
+];
+
 export default function PdfLivePreview({
   draft,
   pdfLayouts,
@@ -124,6 +129,7 @@ export default function PdfLivePreview({
     }
   }
 
+  const isCewe = bookProducts.find((p) => p.id === (draft.bookProduct || "saal-square-28"))?.vendor === "cewe";
   const progress = job?.total ? Math.round((job.done / job.total) * 100) : 0;
 
   return (
@@ -150,10 +156,16 @@ export default function PdfLivePreview({
             onChange={(e) => onChange({ bookProduct: e.target.value })}
             aria-label={t("bookProductLabel")}
           >
-            {bookProducts.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
+            {VENDORS.map(([vendor, name]) => (
+              <optgroup key={vendor} label={name}>
+                {bookProducts
+                  .filter((p) => p.vendor === vendor)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
+                  ))}
+              </optgroup>
             ))}
           </select>
           {[
@@ -200,9 +212,9 @@ export default function PdfLivePreview({
             className="pdf-live-export"
             onClick={handleExport}
             disabled={job?.status === "running"}
-            title={t("bookExportHint")}
+            title={t(isCewe ? "ceweExportHint" : "bookExportHint")}
           >
-            {job?.status === "running" ? t("bookExporting") : `⬇ ${t("bookExport")}`}
+            {job?.status === "running" ? t("bookExporting") : `⬇ ${t(isCewe ? "ceweExport" : "bookExport")}`}
           </button>
         </div>
       ) : (
@@ -240,7 +252,9 @@ export default function PdfLivePreview({
                 <span style={{ width: `${progress}%` }} />
               </div>
               <span>
-                {job.stage === "photos" ? t("bookExportPhotos", job.done, job.total) : t("bookExportLayout")}
+                {job.stage === "photos"
+                  ? t("bookExportPhotos", job.done, job.total)
+                  : t(isCewe ? "ceweExportLayout" : "bookExportLayout")}
               </span>
             </>
           )}
@@ -249,7 +263,9 @@ export default function PdfLivePreview({
               <a className="pdf-live-download" href={`/api/book-exports/${job.id}/download`}>
                 ⬇ {job.fileName} ({Math.round(job.size / 1e6)} MB)
               </a>
-              <span className="pdf-live-hint">{t("bookImportHint")}</span>
+              <span className="pdf-live-hint">
+                {t(job.fileName?.endsWith(".mcfx") ? "ceweImportHint" : "bookImportHint")}
+              </span>
             </>
           )}
           {job.status === "error" && <span className="error">{job.error}</span>}

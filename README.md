@@ -174,12 +174,16 @@ view, a reveal.js presentation, or a printable PDF (either format).
     `pdfLayoutEngine.js`. `saalSvg.js` renders every spread either as Saal's
     own SVG dialect or as a browser preview from the same element list, so
     the editor's live "Photobook" preview (`bookPreview.js`) is exactly what
-    gets exported. `saalExport.js` fetches originals from PhotoPrism,
-    auto-orients and downscales them (backgrounds ≤ 6000 px, prints ≤ 3400 px,
-    HEIC falls back to the 2048 px JPEG), writes `project.xml` + SVGs and
-    streams a `.sswprm` (`sswContainer.js`) as a background job with
-    progress. Products (`products.js`): Saal 28×28 square, A4 portrait, A4
-    landscape. See "Saal project format" below.
+    gets exported. Export jobs (`bookExport.js`) plan the book once and hand
+    it to the chosen product's vendor writer; `exportShared.js` fetches
+    originals from PhotoPrism, auto-orients and downscales them (backgrounds
+    ≤ 6000 px, prints ≤ 3400 px, HEIC falls back to the 2048 px JPEG).
+    `saalExport.js` writes `project.xml` + SVGs and streams a `.sswprm`
+    (`sswContainer.js`); `ceweExport.js` writes the same planned spreads as a
+    CEWE FOTOWELT `.mcfx`. Products (`products.js`): Saal 28×28 square, A4
+    portrait, A4 landscape; CEWE Groß Hardcover (A4 portrait), Groß Panorama
+    Hardcover (A4 landscape), XL Hardcover (29×29 square). See "Saal project
+    format" and "CEWE project format" below.
   - The deck's own PDF (`/api/stories/:id/export/deck-pdf`, reveal.js's
     built-in print-pdf mode) is unrelated and untouched by the above.
   - A stop can carry route/activity embeds (Strava, Komoot, Garmin Connect)
@@ -344,6 +348,53 @@ the real software.
 - `images/<imageID>.jpg` inside `.sswprm`: Saal stores downscaled working
   copies (median long edge ~2760 px); a 2048 px background shows as "gut",
   2048 px prints as "sehr gut".
+
+## CEWE project format
+
+Reverse-engineered from projects CEWE FOTOWELT 8.1.3 wrote (a near-empty
+book, a filled one, and resaves at 26/46/86/202 pages) plus two generated
+probes that the real software opened without complaint.
+
+- **Container** (`.mcfx`): a plain SQLite database (`application_id`
+  0x43455745, "CEWE") with one table
+  `Files(Filename TEXT PRIMARY KEY, Data BLOB, LastModified INTEGER)`. It
+  holds `data.mcf` (the project XML), `folderid.xml` (the project's folder
+  UUID, same as the XML's `folderID`) and every photo as its own row.
+  CEWE pads `data.mcf` with `0xFB` to a 4 MB block and keeps an empty
+  padded `data.mcf~` backup slot - neither is required (the unpadded probe
+  opened identically), and the software adds them itself on the next save.
+- **XML** (`<fotobook>`): product via `art_id` + `productname` +
+  URL-encoded `article_name`; `<articleConfig normalpages totalpages>`
+  (`totalpages` = inner pages + 5). Page elements in order: back+front
+  cover (`fullcover`, holds all cover areas), `spine`, the other
+  `fullcover`, `emptypage` (inside front cover, left of page 1),
+  `normalpage` 1..N, `emptypage`. Every page element's `bundlesize` is its
+  whole sheet (the cover wrap, or a double page); a spread's areas all live
+  on its *left* page's element, with the right page's element left empty.
+- **Geometry**: 0.1 mm, origin at the trimmed top-left of the sheet (bleed
+  is negative / beyond the size). An area is `<position left top width
+  height rotation>`; rotation is in degrees clockwise around the area's
+  center (the planner rotates around the top-left corner, so `ceweExport.js`
+  moves the box accordingly). Photos: `<image filename="safecontainer:/<row
+  name>"><cutout left top scale/>` - the image, scaled by `scale` (0.1 mm per
+  pixel), is placed at area origin + `cutout.left/top` and clipped to the
+  area, i.e. exactly the planner's `placePhoto()` cover-fit.
+- **Text**: Qt rich text HTML (in CDATA or escaped), font sizes in pt -
+  the planner's size unit × 4.15 / 3.528. Fonts are passed through by
+  name; CEWE substitutes any it doesn't ship.
+- **Effects**: drop shadow is `<decoration><shadow …/></decoration>` (CEWE's
+  own preset reused verbatim). Transparency has no XML attribute - CEWE
+  bakes it into an RGBA PNG row - so translucent panels are exported as a
+  tiny solid RGBA PNG stretched over the panel's frame.
+- **Products** come from CEWE's article catalog (`products-<n>.xml` in the
+  app's data folder): per article, page and cover size, bleed (3 mm inner,
+  10 mm cover), page range (26–202, step 4) and spine parameters. Spine
+  width = `base_width` + ⌊(pages − 26) / 16⌋ × `block_width` (7.5 +
+  n × 1.249 mm for the three Hardcover Matt books used here) - matches the
+  cover widths CEWE wrote at 26/46/86/202 pages to the 0.1 mm. The cover
+  sheet is back + spine + front, with the spine centered. Unlike Saal the
+  books are glued, not lay-flat: page 1 is a single right page and the last
+  page a single left page (both left blank), the spreads are 2–3 … (N−2)–(N−1).
 
 ## Running locally
 
@@ -615,6 +666,12 @@ from nginx itself, not from this app). Raise it to match, e.g.
       Architecture section above and "Exposing the dev server through a
       reverse proxy" for the remaining reverse-proxy-side config a very
       large yearbook may still need
+- [ ] CEWE FOTOWELT export (`.mcfx`) for the three formats matching the
+      Saal ones, picked from the same product list (grouped by vendor) and
+      planned by the same layout engine. Container, geometry, rotation,
+      shadow and transparency verified by probes the real software opened;
+      a full generated book still needs a real-software check (fonts: CEWE
+      may substitute the planner's fonts, which changes text fit)
 
 ## Notes
 

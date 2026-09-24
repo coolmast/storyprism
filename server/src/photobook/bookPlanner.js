@@ -284,13 +284,13 @@ export function planBook(story, { product: productId, strings } = {}) {
     });
   }
 
-  // Saal only accepts page counts that exist as articles in its catalog
-  // (see products.js); pad with blank spreads (easy to delete in Saal) up to
-  // the next one. More content than the largest known count is an overflow
+  // Only page counts the vendor's catalog offers are accepted (see
+  // products.js); pad with blank spreads (easy to delete there) up to the
+  // next one. More content than the largest known count is an overflow
   // the export refuses rather than silently dropping pages.
   const contentPages = spreads.length * 2;
   const { pages: numPages, overflow } = resolvePageCount(product, contentPages);
-  const blanks = Math.max(0, numPages / 2 - spreads.length);
+  const blanks = Math.max(0, (numPages - (product.singlePages || 0)) / 2 - spreads.length);
   for (let b = 0; b < blanks; b++) spreads.push({ kind: "blank", layoutId: "blank", elements: [], paper: "#ffffff" });
 
   // Cover: best-fitting featured photo as backdrop, two more as prints.

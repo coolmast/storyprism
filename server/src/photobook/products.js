@@ -63,7 +63,69 @@ export const BOOK_PRODUCTS = {
   },
 };
 
+// CEWE FOTOWELT photobooks (Hardcover Matt, standard digital print) - the
+// counterparts of the three Saal formats above. Geometry is from CEWE's own
+// article catalog (products-<n>.xml in the app's data folder, `composition`
+// per article, mm there / 0.1 mm here); verified against projects the real
+// software wrote (see README "CEWE project format"). Unlike Saal these are
+// glued, not lay-flat: page 1 is a single right page, the last one a single
+// left page, and the pages in between form the spreads - `singlePages`.
+//
+// Spine: base width + one `block` per 16 pages beyond the minimum (CEWE's
+// "4 packages of 4 pages"); matches the cover width CEWE itself wrote at
+// 26/46/86/202 pages exactly.
+const ceweBook = ({ label, page, cover, coverBleed, ids }) => ({
+  vendor: "cewe",
+  label,
+  // Planner canvas: both pages plus the 3 mm bleed on every edge, fold at w/2.
+  spread: { w: 2 * page.w + 60, h: page.h + 60 },
+  page,
+  cover,
+  coverBleed,
+  spine: { base: 75, block: 12.49, pagesPerBlock: 16 },
+  pages: { min: 26, max: 202, step: 4 },
+  singlePages: 2,
+  bleed: 30,
+  ids,
+});
+
+Object.assign(BOOK_PRODUCTS, {
+  "cewe-a4-portrait": ceweBook({
+    label: "CEWE Fotobuch Groß Hardcover (A4 portrait)",
+    page: { w: 2050, h: 2700 },
+    cover: { w: 2100, h: 2750 },
+    coverBleed: 100,
+    ids: { artId: 9141, productName: "ALB15", articleName: "CEWE FOTOBUCH Groß Hardcover Matt" },
+  }),
+  "cewe-a4-landscape": ceweBook({
+    label: "CEWE Fotobuch Groß Panorama Hardcover (A4 landscape)",
+    page: { w: 2700, h: 2050 },
+    cover: { w: 2750, h: 2100 },
+    coverBleed: 100,
+    ids: { artId: 9759, productName: "ALB35", articleName: "CEWE FOTOBUCH Groß Panorama Hardcover Matt" },
+  }),
+  "cewe-square-xl": ceweBook({
+    label: "CEWE Fotobuch XL Hardcover (29 × 29 cm square)",
+    page: { w: 2900, h: 2900 },
+    cover: { w: 2960, h: 2960 },
+    coverBleed: 100,
+    ids: { artId: 9264, productName: "ALB32", articleName: "CEWE FOTOBUCH XL Hardcover Matt" },
+  }),
+});
+
 export const DEFAULT_BOOK_PRODUCT = "saal-square-28";
+
+export const vendorOf = (product) => product.vendor || "saal";
+
+export function ceweSpineWidth(product, numPages) {
+  const { base, block, pagesPerBlock } = product.spine;
+  return base + Math.floor((numPages - product.pages.min) / pagesPerBlock) * block;
+}
+
+// CEWE's own cover box ("bundlesize"): back + spine + front, trimmed.
+export function ceweCoverBox(product, numPages) {
+  return { w: 2 * product.cover.w + ceweSpineWidth(product, numPages), h: product.cover.h };
+}
 
 // Shared Saal category/topic id - identical in every project inspected.
 export const SAAL_CATEGORY_ID = "9ad91ddd-2087-841e-197e-f43744139f04";
@@ -82,6 +144,10 @@ function productId(product) {
 }
 
 export function knownPageCounts(product) {
+  if (product.pages) {
+    const { min, max, step } = product.pages;
+    return Array.from({ length: (max - min) / step + 1 }, (_, i) => min + i * step);
+  }
   return Object.keys(PAGE_ARTICLES[productId(product)] || {})
     .map(Number)
     .sort((a, b) => a - b);
@@ -90,9 +156,12 @@ export function knownPageCounts(product) {
 // The page count a book with `neededPages` of content is exported at: the
 // smallest known count that fits (the rest becomes blank pages), or the
 // largest known one if the content needs more (flagged as overflow).
+// `neededPages` counts spread pages only; products with single first/last
+// pages (CEWE) need those on top.
 export function resolvePageCount(product, neededPages) {
   const counts = knownPageCounts(product);
-  const fit = counts.find((c) => c >= neededPages);
+  const needed = neededPages + (product.singlePages || 0);
+  const fit = counts.find((c) => c >= needed);
   return { pages: fit ?? counts.at(-1), overflow: fit === undefined };
 }
 
@@ -105,6 +174,10 @@ export function childArticleIdFor(product, numPages) {
 const bracket = (pages) => Math.floor((pages - 4) / 6);
 
 export function coverSize(product, numPages) {
+  if (vendorOf(product) === "cewe") {
+    const box = ceweCoverBox(product, numPages);
+    return { w: box.w + 2 * product.coverBleed, h: box.h + 2 * product.coverBleed };
+  }
   const anchors = Object.entries(product.coverAnchors).map(([p, w]) => [Number(p), w]);
   if (product.coverAnchors[numPages]) return { w: product.coverAnchors[numPages], h: product.coverHeight };
   const [refPages, refWidth] = anchors.reduce((best, a) =>

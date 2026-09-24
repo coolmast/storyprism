@@ -98,6 +98,9 @@ export function buildBookPreviewHtml(story) {
       ? `<div class="bp-hidden">${items.map((h) => toggleBtn(h.toggle, false, `↺ ${h.label}`)).join("")}</div>`
       : "";
 
+  // Glued books (CEWE) start with a single right-hand page 1, so their
+  // first spread is pages 2-3.
+  const first = plan.product.singlePages ? 2 : 1;
   const spreadCard = (s, i) => {
     const label =
       s.kind === "photos"
@@ -105,7 +108,7 @@ export function buildBookPreviewHtml(story) {
         : KIND_LABEL[s.kind] || s.kind;
     return `<figure class="bp-spread">
       <div class="bp-canvas">${inlineSvg(s, plan.spreadSize, `spread-${i}`)}<span class="bp-fold"></span></div>
-      <figcaption><span>${i * 2 + 1}–${i * 2 + 2} · ${label}</span>${s.kind === "photos" ? pacingControls(s) : ""}${
+      <figcaption><span>${first + i * 2}–${first + i * 2 + 1} · ${label}</span>${s.kind === "photos" ? pacingControls(s) : ""}${
         s.toggle ? toggleBtn(s.toggle, true, "✕ Remove from book") : ""
       }</figcaption>
     </figure>`;

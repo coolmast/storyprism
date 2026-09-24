@@ -9,3 +9,5 @@ server/data/
 *.sswprm
 *.sswpm
 saal-test/
+cewe-test/
+*.mcfx
