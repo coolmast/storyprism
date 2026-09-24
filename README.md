@@ -797,6 +797,43 @@ from nginx itself, not from this app). Raise it to match, e.g.
       fresh empty book and an old-style pre-populated one) and the UI smoke
       test, which now drives this flow through the browser instead of the
       old one-step creation
+- [x] A collapsed section can be removed directly (a trash-icon button next
+      to its summary row, `StoryEditor.jsx`) - previously the remove control
+      only existed in the expanded header, so removing one meant expanding
+      it first
+- [x] Editor photo grid: row-first flow (reading order) instead of CSS
+      columns' column-first flow, and every card the same size - a
+      `.photo-frame` fixed-aspect box per photo with `object-fit: contain`,
+      so a portrait photo gets letterboxed rather than cropped or leaving a
+      lopsided masonry (`IncludedPhotoGrid.jsx`/`App.css`)
+- [x] Route embeds reworked to actually handle what Komoot/Strava hand out
+      today, not just a plain `<iframe>` `src=`: Komoot's plain share link,
+      `<iframe>` snippet, and `<a><img></a>` snippet all now work as pasted
+      (re-derived into a canonical embed URL - see `embeds.js`), and
+      Strava's current div+widget-script embed mechanism (its old
+      iframe-able embed link no longer allows framing) is supported for the
+      first time. See "Route embeds" further down for the mechanism per
+      provider
+- [x] Photobook: a route embed with a derivable static map image (Komoot's
+      `image=1` endpoint) gets its own spread - the map contain-fit (not
+      cropped) on one page, a few of the stop's own photos on the other so
+      it doesn't read as an oddly empty page (`routeMapSpread` in
+      `spreadLayouts.js`, wired into `bookPlanner.js`). The photos come out
+      of that stop's normal photo pool first, so they don't also repeat in
+      a later grid spread. Verified against both the Saal and CEWE export
+      pipelines (a disposable story's real export, not just the preview) -
+      `exportShared.js` fetches a non-PhotoPrism image directly
+      (`photo.externalUrl`) the same way it fetches a PhotoPrism photo
+- [x] Resolution-aware photobook layout: a low-res photo (PhotoPrism's own
+      width/height metadata, below ~3 effective megapixels) is scored down
+      sharply as a candidate for any full-bleed/full-spread/hero placement
+      (`resolutionFitness` in `pdfLayoutEngine.js`, folded into
+      `backdropScore`/`pickBackdrop`/the `panorama` layout's own background
+      pick) rather than disqualified outright - it's still perfectly fine
+      in a small multi-photo grid frame, which is where this pushes it
+      instead. Verified by artificially downsizing one photo's reported
+      resolution in an otherwise-identical group and confirming the chapter
+      spread's chosen backdrop changed to a different, full-res photo
 
 ## Notes
 
@@ -958,16 +995,39 @@ from nginx itself, not from this app). Raise it to match, e.g.
   through the same fixed fields. Facts are stored as a JSON blob
   (`stop_info_cards.facts`) rather than a normalized table, since they're
   never queried independently of their card.
-- **Route embeds only iframe a URL that is both from an allowlisted host
-  (strava.com, komoot.com/.de, garmin.com) and looks like the provider's
-  actual embed link** (path or query contains "embed") — enforced
-  server-side on save (`isAllowedEmbedHost` in `embeds.js`), not just in
-  the UI. A plain activity/tour page URL is shown as a link-out card
-  instead of an iframe, because most of those pages refuse to be framed
-  (they'd just show blank or an error) — you need the specific "Embed"
-  share link the service itself generates. Garmin Connect in particular
-  doesn't have as well-known an embed format as Strava/Komoot; if their
-  embed doesn't render, the link-out card is the honest fallback.
+- **Route embeds only ever render something for a URL from an allowlisted
+  host** (strava.com, komoot.com/.de, garmin.com) — enforced server-side on
+  save (`isAllowedEmbedHost` in `embeds.js`), not just in the UI. What
+  actually renders depends on the provider (`embedKind` in `embeds.js`):
+  - **Komoot**: any of the three things Komoot itself calls a "share" link
+    works as pasted - the plain tour-page link, the whole `<iframe>` embed
+    snippet, or the whole `<a><img></a>` embed snippet - `extractEmbedUrl`
+    pulls the actual link out of a pasted snippet, and `komootEmbedUrl`
+    re-derives a fresh, canonical `.../tour/:id/embed?share_token=...` URL
+    from the tour id + share token every one of them carries, so a plain
+    tour link (which used to render as a link-out card only) now becomes a
+    real `<iframe>`. That same endpoint doubles as a static PNG generator
+    with `image=1&hm=true` (`komootImageUrl`) - used to give the map its own
+    spread in the photobook (see "Photobook" further down), no
+    screenshotting needed.
+  - **Strava**: their share-link/classic embed-iframe URLs no longer allow
+    framing at all - the only thing that still works is their own
+    placeholder-`<div data-embed-id data-token>` + a shared
+    `<script src="strava-embeds.com/embed.js">` that replaces the div with
+    a real iframe client-side. Paste the whole snippet Strava's share menu
+    gives you; `extractEmbedUrl` pulls the activity id + token out of it
+    (checked before the generic src=/href= extraction, since the snippet's
+    only literal `src=` is the same generic widget script for every
+    activity) into a URL of the app's own device
+    (`.../activities/:id?embed_token=...`) that `stravaActivityInfo` reads
+    back at render time. The widget script is included at most once per
+    page (`hasStravaWidget` in `render.js`/`deck.js`), however many Strava
+    embeds a story has.
+  - **Garmin Connect**: doesn't have as well-known an embed format as
+    Strava/Komoot - needs the specific "Embed" share link the service
+    itself generates (path or query containing "embed"); anything else
+    shows as a link-out card, since most activity/tour pages simply refuse
+    to be framed (blank or an error instead of quietly failing).
 - **AI notes import will confidently write as if any text you give it is
   your own trip account** — tested it against a Wikipedia article (not a
   travel diary) and it happily produced a plausible-sounding first-person

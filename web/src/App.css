@@ -1178,6 +1178,26 @@ textarea {
   font-size: 0.85rem;
 }
 
+.stop-remove-btn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.stop-remove-btn:hover {
+  background: var(--sand);
+  color: var(--bad);
+}
+
 .stop-editor-header {
   display: flex;
   flex-wrap: wrap;
@@ -1799,13 +1819,16 @@ textarea {
   font-size: 1.2rem;
 }
 
+/* Row-first (reading order), not CSS columns' column-first flow - and every
+   card the same size, so photos of different shapes don't leave a lopsided
+   masonry. A photo is never cropped to fit: .photo-frame is the fixed-size
+   box, object-fit: contain inside it, so a portrait photo just gets more
+   letterbox space rather than losing part of the image. */
 .photo-grid {
-  column-count: 3;
-  column-gap: 1rem;
-}
-
-@media (max-width: 700px) {
-  .photo-grid { column-count: 2; }
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 1rem;
+  align-items: start;
 }
 
 @media (max-width: 480px) {
@@ -1821,8 +1844,17 @@ textarea {
   flex-direction: column;
   gap: 0.4rem;
   background: var(--surface);
-  break-inside: avoid;
-  margin-bottom: 1rem;
+}
+
+.photo-frame {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 4px;
+  background: var(--sand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 
 .photo-card.sortable-ghost {
@@ -1936,10 +1968,12 @@ textarea {
   outline: 2px solid var(--terracotta);
 }
 
-.photo-card img {
-  width: 100%;
+.photo-frame img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
   height: auto;
-  border-radius: 4px;
+  object-fit: contain;
   display: block;
 }
 

@@ -8,7 +8,14 @@ import { SPREAD_LAYOUTS } from "./spreadLayouts.js";
 import { getStrings } from "../i18n.js";
 import { escapeHtml } from "../render.js";
 
-const KIND_LABEL = { intro: "Intro", chapter: "Chapter opener", info: "Info card", outro: "Outro", blank: "Blank" };
+const KIND_LABEL = {
+  intro: "Intro",
+  chapter: "Chapter opener",
+  info: "Info card",
+  route: "Route map",
+  outro: "Outro",
+  blank: "Blank",
+};
 
 // Saal's own font files, when extracted with tools/extract_saal_fonts.py,
 // are served from /api/saal-fonts so the preview renders with exactly the

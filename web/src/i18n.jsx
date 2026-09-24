@@ -172,7 +172,7 @@ const DICT = {
     titleOptional: "Title (optional)",
     addRoute: "Add route",
     routeEmbedHint:
-      'Use the service\'s "Embed" share link for an interactive map on the page; any other link just shows as a button out to the route.',
+      "For Komoot, any tour link works (the plain share link, or the whole embed/image code you copied). For Strava, paste the whole embed code from the activity's share menu. Either way it's turned into a live map automatically. For Garmin, use the service's \"Embed\" share link; any other link just shows as a button out to the route.",
 
     suggestedFromPhotos: "Suggested from your photos:",
     researchingPlace: (name) => `Researching ${name}…`,
@@ -391,7 +391,7 @@ const DICT = {
     titleOptional: "Titel (optional)",
     addRoute: "Route hinzufügen",
     routeEmbedHint:
-      'Nutze den „Einbetten"-Link des Dienstes für eine interaktive Karte auf der Seite; jeder andere Link erscheint nur als Button zur Route.',
+      "Bei Komoot funktioniert jeder Tour-Link (der normale Freigabelink oder der komplette Einbetten-/Bild-Code). Bei Strava füge den kompletten Einbetten-Code aus dem Teilen-Menü der Aktivität ein. In beiden Fällen wird automatisch eine Live-Karte daraus. Bei Garmin nutze den „Einbetten\"-Link des Dienstes; jeder andere Link erscheint nur als Button zur Route.",
 
     suggestedFromPhotos: "Vorschläge aus deinen Fotos:",
     researchingPlace: (name) => `${name} wird recherchiert…`,
@@ -611,7 +611,7 @@ const DICT = {
     titleOptional: "Titel (valgfrit)",
     addRoute: "Tilføj rute",
     routeEmbedHint:
-      'Brug tjenestens "Indlejr"-link for et interaktivt kort på siden; ethvert andet link vises blot som en knap til ruten.',
+      "For Komoot virker ethvert tur-link (det almindelige delelink, eller hele indlejrings-/billedkoden du kopierede). For Strava skal du indsætte hele indlejringskoden fra aktivitetens del-menu. Begge dele bliver automatisk til et live kort. For Garmin skal du bruge tjenestens \"Indlejr\"-link; ethvert andet link vises blot som en knap til ruten.",
 
     suggestedFromPhotos: "Foreslået fra dine billeder:",
     researchingPlace: (name) => `Undersøger ${name}…`,

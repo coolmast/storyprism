@@ -11,7 +11,7 @@ import {
 } from "./photoprism.js";
 import { buildItinerary } from "./itinerary.js";
 import { DEFAULT_THEME } from "./themes.js";
-import { isAllowedEmbedHost } from "./embeds.js";
+import { isAllowedEmbedHost, extractEmbedUrl } from "./embeds.js";
 import { suggestPlacesForStop, photosMatchingPlace } from "./places.js";
 import { DEFAULT_LANGUAGE } from "./i18n.js";
 import { PDF_TEMPLATE_IDS } from "./pdfTemplates.js";
@@ -650,6 +650,11 @@ export function updateStory(id, data) {
       // ids for a field with no other references.
       deleteEmbedsStmt.run({ stopId: stop.id });
       (stop.embeds ?? [])
+        // The editor already extracts a plain URL out of a pasted embed
+        // snippet before this ever reaches the API - re-run it here too, so
+        // a raw <iframe>/<a> snippet saved by any other client still ends
+        // up as a clean url instead of being silently dropped below.
+        .map((e) => ({ ...e, url: extractEmbedUrl(e.url) }))
         .filter((e) => e.url && isAllowedEmbedHost(e.url))
         .forEach((embed, index) => {
           insertEmbedStmt.run({

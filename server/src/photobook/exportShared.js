@@ -17,6 +17,12 @@ const BG_MAX = 6000;
 const CARD_MAX = 3400;
 const CONCURRENCY = 4;
 
+async function fetchExternalBuffer(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url} -> HTTP ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
 async function prepareImage(photo, maxEdge) {
   const resize = (buf) =>
     sharp(buf, { failOn: "none" })
@@ -25,10 +31,16 @@ async function prepareImage(photo, maxEdge) {
       .jpeg({ quality: 90, chromaSubsampling: "4:4:4" })
       .toBuffer({ resolveWithObject: true });
   let result;
-  try {
-    result = await resize((await fetchOriginalBuffer(photo.hash)).buffer);
-  } catch {
-    result = await resize((await fetchThumbBuffer(photo.hash, "fit_2048")).buffer);
+  // A route map (see embeds.js's komootImageUrl) isn't a PhotoPrism photo -
+  // it's fetched directly from wherever it actually lives.
+  if (photo.externalUrl) {
+    result = await resize(await fetchExternalBuffer(photo.externalUrl));
+  } else {
+    try {
+      result = await resize((await fetchOriginalBuffer(photo.hash)).buffer);
+    } catch {
+      result = await resize((await fetchThumbBuffer(photo.hash, "fit_2048")).buffer);
+    }
   }
   return { data: result.data, width: result.info.width, height: result.info.height };
 }

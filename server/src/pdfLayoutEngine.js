@@ -24,6 +24,34 @@ export function orientation(p) {
   return "square";
 }
 
+// A photo below this doesn't have enough real detail for a full-bleed
+// background or a full-page/spread placement - a resized web copy or an
+// old low-res import prints visibly soft blown up that large, even with a
+// good crop. width/height come straight from PhotoPrism's own metadata
+// (the source file's true resolution, not a thumbnail size), so this is a
+// genuine quality signal, not a guess.
+const MIN_BACKDROP_MEGAPIXELS = 3;
+
+export function megapixels(p) {
+  const w = Number(p?.width) || 0;
+  const h = Number(p?.height) || 0;
+  return (w * h) / 1e6;
+}
+
+// 1 at/above the floor; below it, scales down sharply (but never to zero) -
+// a proper full-bleed candidate is untouched, while a clearly-too-small
+// photo still stays *technically* pickable (better than no backdrop at all
+// if literally nothing else qualifies) rather than being scored to
+// -Infinity. Multiplied into whatever crop/composition score a caller
+// already computed for "should this be the big background photo" - the
+// smaller frames in a multi-photo grid need far fewer pixels per photo, so
+// this never touches those.
+export function resolutionFitness(p) {
+  const mp = megapixels(p);
+  if (mp <= 0) return 1; // unknown - don't penalize what we can't measure
+  return mp >= MIN_BACKDROP_MEGAPIXELS ? 1 : Math.max(0.15, mp / MIN_BACKDROP_MEGAPIXELS);
+}
+
 // How much of a photo survives being cropped to fill a box of `boxAspect`
 // (1 = nothing lost, 0.5 = half the photo is cut away).
 export function coverRetention(photoA, boxAspect) {
@@ -157,7 +185,7 @@ export function pickBackdrop(photos, pageAspect) {
   let bestScore = -1;
   photos.forEach((p, i) => {
     const a = photoAspect(p);
-    const score = coverRetention(a, pageAspect) + (a > 1 ? 0.05 : 0);
+    const score = (coverRetention(a, pageAspect) + (a > 1 ? 0.05 : 0)) * resolutionFitness(p);
     if (score > bestScore) {
       bestScore = score;
       best = i;

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { stat, unlink } from "node:fs/promises";
 import Database from "better-sqlite3";
 import sharp from "sharp";
-import { placePhoto, SAAL_EM, SAAL_LINE } from "./spreadLayouts.js";
+import { placePhoto, placePhotoContain, SAAL_EM, SAAL_LINE } from "./spreadLayouts.js";
 import { ceweCoverBox } from "./products.js";
 import { EXPORT_DIR, preparePhotos, photoKey, safeFileName } from "./exportShared.js";
 
@@ -74,6 +74,25 @@ const SHADOW =
   '<shadow shadowAngle="135" shadowBlurNew="5" shadowDistance="50" shadowEnabled="1" shadowIntensity="128" shadowWidthInMM="4"/>';
 
 function imageArea(el, ref, dx, dy, z) {
+  // A route map (el.fit === "contain") isn't cropped: its area box is the
+  // already-scaled-to-fit image itself (letterboxed within el.frame, see
+  // placePhotoContain), and the cutout is a no-op offset at that same scale
+  // - contrast with the ordinary cover-crop below, where the area box is
+  // the full frame and the cutout's left/top/scale describe which part of
+  // the oversized placed image that frame actually shows.
+  if (el.fit === "contain") {
+    const p = placePhotoContain(el.frame, ref.width, ref.height);
+    const box = areaBox(p, el.rotation, dx, dy);
+    const scale = (Math.round(p.s * 1e6) / 1e6).toString();
+    return `        <area areatype="imagearea">
+            ${position(box, z)}
+            <decoration/>
+            <image filename="safecontainer:/${xmlAttr(ref.name)}" useABK="1">
+                <cutout left="0" scale="${scale}" top="0"/>
+            </image>
+        </area>
+`;
+  }
   const box = areaBox(el.frame, el.rotation, dx, dy);
   const p = placePhoto(el.frame, ref.width, ref.height, el.focus);
   return `        <area areatype="imagearea">

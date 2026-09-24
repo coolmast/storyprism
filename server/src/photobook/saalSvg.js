@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { SAAL_EM, SAAL_LINE, fontInfo, placePhoto } from "./spreadLayouts.js";
+import { SAAL_EM, SAAL_LINE, fontInfo, placePhoto, placePhotoContain } from "./spreadLayouts.js";
 
 // Saal lays text out inside its element box with a fixed ~44 mm inner margin
 // on every side (measured in a calibration import; Saal's own projects show
@@ -68,8 +68,10 @@ function imageSvg(el, id, ref, mode, defs, size) {
       <rect x="${n(f.x)}" y="${n(f.y)}" width="${n(f.w)}" height="${n(f.h)}"/>
     </clipPath>`);
   if (el.shadow) defs.push(shadowFilter(id));
-  // Crop centered on the faces (el.focus), as planned by the layout.
-  const p = placePhoto(f, ref.width, ref.height, el.focus);
+  // Crop centered on the faces (el.focus), as planned by the layout - or,
+  // for a route map (el.fit === "contain"), scaled to fit with nothing
+  // cropped off instead.
+  const p = el.fit === "contain" ? placePhotoContain(f, ref.width, ref.height) : placePhoto(f, ref.width, ref.height, el.focus);
   const rot = el.rotation ? ` transform="rotate(${n(el.rotation)}, ${n(f.x)}, ${n(f.y)})"` : "";
   const attrs =
     mode === "saal"

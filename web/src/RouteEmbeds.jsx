@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { detectProvider } from "./embeds.js";
+import { detectProvider, extractEmbedUrl } from "./embeds.js";
 import { useI18n } from "./i18n.jsx";
 import { uid } from "./uid.js";
 
@@ -9,7 +9,10 @@ export default function RouteEmbeds({ embeds, onChange }) {
   const [title, setTitle] = useState("");
 
   function add() {
-    const trimmed = url.trim();
+    // Accepts a plain share link, or the whole <iframe>/<a><img></a> embed
+    // snippet the provider hands out - extractEmbedUrl pulls the actual
+    // link out of either.
+    const trimmed = extractEmbedUrl(url);
     if (!trimmed) return;
     onChange([
       ...embeds,

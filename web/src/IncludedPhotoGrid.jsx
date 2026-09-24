@@ -70,7 +70,11 @@ export default function IncludedPhotoGrid({
               ✂
             </button>
           )}
-          {photo.thumbUrl && <img src={photo.thumbUrl} alt="" />}
+          {photo.thumbUrl && (
+            <div className="photo-frame">
+              <img src={photo.thumbUrl} alt="" />
+            </div>
+          )}
           <div className="photo-card-row">
             <label className="photo-include">
               <input

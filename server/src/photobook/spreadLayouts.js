@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { photoAspect, coverRetention, collage, pickBackdrop, cardLayout } from "../pdfLayoutEngine.js";
+import { photoAspect, coverRetention, collage, pickBackdrop, cardLayout, resolutionFitness } from "../pdfLayoutEngine.js";
 
 // Spread layouts for printed photobooks, modeled on the user's hand-made Saal
 // books: a lay-flat double page is designed as one canvas - a background
@@ -145,6 +145,7 @@ const image = (photo, frame, opts = {}) => ({
   background: false,
   shadow: false,
   rotation: 0,
+  fit: "cover",
   focus: focusOf(photo),
   ...opts,
 });
@@ -166,6 +167,18 @@ export function placePhoto(frame, pxW, pxH, focus) {
     h,
     s,
   };
+}
+
+// Photo scaled to fit *inside* `frame` with nothing cropped off, centered -
+// for an image that's a legible graphic rather than a photo (a route map's
+// title/track/elevation-profile composite), where a cover-crop could just
+// as easily slice off the part that matters. Letterboxes onto the page's
+// own background instead of covering the whole frame like placePhoto does.
+export function placePhotoContain(frame, pxW, pxH) {
+  const s = Math.min(frame.w / pxW, frame.h / pxH);
+  const w = pxW * s;
+  const h = pxH * s;
+  return { x: frame.x + (frame.w - w) / 2, y: frame.y + (frame.h - h) / 2, w, h, s };
 }
 
 // What matters in a (background) image element, in spread coordinates: its
@@ -249,6 +262,10 @@ export function backdropScore(photo, aspect) {
     if (ins.labels.includes("people") || ins.labels.includes("portrait")) score -= 0.1;
   }
   if (photo.featured) score += 0.1;
+  // A low-res photo isn't disqualified outright, just scored down sharply -
+  // it's fine in a small multi-photo grid frame, just not stretched across
+  // a whole spread or page. See pdfLayoutEngine.js's resolutionFitness.
+  score *= resolutionFitness(photo);
   return r < 0.5 ? -1 : score;
 }
 
@@ -583,12 +600,17 @@ export const SPREAD_LAYOUTS = {
     label: "Full-spread photo",
     photos: { min: 1, max: 3, ideal: 1 },
     fit(photos, spread) {
-      const widest = photos.reduce((a, p) => (photoAspect(p) > photoAspect(a) ? p : a), photos[0]);
+      // Widest *and* not too low-res, weighted together - a low-res photo
+      // otherwise wins this full-spread slot purely for having a panoramic
+      // aspect ratio, then prints visibly soft blown up across two pages.
+      const panoramaFit = (p) => photoAspect(p) * resolutionFitness(p);
+      const widest = photos.reduce((a, p) => (panoramaFit(p) > panoramaFit(a) ? p : a), photos[0]);
       const r = coverRetention(photoAspect(widest), spread.w / spread.h);
-      return photoAspect(widest) >= 1.75 ? Math.min(1.2, r + 0.35) : r * 0.7;
+      return (photoAspect(widest) >= 1.75 ? Math.min(1.2, r + 0.35) : r * 0.7) * resolutionFitness(widest);
     },
     build(photos, spread, ctx) {
-      const bgIdx = photos.reduce((a, p, i) => (photoAspect(p) > photoAspect(photos[a]) ? i : a), 0);
+      const panoramaFit = (p) => photoAspect(p) * resolutionFitness(p);
+      const bgIdx = photos.reduce((a, p, i) => (panoramaFit(p) > panoramaFit(photos[a]) ? i : a), 0);
       const cards = photos.filter((_, i) => i !== bgIdx);
       const R = pageBox(spread, "right");
       const L = pageBox(spread, "left");
@@ -847,6 +869,41 @@ export function infoCardSpread(spread, ctx, { card, hero }) {
   const elements = [];
   if (hero) elements.push(image(hero, L, { background: true }));
   elements.push(...result.els);
+  return { elements, paper: "#ffffff" };
+}
+
+// A route embed's map image (see embeds.js's komootImageUrl), one page of a
+// spread - contain-fit, not cropped, since it's a title + track +
+// elevation-profile composite where a cover-crop could easily slice off the
+// part that matters (see placePhotoContain). The other page takes a small
+// gallery of the stop's own photos (bookPlanner.js hands over a few, held
+// back from its normal photo-grid chunking so they don't also repeat
+// later) - a map spread with nothing else on it read as an oddly empty,
+// text-book-ish page; a couple of trail photos next to it reads as part of
+// the story instead.
+export function routeMapSpread(spread, ctx, { hero, title, photos = [], variant = 0 }) {
+  const mapSide = variant % 2 ? "right" : "left";
+  const galSide = mapSide === "left" ? "right" : "left";
+  const mapPage = pageBox(spread, mapSide);
+  const margin = mapPage.w * 0.1;
+  const captionH = title ? mapPage.h * 0.13 : 0;
+  const mapBox = { x: mapPage.x + margin, y: mapPage.y + margin, w: mapPage.w - 2 * margin, h: mapPage.h - 2 * margin - captionH };
+
+  const elements = [];
+  if (hero) elements.push(image(hero, mapBox, { fit: "contain" }));
+  if (title) {
+    // In its own reserved strip below the image, not overlaid on it - so it
+    // can't land on top of the composite's own bottom edge, wherever that
+    // happens to fall once the image is contain-fit (its exact proportions
+    // vary per tour).
+    const capFrame = { x: mapPage.x + margin, y: mapPage.y + mapPage.h - captionH, w: mapPage.w - 2 * margin, h: captionH };
+    elements.push(titleElement(title, capFrame, mapSide === "right" ? "br" : "bl", ctx, { dark: true }));
+  }
+  if (photos.length) {
+    const gal = inset(pageBox(spread, galSide), mapPage.w * 0.06);
+    const frames = collageOn(photos, gal, { gap: 70, fill: 0.9, variant });
+    elements.push(...photos.map((p, i) => image(p, frames[i], { shadow: true })));
+  }
   return { elements, paper: "#ffffff" };
 }
 

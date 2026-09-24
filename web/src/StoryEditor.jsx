@@ -498,14 +498,27 @@ export default function StoryEditor({ story, onSaved }) {
               </button>
 
               {isCollapsed ? (
-                <button type="button" className="stop-summary-info" onClick={() => toggleStopCollapsed(stop.id)}>
-                  {summaryThumb?.thumbUrl && (
-                    <img className="stop-summary-thumb" src={summaryThumb.thumbUrl} alt="" />
+                <>
+                  <button type="button" className="stop-summary-info" onClick={() => toggleStopCollapsed(stop.id)}>
+                    {summaryThumb?.thumbUrl && (
+                      <img className="stop-summary-thumb" src={summaryThumb.thumbUrl} alt="" />
+                    )}
+                    <span className="stop-summary-heading">{stop.heading}</span>
+                    <span className="stop-dates">{formatRange(stop.startedAt, stop.endedAt, locale)}</span>
+                    <span className="stop-summary-meta">{t("photosCount", includedPhotos.length)}</span>
+                  </button>
+                  {draft.stops.length > 1 && (
+                    <button
+                      type="button"
+                      className="stop-remove-btn"
+                      title={t("removeSection")}
+                      aria-label={t("removeSection")}
+                      onClick={() => requestRemoveSection(stop.id)}
+                    >
+                      🗑
+                    </button>
                   )}
-                  <span className="stop-summary-heading">{stop.heading}</span>
-                  <span className="stop-dates">{formatRange(stop.startedAt, stop.endedAt, locale)}</span>
-                  <span className="stop-summary-meta">{t("photosCount", includedPhotos.length)}</span>
-                </button>
+                </>
               ) : (
                 <div className="stop-editor-header">
                   <input

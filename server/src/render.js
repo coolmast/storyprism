@@ -1,5 +1,5 @@
 import { getTheme } from "./themes.js";
-import { isEmbeddable } from "./embeds.js";
+import { isEmbeddable, resolvedEmbedUrl, embedKind, stravaActivityInfo } from "./embeds.js";
 import { getStrings } from "./i18n.js";
 
 export function escapeHtml(str = "") {
@@ -51,12 +51,25 @@ function photoFigure(p, fallbackAlt) {
 }
 
 function embedBlock(embed, strings) {
-  if (isEmbeddable(embed.url)) {
+  const kind = embedKind(embed.url);
+  if (kind === "strava-widget") {
+    // Strava's own widget, not an iframe we control - the shared
+    // embed.js script (added once for the whole page, see hasStravaWidget
+    // below) finds this div and replaces it with the real embed itself.
+    const info = stravaActivityInfo(embed.url);
+    return `
+    <div class="route-embed">
+      ${embed.title ? `<p class="route-embed-title">${escapeHtml(embed.title)}</p>` : ""}
+      <div class="strava-embed-placeholder" data-embed-type="activity" data-embed-id="${escapeHtml(info.activityId)}"
+           data-style="${escapeHtml(info.style)}" data-from-embed="false" data-token="${escapeHtml(info.token)}"></div>
+    </div>`;
+  }
+  if (kind === "iframe") {
     return `
     <div class="route-embed">
       ${embed.title ? `<p class="route-embed-title">${escapeHtml(embed.title)}</p>` : ""}
       <div class="route-embed-frame">
-        <iframe src="${escapeHtml(embed.url)}" loading="lazy" allowfullscreen
+        <iframe src="${escapeHtml(resolvedEmbedUrl(embed))}" loading="lazy" allowfullscreen
                 title="${escapeHtml(embed.title || embed.provider)}"></iframe>
       </div>
     </div>`;
@@ -135,6 +148,7 @@ export function renderStoryHtml(story, { editMode = false } = {}) {
   const includedByStop = story.stops.map((s) => s.photos.filter((p) => p.included));
   const featuredByStop = includedByStop.map((photos) => photos.find((p) => p.featured));
   const coverPhoto = (featuredByStop.find(Boolean) || includedByStop.flat()[0])?.thumbUrl;
+  const hasStravaWidget = story.stops.some((s) => (s.embeds || []).some((e) => embedKind(e.url) === "strava-widget"));
   const located = story.stops.filter((s) => s.lat != null);
   const mapPoints = located.map((s) => ({
     lat: s.lat,
@@ -375,6 +389,7 @@ export function renderStoryHtml(story, { editMode = false } = {}) {
   <script src="/vendor/leaflet/leaflet.js"></script>
   <script src="/vendor/photoswipe/umd/photoswipe.umd.min.js"></script>
   <script src="/vendor/photoswipe/umd/photoswipe-lightbox.umd.min.js"></script>
+  ${hasStravaWidget ? `<script src="https://strava-embeds.com/embed.js"></script>` : ""}
   <script>
     const lightbox = new PhotoSwipeLightbox({
       gallery: 'main',

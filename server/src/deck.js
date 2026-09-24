@@ -1,5 +1,5 @@
 import { getTheme } from "./themes.js";
-import { isEmbeddable } from "./embeds.js";
+import { isEmbeddable, resolvedEmbedUrl, embedKind, stravaActivityInfo } from "./embeds.js";
 import { getStrings } from "./i18n.js";
 
 function escapeHtml(str = "") {
@@ -69,6 +69,7 @@ export function renderStoryDeck(story) {
   const includedByStop = story.stops.map((s) => s.photos.filter((p) => p.included));
   const featuredByStop = includedByStop.map((photos) => photos.find((p) => p.featured));
   const coverPhoto = (featuredByStop.find(Boolean) || includedByStop.flat()[0])?.thumbUrl;
+  const hasStravaWidget = story.stops.some((s) => (s.embeds || []).some((e) => embedKind(e.url) === "strava-widget"));
 
   const stopSlides = story.stops
     .map((stop, i) => {
@@ -109,19 +110,30 @@ export function renderStoryDeck(story) {
         .map((c) => infoCardSlide(c, strings))
         .join("\n");
 
-      // Only embeddable (allowlisted + a real /embed link) routes get their
-      // own slide; a plain activity-page link wouldn't render inside an
-      // iframe anyway, so it's skipped here rather than shown as a dead frame.
+      // Only a route that actually embeds (Strava's own widget, or a real
+      // /embed iframe link) gets its own slide; a plain activity-page link
+      // wouldn't render at all, so it's skipped here rather than shown as a
+      // dead frame.
       const embedSlides = (stop.embeds || [])
-        .filter((e) => isEmbeddable(e.url))
-        .map(
-          (e) => `
+        .map((e) => ({ e, kind: embedKind(e.url) }))
+        .filter(({ kind }) => kind !== "link")
+        .map(({ e, kind }) => {
+          if (kind === "strava-widget") {
+            const info = stravaActivityInfo(e.url);
+            return `
       <section>
         ${e.title ? `<h3 class="deck-embed-title">${escapeHtml(e.title)}</h3>` : ""}
-        <iframe class="deck-embed-frame" src="${escapeHtml(e.url)}" allowfullscreen
+        <div class="strava-embed-placeholder" data-embed-type="activity" data-embed-id="${escapeHtml(info.activityId)}"
+             data-style="${escapeHtml(info.style)}" data-from-embed="false" data-token="${escapeHtml(info.token)}"></div>
+      </section>`;
+          }
+          return `
+      <section>
+        ${e.title ? `<h3 class="deck-embed-title">${escapeHtml(e.title)}</h3>` : ""}
+        <iframe class="deck-embed-frame" src="${escapeHtml(resolvedEmbedUrl(e))}" allowfullscreen
                 title="${escapeHtml(e.title || e.provider)}"></iframe>
-      </section>`
-        )
+      </section>`;
+        })
         .join("\n");
 
       // A plain <img>, not data-background-image: reveal's background layer
@@ -270,6 +282,7 @@ export function renderStoryDeck(story) {
     </div>
   </div>
   <script src="/vendor/reveal/reveal.js"></script>
+  ${hasStravaWidget ? `<script src="https://strava-embeds.com/embed.js"></script>` : ""}
   <script>
     Reveal.initialize({
       hash: true,

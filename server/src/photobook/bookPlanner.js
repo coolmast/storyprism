@@ -4,6 +4,7 @@ import {
   SPREAD_LAYOUTS,
   chapterSpread,
   infoCardSpread,
+  routeMapSpread,
   coverSpread,
   resolveFonts,
   backdropScore,
@@ -11,6 +12,7 @@ import {
 import { photoAspect, coverRetention } from "../pdfLayoutEngine.js";
 import { dateRange } from "../render.js";
 import { getTheme } from "../themes.js";
+import { komootImageUrl } from "../embeds.js";
 
 // Turns a story into a printed photobook: a wrap-around cover plus a list of
 // lay-flat spreads, each a list of positioned elements (see
@@ -131,12 +133,31 @@ function heroForCard(card, stop) {
   return stop.photos.find((p) => p.hash === card.heroPhotoHash || (p.thumbUrl || "").includes(card.heroPhotoHash)) || null;
 }
 
+// A route embed's map, as a "photo" for the image element it's placed in -
+// not a PhotoPrism photo at all (see exportShared.js's fetchExternalBuffer
+// / photoKey, which key on this externalUrl when there's no hash). Only
+// Komoot has a static-image trick to derive one from; Strava/Garmin embeds
+// skip the photobook entirely for now, same as they already do in the
+// presentation deck.
+function routeMapPhoto(embed) {
+  const url = komootImageUrl(embed.url);
+  // thumbUrl/fullUrl are what the live preview's inline SVG loads directly
+  // in the browser (bookPreview.js's previewRef); externalUrl is what the
+  // real Saal/CEWE export fetches server-side (exportShared.js) - both need
+  // to point at the same image. width/height are only ever a preview-time
+  // placement estimate (a real tour's elevation profile varies the image's
+  // exact proportions) - the actual export measures the real fetched pixels
+  // instead of trusting these.
+  return url ? { id: `route-${embed.id}`, externalUrl: url, thumbUrl: url, fullUrl: url, width: 1280, height: 1160 } : null;
+}
+
 function isStopEmpty(stop) {
   return (
     !stop.photos.some((p) => p.included) &&
     !stop.narrative &&
     !stop.pullQuote &&
-    !(stop.infoCards || []).length
+    !(stop.infoCards || []).length &&
+    !(stop.embeds || []).length
   );
 }
 
@@ -225,6 +246,25 @@ export function planBook(story, { product: productId, strings } = {}) {
       pool = [feat, ...included.filter((p) => p !== feat)];
     }
 
+    // Route map spreads - one per embed with a derivable map image. The
+    // first one also gets a few of the stop's own photos on its opposite
+    // page (see routeMapSpread) so it isn't just a mostly-empty page facing
+    // a map; those photos come out of `pool` *before* the normal photo-grid
+    // chunking below so they don't also repeat later in the book.
+    const routeSpreads = (stop.embeds || [])
+      .map((embed) => ({ embed, hero: routeMapPhoto(embed) }))
+      .filter((r) => r.hero)
+      .map(({ embed, hero }, i) => {
+        const galleryPhotos = i === 0 ? pool.slice(0, Math.min(3, pool.length)) : [];
+        pool = pool.filter((p) => !galleryPhotos.includes(p));
+        return {
+          kind: "route",
+          ...tag,
+          ...routeMapSpread(spreadSize, baseCtx, { hero, title: embed.title || null, photos: galleryPhotos, variant: nextVariant() }),
+          layoutId: "route-map",
+        };
+      });
+
     const weights =
       stop.bookLayoutOverride && SPREAD_LAYOUTS[stop.bookLayoutOverride]
         ? { [stop.bookLayoutOverride]: 1, panorama: 0.01 }
@@ -260,12 +300,14 @@ export function planBook(story, { product: productId, strings } = {}) {
     const top = cards.filter((c) => (c.placement || "top") === "top").map(infoSpread);
     const middle = cards.filter((c) => c.placement === "middle").map(infoSpread);
     const end = cards.filter((c) => c.placement === "end").map(infoSpread);
-    // Top cards come after whichever spread carries the stop title.
+    // Top cards (and the route map, a similar overview-up-front element)
+    // come after whichever spread carries the stop title.
     const lead = stopSpreads.length ? stopSpreads : photoSpreads.slice(0, 1);
     const photosAfterLead = stopSpreads.length ? photoSpreads : photoSpreads.slice(1);
     const mid = Math.ceil(photosAfterLead.length / 2);
     spreads.push(
       ...lead,
+      ...routeSpreads,
       ...top,
       ...photosAfterLead.slice(0, mid),
       ...middle,
