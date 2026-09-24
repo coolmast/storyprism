@@ -123,8 +123,11 @@ export function ceweSpineWidth(product, numPages) {
 }
 
 // CEWE's own cover box ("bundlesize"): back + spine + front, trimmed.
+// CEWE only writes (and accepts) whole 0.1 mm cover widths; a fractional one
+// (two spine blocks = 2 x 12.49) made it discard the cover and later crash in
+// its own order check.
 export function ceweCoverBox(product, numPages) {
-  return { w: 2 * product.cover.w + ceweSpineWidth(product, numPages), h: product.cover.h };
+  return { w: Math.round(2 * product.cover.w + ceweSpineWidth(product, numPages)), h: product.cover.h };
 }
 
 // Shared Saal category/topic id - identical in every project inspected.

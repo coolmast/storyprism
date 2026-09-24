@@ -380,18 +380,29 @@ probes that the real software opened without complaint.
   pixel), is placed at area origin + `cutout.left/top` and clipped to the
   area, i.e. exactly the planner's `placePhoto()` cover-fit.
 - **Text**: Qt rich text HTML (in CDATA or escaped), font sizes in pt -
-  the planner's size unit × 4.15 / 3.528. Fonts are passed through by
-  name; CEWE substitutes any it doesn't ship.
+  the planner's size unit × 4.15 / 3.528. CEWE only prints fonts on its
+  `fonts-mac.xml` "good" list (plus its bundled ones) and substitutes
+  anything else with a warning on open; none of the book's Google fonts are
+  on it, so `ceweExport.js` maps each to the closest font that ships with
+  every Mac and is on the list (script → Apple Chancery / Brush Script MT,
+  serifs → Baskerville / Hoefler Text / Didot / Cochin, …). The book preview
+  names the mapping for CEWE products. Text frames are still planned with
+  the original font's metrics, so fit can differ slightly.
 - **Effects**: drop shadow is `<decoration><shadow …/></decoration>` (CEWE's
   own preset reused verbatim). Transparency has no XML attribute - CEWE
   bakes it into an RGBA PNG row - so translucent panels are exported as a
-  tiny solid RGBA PNG stretched over the panel's frame.
+  solid RGBA PNG covering the panel's frame at 150 dpi (a smaller one trips
+  CEWE's print-resolution warning even though it's a flat color).
 - **Products** come from CEWE's article catalog (`products-<n>.xml` in the
   app's data folder): per article, page and cover size, bleed (3 mm inner,
   10 mm cover), page range (26–202, step 4) and spine parameters. Spine
   width = `base_width` + ⌊(pages − 26) / 16⌋ × `block_width` (7.5 +
   n × 1.249 mm for the three Hardcover Matt books used here) - matches the
   cover widths CEWE wrote at 26/46/86/202 pages to the 0.1 mm. The cover
+  `bundlesize` must be a whole number (rounded): a fractional one (e.g.
+  5599.98 at 58–73 pages, two spine blocks) makes CEWE discard the whole
+  cover on open and later crash in its order check
+  (`CWRegionMath::detectInnerPageRect`, null page rect). The cover
   sheet is back + spine + front, with the spine centered. Unlike Saal the
   books are glued, not lay-flat: page 1 is a single right page and the last
   page a single left page (both left blank), the spreads are 2–3 … (N−2)–(N−1).

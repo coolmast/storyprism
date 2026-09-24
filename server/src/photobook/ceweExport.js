@@ -86,6 +86,34 @@ function imageArea(el, ref, dx, dy, z) {
 `;
 }
 
+// CEWE only prints fonts it knows (its fonts-mac.xml "good" list plus its own
+// bundled ones) and silently substitutes anything else. None of the book's
+// Google fonts are on that list, so each maps to the closest font that ships
+// with every Mac *and* is on the list.
+const CEWE_FONT = {
+  "Architects Daughter": "Chalkboard",
+  Allison: "Apple Chancery",
+  Allura: "Apple Chancery",
+  Babylonica: "Apple Chancery",
+  Explora: "Apple Chancery",
+  "Great Vibes": "Apple Chancery",
+  "Lavishly Yours": "Apple Chancery",
+  Tangerine: "Apple Chancery",
+  Waterfall: "Apple Chancery",
+  Bainsley: "Brush Script MT",
+  "Butterfly Kids": "Brush Script MT",
+  "Grand Hotel": "Brush Script MT",
+  Amarante: "Big Caslon",
+  "Anonymous Pro": "Andale Mono",
+  Bellota: "Gill Sans",
+  "Brygada 1918": "Baskerville",
+  Berenika: "Hoefler Text",
+  Clara: "Didot",
+  Coelacanth: "Cochin",
+  Exo: "Futura",
+};
+export const ceweFont = (font) => CEWE_FONT[font?.name] || "Baskerville";
+
 const alignOf = (a) => (a === "center" ? "center" : a === "right" ? "right" : "left");
 
 // Qt rich text, the dialect CEWE stores (and edits) text in. One <p> per
@@ -93,7 +121,7 @@ const alignOf = (a) => (a === "center" ? "center" : a === "right" ? "right" : "l
 function qtHtml(paragraphs) {
   const ps = paragraphs
     .map((p) => {
-      const font = p.font?.name || "CEWE Head";
+      const font = ceweFont(p.font);
       const pt = Math.round(p.size * PT_PER_SIZE * 10) / 10;
       return `<p align="${alignOf(p.align)}" style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; line-height:120%;"><span style=" font-family:'${font}'; font-size:${pt}pt; font-weight:${p.bold ? 700 : 400}; font-style:${p.italic ? "italic" : "normal"}; color:${p.color || "#000000"};">${htmlText(p.text)}</span></p>`;
     })
@@ -109,7 +137,7 @@ function textArea(el, dx, dy, z) {
   const first = el.paragraphs[0];
   const frame = { ...el.frame, h: el.frame.h + first.size * SAAL_LINE };
   const box = areaBox(frame, el.rotation, dx, dy);
-  const font = first.font?.name || "CEWE Head";
+  const font = ceweFont(first.font);
   const pt = Math.round(first.size * PT_PER_SIZE);
   return `        <area areatype="textarea">
             ${position(box, z)}
@@ -122,14 +150,21 @@ function textArea(el, dx, dy, z) {
 }
 
 // Translucent boxes: CEWE itself stores transparency baked into a PNG's
-// alpha channel (an image area whose file is RGBA), so a panel is a small
-// solid-color RGBA PNG stretched over its frame.
-async function panelImage(color, opacity) {
+// alpha channel (an image area whose file is RGBA), so a panel is a
+// solid-color RGBA PNG covering its frame - sized at 150 dpi, since CEWE's
+// print-quality check flags a smaller image as too low-resolution even
+// though it's a flat color.
+const PANEL_DPI = 150;
+async function panelImage(color, opacity, frame) {
   const hex = color.replace("#", "");
   const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
-  return sharp({ create: { width: 16, height: 16, channels: 4, background: { r, g, b, alpha: opacity } } })
-    .png()
+  const px = (v) => Math.max(8, Math.min(8000, Math.ceil((v / 254) * PANEL_DPI)));
+  const width = px(frame.w);
+  const height = px(frame.h);
+  const data = await sharp({ create: { width, height, channels: 4, background: { r, g, b, alpha: opacity } } })
+    .png({ compressionLevel: 9 })
     .toBuffer();
+  return { data, width, height };
 }
 
 function panelArea(el, ref, dx, dy, z) {
@@ -174,12 +209,13 @@ export async function runCeweExport(job, story, plan) {
 
     job.stage = "layout";
     const panels = new Map();
-    const panelRef = async (color, opacity) => {
-      const key = `${color}-${opacity}`;
+    const panelRef = async (color, opacity, frame) => {
+      const key = `${color}-${opacity}-${Math.round(frame.w)}x${Math.round(frame.h)}`;
       if (!panels.has(key)) {
-        const name = `panel_${color.replace("#", "")}_${Math.round(opacity * 100)}.png`;
-        insert.run(name, await panelImage(color, opacity), now);
-        panels.set(key, { name, width: 16, height: 16 });
+        const img = await panelImage(color, opacity, frame);
+        const name = `panel_${color.replace("#", "")}_${Math.round(opacity * 100)}_${img.width}x${img.height}.png`;
+        insert.run(name, img.data, now);
+        panels.set(key, { name, width: img.width, height: img.height });
       }
       return panels.get(key);
     };
@@ -188,15 +224,15 @@ export async function runCeweExport(job, story, plan) {
       const out = [];
       let z = 100;
       if (spread.paper && spread.paper.toLowerCase() !== "#ffffff") {
-        const ref = await panelRef(spread.paper, 1);
-        out.push(panelArea({ frame: { x: 0, y: 0, w: canvas.w, h: canvas.h } }, ref, dx, dy, z++));
+        const frame = { x: 0, y: 0, w: canvas.w, h: canvas.h };
+        out.push(panelArea({ frame }, await panelRef(spread.paper, 1, frame), dx, dy, z++));
       }
       for (const el of spread.elements) {
         if (el.kind === "image") {
           const ref = el.photo && refs.get(photoKey(el.photo));
           if (ref) out.push(imageArea(el, ref, dx, dy, z++));
         } else if (el.kind === "panel" && el.opacity) {
-          out.push(panelArea(el, await panelRef(el.color, el.opacity), dx, dy, z++));
+          out.push(panelArea(el, await panelRef(el.color, el.opacity, el.frame), dx, dy, z++));
         } else if (el.kind === "text") {
           out.push(textArea(el, dx, dy, z++));
         }
