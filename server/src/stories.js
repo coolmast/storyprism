@@ -65,6 +65,27 @@ function serializeSpreadCounts(counts) {
   return clean.length ? JSON.stringify(clean) : null;
 }
 
+// The cover's two manual "print" photo picks - up to 2 slots, each either a
+// photo hash (trusted as-is, same as heroPhotoHash/bookChapterBackdropHash -
+// no cross-check against the story's actual photos) or null for "let that
+// one slot auto-pick".
+function parseCoverCards(json) {
+  try {
+    const v = JSON.parse(json || "[]");
+    if (!Array.isArray(v)) return [];
+    return v.slice(0, 2).map((h) => (typeof h === "string" && h ? h : null));
+  } catch {
+    return [];
+  }
+}
+
+function serializeCoverCards(cards) {
+  if (!Array.isArray(cards)) return null;
+  const clean = cards.slice(0, 2).map((h) => (typeof h === "string" && h ? h : null));
+  while (clean.length && clean.at(-1) == null) clean.pop();
+  return clean.length ? JSON.stringify(clean) : null;
+}
+
 // Text size multiplier for the printed book (50 %-200 %).
 function textScale(value, fallback) {
   const v = Number(value);
@@ -476,6 +497,8 @@ export function getStory(id) {
     bookHideOutro: !!story.book_hide_outro,
     bookTitleScale: story.book_title_scale ?? 1,
     bookBodyScale: story.book_body_scale ?? 1,
+    bookCoverBackdropHash: story.book_cover_backdrop_hash || null,
+    bookCoverCards: parseCoverCards(story.book_cover_cards),
     createdAt: story.created_at,
     updatedAt: story.updated_at,
     stops: stops.map((s) => {
@@ -550,7 +573,7 @@ export function getStory(id) {
 }
 
 const updateStoryStmt = db.prepare(
-  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, content_language = @contentLanguage, pdf_layout_pack = @pdfLayoutPack, pdf_paper_size = @pdfPaperSize, book_product = @bookProduct, book_layout_pack = @bookLayoutPack, book_title_font = @bookTitleFont, book_body_font = @bookBodyFont, book_keep_bursts = @bookKeepBursts, book_hide_intro = @bookHideIntro, book_hide_outro = @bookHideOutro, book_title_scale = @bookTitleScale, book_body_scale = @bookBodyScale, updated_at = @now WHERE id = @id"
+  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, content_language = @contentLanguage, pdf_layout_pack = @pdfLayoutPack, pdf_paper_size = @pdfPaperSize, book_product = @bookProduct, book_layout_pack = @bookLayoutPack, book_title_font = @bookTitleFont, book_body_font = @bookBodyFont, book_keep_bursts = @bookKeepBursts, book_hide_intro = @bookHideIntro, book_hide_outro = @bookHideOutro, book_title_scale = @bookTitleScale, book_body_scale = @bookBodyScale, book_cover_backdrop_hash = @bookCoverBackdropHash, book_cover_cards = @bookCoverCards, updated_at = @now WHERE id = @id"
 );
 // Upsert, not a plain UPDATE: the editor can now create brand-new stops
 // client-side (splitting one stop into two, or adding a blank section) and
@@ -634,6 +657,13 @@ export function updateStory(id, data) {
       bookHideOutro: (data.bookHideOutro ?? existing.bookHideOutro) ? 1 : 0,
       bookTitleScale: textScale(data.bookTitleScale, existing.bookTitleScale),
       bookBodyScale: textScale(data.bookBodyScale, existing.bookBodyScale),
+      bookCoverBackdropHash:
+        data.bookCoverBackdropHash !== undefined
+          ? data.bookCoverBackdropHash || null
+          : existing.bookCoverBackdropHash,
+      bookCoverCards: serializeCoverCards(
+        data.bookCoverCards !== undefined ? data.bookCoverCards : existing.bookCoverCards
+      ),
       now,
     });
 

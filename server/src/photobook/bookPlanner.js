@@ -270,17 +270,22 @@ export function planBook(story, { product: productId, strings } = {}) {
     const tag = { stopId: stop.id, stopHeading: stop.heading };
     const stopSpreads = [];
 
+    // The chapter's backdrop: the user's own pick (bookChapterBackdropHash -
+    // same idea as an info card's own hero photo, see InfoCards.jsx) if they
+    // set one, else the best-scoring scenery for a full spread (a face-free
+    // featured photo wins through backdropScore's featured bonus). A manual
+    // pick earns the stop a full chapter-opener spread even with no
+    // narrative/pull quote - picking a specific backdrop is itself a strong
+    // signal the user wants the "photo behind a heading" treatment, not just
+    // the plain title-over-first-photo-grid fallback below.
+    const manualBackdrop = stop.bookChapterBackdropHash
+      ? included.find((p) => p.hash === stop.bookChapterBackdropHash)
+      : null;
+    const showChapterSpread = hasText || Boolean(manualBackdrop);
+
     let pool = included;
-    if (hasText) {
-      // The chapter's backdrop: the user's own pick (bookChapterBackdropHash
-      // - same idea as an info card's own hero photo, see InfoCards.jsx) if
-      // they set one, else the best-scoring scenery for a full spread (a
-      // face-free featured photo wins through backdropScore's featured
-      // bonus).
+    if (showChapterSpread) {
       const spreadAspect = spreadSize.w / spreadSize.h;
-      const manualBackdrop = stop.bookChapterBackdropHash
-        ? included.find((p) => p.hash === stop.bookChapterBackdropHash)
-        : null;
       const backdrop =
         manualBackdrop ||
         [...included].sort((a, b) => backdropScore(b, spreadAspect) - backdropScore(a, spreadAspect))[0] ||
@@ -345,7 +350,7 @@ export function planBook(story, { product: productId, strings } = {}) {
         photoCount: s.photos.length,
         pinned: s.pinned,
         layoutPinned: s.layoutPinned,
-        ...build(s.layoutId, s.photos, s.variant, { title: !hasText && idx === 0 ? stop.heading : null }),
+        ...build(s.layoutId, s.photos, s.variant, { title: !showChapterSpread && idx === 0 ? stop.heading : null }),
       })
     );
 
@@ -418,14 +423,29 @@ export function planBook(story, { product: productId, strings } = {}) {
   const blanks = Math.max(0, (numPages - (product.singlePages || 0)) / 2 - spreads.length);
   for (let b = 0; b < blanks; b++) spreads.push({ kind: "blank", layoutId: "blank", elements: [], paper: "#ffffff" });
 
-  // Cover: best-fitting featured photo as backdrop, two more as prints.
+  // Cover: best-fitting featured photo as backdrop, two more as prints -
+  // unless the user picked specific photos instead (bookCoverBackdropHash /
+  // bookCoverCards, same "Auto unless overridden" pattern as a stop's
+  // chapter backdrop). Each of the 2 card slots overrides independently -
+  // a null entry there still lets that one slot auto-pick.
   const cSize = coverSize(product, numPages);
   const cAspect = cSize.w / cSize.h;
+  const manualCoverBg = story.bookCoverBackdropHash
+    ? allIncluded.find((p) => p.hash === story.bookCoverBackdropHash)
+    : null;
   const coverCandidates = [...coverPool, ...allIncluded.filter((p) => !coverPool.includes(p))];
   const coverBg =
+    manualCoverBg ||
     [...coverCandidates].sort((a, b) => backdropScore(b, cAspect) + (coverPool.includes(b) ? 0.15 : 0) - backdropScore(a, cAspect) - (coverPool.includes(a) ? 0.15 : 0))[0] ||
     null;
-  const coverCards = [...coverPool, ...allIncluded].filter((p, i, arr) => p !== coverBg && arr.indexOf(p) === i).slice(0, 2);
+  const manualCoverCards = (story.bookCoverCards || []).map((h) => (h ? allIncluded.find((p) => p.hash === h) : null));
+  const autoCoverCardPool = [...coverPool, ...allIncluded].filter(
+    (p, i, arr) => p !== coverBg && !manualCoverCards.includes(p) && arr.indexOf(p) === i
+  );
+  let autoCoverCardIdx = 0;
+  const coverCards = [0, 1]
+    .map((i) => manualCoverCards[i] || autoCoverCardPool[autoCoverCardIdx++] || null)
+    .filter(Boolean);
   const cover = {
     kind: "cover",
     size: cSize,

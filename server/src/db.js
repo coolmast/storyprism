@@ -156,3 +156,13 @@ ensureColumn("stop_info_cards", "photo_position", "REAL");
 // as an info card's own hero photo, just for the stop's chapter spread.
 // NULL means "automatic" (the existing backdropScore-based pick).
 ensureColumn("stops", "book_chapter_backdrop_hash", "TEXT");
+// The photobook cover's own manual picks, story-wide (the cover is a single
+// wraparound canvas spanning back/spine/front, built from photos across
+// every stop, not just one). NULL/empty means "automatic" for that slot.
+// book_cover_backdrop_hash: the one photo used as the full-bleed background
+// across the whole wraparound cover. book_cover_cards: JSON array of up to
+// 2 hashes (or null entries) for the two small tilted "print" photos on the
+// front cover - a null entry there still lets that one slot auto-pick while
+// the other is manually chosen.
+ensureColumn("stories", "book_cover_backdrop_hash", "TEXT");
+ensureColumn("stories", "book_cover_cards", "TEXT");

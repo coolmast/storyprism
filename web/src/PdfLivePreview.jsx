@@ -9,6 +9,7 @@ import {
 } from "./api.js";
 import { useI18n } from "./i18n.jsx";
 import { Toggle } from "./ui/index.js";
+import CoverPicker from "./CoverPicker.jsx";
 
 // Side panel (full screen on a phone) previewing the printed output for the
 // *current, unsaved* draft, re-rendered shortly after every edit:
@@ -258,6 +259,12 @@ export default function PdfLivePreview({
             onChange={(checked) => onChange({ bookKeepBursts: checked })}
             label={t("bookKeepBursts")}
             hint={t("bookKeepBurstsHint")}
+          />
+          <CoverPicker
+            stops={draft.stops}
+            backdropHash={draft.bookCoverBackdropHash}
+            cardHashes={draft.bookCoverCards}
+            onChange={onChange}
           />
           <button
             className="pdf-live-export"

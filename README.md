@@ -248,7 +248,26 @@ or a real printed photobook (Saal Digital/CEWE FOTOWELT).
     normally the automatically best-scoring one (`backdropScore`), but a stop
     can pin a specific photo instead (`stop.bookChapterBackdropHash`, picked
     from a small photo grid in the editor, same interaction as an info card's
-    hero-photo picker below). `saalSvg.js` renders every spread either as Saal's
+    hero-photo picker below). A manual pick also earns that stop a full
+    chapter-opener spread even with no narrative/pull quote text at all —
+    picking a specific backdrop is itself a strong enough signal the user
+    wants the "photo behind a heading" treatment, not the plain
+    title-over-first-photo-grid fallback a textless stop otherwise gets.
+    The cover is a separate concern: one continuous wraparound canvas
+    (back cover · spine · front cover) built from photos across *every*
+    stop, not just one — normally the best-scoring `featured` photo (or, if
+    no stop has one, the best-scoring photo overall) as the full-bleed
+    background plus two more as tilted "print" cards on the front, but the
+    story can pin the background and/or either print card to a specific
+    photo instead (`story.bookCoverBackdropHash` /
+    `story.bookCoverCards`, a 2-slot array where a `null` entry still lets
+    that one card auto-pick). `CoverPicker.jsx` (used from the Photobook
+    preview panel's own settings, since a story-wide choice belongs there,
+    not under any one stop) groups the story's included photos by stop so
+    the picker stays usable on a long trip, with three independent
+    role-pickers (background, print 1, print 2) reusing the same
+    toggle+grid interaction as the chapter-backdrop/hero-photo pickers.
+    `saalSvg.js` renders every spread either as Saal's
     own SVG dialect or as a browser preview from the same element list, so
     the editor's live "Photobook" preview (`bookPreview.js`) is exactly what
     gets exported. Export jobs (`bookExport.js`) plan the book once and hand
@@ -969,6 +988,27 @@ from nginx itself, not from this app). Raise it to match, e.g.
       in the same disposable test story), plus a legacy-shaped story
       (plain-integer spread pins, placement-only info card) still planning
       the same as before
+- [x] Fixed: a stop's manually-pinned chapter backdrop
+      (`bookChapterBackdropHash`, above) was silently ignored whenever that
+      stop had no narrative/pull quote text, since the whole chapter-opener
+      spread was only ever created when there was text to show. A manual
+      backdrop pick now earns the stop a chapter-opener spread (title only,
+      no body text) on its own. Found from a real story ("Frankreich 2025")
+      where the user had picked a backdrop for a textless stop and it never
+      showed up in the preview.
+- [x] Photobook cover: the wraparound cover (back · spine · front) was
+      100% automatic with no way to choose which photos it used. Added
+      manual overrides - one for the full-bleed background
+      (`story.bookCoverBackdropHash`) and one each for the two small tilted
+      "print" photos on the front (`story.bookCoverCards`, a 2-slot array;
+      a `null` slot still auto-picks just that one card) - via a new
+      `CoverPicker.jsx` in the Photobook preview panel's settings, grouping
+      the story's photos by stop since the cover draws from the whole trip,
+      not one stop. Verified all 4 combinations (fully automatic, backdrop
+      pinned, one card pinned, both cards pinned) via a disposable test
+      story's preview, an editor screenshot showing the grouped picker UI
+      with no console errors, and the two real stories re-rendering
+      unchanged with no cover fields set.
 
 ## Notes
 
