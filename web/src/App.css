@@ -16,6 +16,15 @@
   border-right: 1px solid var(--border);
   padding: 1.25rem 1rem;
   gap: 1.75rem;
+  transition: width 0.15s ease, padding 0.15s ease;
+  /* Pinned to the viewport rather than stretching to match a tall
+     .app-main (a long album list, say) - otherwise the collapse toggle at
+     its bottom (margin-top: auto) would end up scrolled far below the
+     fold instead of always being reachable. */
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
 }
 
 .app-brand {
@@ -86,6 +95,59 @@
 
 .app-nav button.active svg {
   color: var(--accent-text);
+}
+
+.sidebar-collapse-btn {
+  margin-top: auto;
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.sidebar-collapse-btn:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.sidebar-collapse-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Collapsed: icon rail only, on desktop - hides the brand text and nav
+   labels rather than the icons, so the sidebar stays usable for navigation
+   at a fraction of the width, and remembers the choice (App.jsx,
+   localStorage) across reloads the same way the theme toggle does. */
+.app-shell.sidebar-collapsed .app-sidebar {
+  width: 60px;
+  padding-left: 0.6rem;
+  padding-right: 0.6rem;
+}
+
+.app-shell.sidebar-collapsed .app-brand-text,
+.app-shell.sidebar-collapsed .app-nav button span {
+  display: none;
+}
+
+.app-shell.sidebar-collapsed .app-brand {
+  justify-content: center;
+}
+
+.app-shell.sidebar-collapsed .app-nav button {
+  justify-content: center;
+  padding: 0.55rem;
+}
+
+.app-shell.sidebar-collapsed .sidebar-collapse-btn {
+  align-self: center;
 }
 
 .app-main {
@@ -1278,6 +1340,25 @@ textarea {
 .ai-btn.small {
   padding: 0.2rem 0.6rem;
   font-size: 0.8rem;
+}
+
+/* A quieter entry point than .ai-btn for the ghostwriter on the
+   intro/outro/info-card summary fields - these already sit in a simple,
+   uncluttered part of the UI, so a small link-style toggle keeps it that
+   way instead of adding another prominent pill button next to each field. */
+.ghostwriter-toggle-compact {
+  font: inherit;
+  font-size: 0.8rem;
+  background: none;
+  border: none;
+  color: var(--teal);
+  cursor: pointer;
+  padding: 0.15rem 0;
+  align-self: flex-start;
+}
+
+.ghostwriter-toggle-compact:hover {
+  text-decoration: underline;
 }
 
 .ai-btn:disabled {

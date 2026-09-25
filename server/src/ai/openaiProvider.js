@@ -226,6 +226,12 @@ export async function interviewTurn({
   return data.choices[0].message.content.trim();
 }
 
+const GHOSTWRITER_VOICE_RULES =
+  'Write like a specific person telling a friend about their trip, not a travel brochure: avoid stock ' +
+  'phrases ("heart swelled", "wrapped around us like an embrace", "little did we know", "we couldn\'t ' +
+  'believe our eyes"). Prefer plain, concrete detail over generic sensory adjectives - name the actual ' +
+  "thing, sound, or feeling rather than reaching for a simile. Short sentences are fine.";
+
 export async function draftFromInterview({ heading, narrative, captions, research, history, language }) {
   const context = describeStopContext({ heading, narrative, captions, research });
   const transcript = history
@@ -238,14 +244,10 @@ export async function draftFromInterview({ heading, narrative, captions, researc
       content:
         "You are the same ghostwriter. Using the context and interview transcript below, write a polished, " +
         "vivid narrative (1-2 short paragraphs, first person) for this stop, weaving in the concrete sensory " +
-        "and emotional details the traveler actually shared. Write like a specific person telling a friend " +
-        'about their trip, not a travel brochure: avoid stock phrases ("heart swelled", "wrapped around us ' +
-        'like an embrace", "little did we know", "we couldn\'t believe our eyes"). Prefer plain, concrete ' +
-        "detail over generic sensory adjectives - name the actual thing, sound, or feeling they described " +
-        "rather than reaching for a simile. Short sentences are fine. Also suggest one short, striking " +
-        "pull-quote sentence drawn from or inspired by the conversation, or null if nothing in the " +
-        `conversation fits well as a pull quote.${languageInstruction(language)} (Keep the JSON field names ` +
-        'in English; only the narrative/pullQuote text itself should be in the requested language.)\n\n' +
+        `and emotional details the traveler actually shared. ${GHOSTWRITER_VOICE_RULES} Also suggest one ` +
+        "short, striking pull-quote sentence drawn from or inspired by the conversation, or null if nothing " +
+        `in the conversation fits well as a pull quote.${languageInstruction(language)} (Keep the JSON field ` +
+        'names in English; only the narrative/pullQuote text itself should be in the requested language.)\n\n' +
         'Respond as JSON: {"narrative": string, "pullQuote": string|null}',
     },
     {
@@ -275,11 +277,137 @@ export async function draftFromInterview({ heading, narrative, captions, researc
   return JSON.parse(data.choices[0].message.content);
 }
 
-const GHOSTWRITER_VOICE_RULES =
-  'Write like a specific person telling a friend about their trip, not a travel brochure: avoid stock ' +
-  'phrases ("heart swelled", "wrapped around us like an embrace", "little did we know", "we couldn\'t ' +
-  'believe our eyes"). Prefer plain, concrete detail over generic sensory adjectives - name the actual ' +
-  "thing, sound, or feeling rather than reaching for a simile. Short sentences are fine.";
+// Same interview/draft dance as interviewTurn/draftFromInterview above,
+// generalized to whatever else can be ghostwritten - the story's intro/
+// outro, or one info card's summary - via `kind`. Kept as its own pair of
+// functions rather than folded into the ones above: their context and
+// response shapes differ enough (a whole-trip overview vs. one place's
+// facts; {text} or {summary} instead of {narrative, pullQuote}) that a
+// single mega-function would need just as much per-kind branching, only
+// harder to follow.
+const GHOSTWRITER_PROMPTS = {
+  intro: {
+    interview: `You are a warm, perceptive ghostwriter helping someone turn their travel photos into a vivid, personal story. You are interviewing them to write the OPENING of their whole trip story - the introduction a reader sees before any of the individual stops.
+
+Ask short, specific, warm follow-up questions about the trip as a whole: why they went, who was with them, what they were hoping for or nervous about, how the trip came together, the mood setting off. Reference the actual places they visited (listed in the context) to make questions concrete. Ask at most 2-3 questions per turn. Be conversational and curious, never a form or a checklist. Keep your own messages brief. Never write the introduction for them in this conversation - only ask questions. If they seem to be repeating themselves or say they are done, acknowledge it warmly and suggest they click "Draft rewrite" instead of asking more questions.`,
+    draft: (context, transcript, language) =>
+      "You are the same ghostwriter. Using the context and interview transcript below, write a polished, " +
+      "vivid opening (1-2 short paragraphs, first person) for this trip's story - the introduction a reader " +
+      `sees before any of the stops, setting the scene for the trip as a whole. ${GHOSTWRITER_VOICE_RULES}` +
+      `${languageInstruction(language)} (Keep the JSON field name in English; only the text itself should be ` +
+      `in the requested language.)\n\nRespond as JSON: {"text": string}\n\nContext:\n${context}\n\nInterview ` +
+      `transcript:\n${transcript}`,
+  },
+  outro: {
+    interview: `You are the same warm, perceptive ghostwriter, now interviewing them to write the CLOSING reflection of their trip story - what a reader sees after all the stops.
+
+Ask short, specific, warm follow-up questions about how the trip ended and what it left them with: a favorite memory in hindsight, something that surprised them, how it felt heading home, what they'd tell a friend thinking of doing something similar, anything they'd do differently. Reference the actual places they visited to make questions concrete. Ask at most 2-3 questions per turn. Be conversational and curious, never a form or a checklist. Keep your own messages brief. Never write the closing text for them in this conversation - only ask questions. If they seem to be repeating themselves or say they are done, acknowledge it warmly and suggest they click "Draft rewrite" instead of asking more questions.`,
+    draft: (context, transcript, language) =>
+      "You are the same ghostwriter. Using the context and interview transcript below, write a polished, " +
+      "vivid closing reflection (1-2 short paragraphs, first person) for this trip's story - what a reader " +
+      `sees after all the stops. ${GHOSTWRITER_VOICE_RULES}${languageInstruction(language)} (Keep the JSON ` +
+      `field name in English; only the text itself should be in the requested language.)\n\nRespond as JSON: ` +
+      `{"text": string}\n\nContext:\n${context}\n\nInterview transcript:\n${transcript}`,
+  },
+  infoCard: {
+    interview: `You are a warm, perceptive ghostwriter. Someone has an info card about a specific place from their trip - factual background research (what kind of place it is, a few verified facts) - but its summary is still generic, tour-guide prose. You're interviewing them to turn it into a personal account of what THIS place meant to them or to their journey.
+
+Ask short, specific, warm follow-up questions: why they went there, what they actually did or noticed, a specific moment, how it connected to the rest of the trip, whether it lived up to (or defied) expectations. Reference the place's own facts/subtitle (in the context) to ground your questions. Ask at most 2-3 questions per turn. Be conversational and curious, never a form or a checklist. Keep your own messages brief. Never write the summary for them in this conversation - only ask questions. If they seem to be repeating themselves or say they are done, acknowledge it warmly and suggest they click "Draft rewrite" instead of asking more questions.`,
+    draft: (context, transcript, language) =>
+      "You are the same ghostwriter. Using the context and interview transcript below, rewrite ONLY this " +
+      "place's summary as a personal 2-4 sentence account (first person) of what it meant to them or their " +
+      "journey - grounded in the real facts already gathered (never invent new facts), but no longer generic " +
+      `tour-guide prose. ${GHOSTWRITER_VOICE_RULES}${languageInstruction(language)} (Keep the JSON field name ` +
+      `in English; only the text itself should be in the requested language.)\n\nRespond as JSON: ` +
+      `{"summary": string}\n\nContext:\n${context}\n\nInterview transcript:\n${transcript}`,
+  },
+};
+
+function transcriptOf(history) {
+  const lines = history.map((m) => `${m.role === "user" ? "Traveler" : "Ghostwriter"}: ${m.content}`).join("\n");
+  return lines || "(no conversation yet - just polish what is already there)";
+}
+
+export async function ghostwriterTurn({ kind, context, history, language }) {
+  const prompt = GHOSTWRITER_PROMPTS[kind];
+  if (!prompt) throw new Error(`Unknown ghostwriter kind: ${kind}`);
+  const messages = [
+    { role: "system", content: `${prompt.interview}${languageInstruction(language)}\n\nContext:\n${context}` },
+    ...history,
+  ];
+  if (history.length === 0) {
+    messages.push({ role: "user", content: "Let's start - ask me your first questions." });
+  }
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: INTERVIEW_MODEL, messages, max_tokens: 220 }),
+  });
+  if (!res.ok) throw new Error(`OpenAI interview request failed: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  return data.choices[0].message.content.trim();
+}
+
+export async function ghostwriterDraft({ kind, context, history, language }) {
+  const prompt = GHOSTWRITER_PROMPTS[kind];
+  if (!prompt) throw new Error(`Unknown ghostwriter kind: ${kind}`);
+  const messages = [{ role: "user", content: prompt.draft(context, transcriptOf(history), language) }];
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: INTERVIEW_MODEL,
+      messages,
+      response_format: { type: "json_object" },
+      max_tokens: 500,
+    }),
+  });
+  if (!res.ok) throw new Error(`OpenAI draft request failed: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  return JSON.parse(data.choices[0].message.content);
+}
+
+// Trip-level context for the intro/outro ghostwriter - title, overall date
+// range, and the stop headings as a quick itinerary overview, so its
+// interview questions can reference actual places instead of speaking in
+// the abstract. `text`/`textLabel` describe whichever of intro/outro is
+// currently being written.
+export function describeTripContext({ title, stops, text, textLabel }) {
+  const dated = (stops || []).filter((s) => s.startedAt);
+  const range = dated.length
+    ? `${new Date(dated[0].startedAt).toLocaleDateString()} – ${new Date(
+        dated[dated.length - 1].endedAt || dated[dated.length - 1].startedAt
+      ).toLocaleDateString()}`
+    : null;
+  const headings = (stops || []).map((s) => s.heading).filter(Boolean);
+  return [
+    `Trip: "${title}"${range ? ` (${range})` : ""}.`,
+    headings.length ? `Stops visited, in order: ${headings.join(", ")}.` : null,
+    `Existing ${textLabel}: ${text ? `"${text}"` : "(nothing written yet)"}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+// Context for the info-card personalization ghostwriter: the card's own
+// research (so questions can reference real facts, e.g. "you mentioned this
+// place was founded in 1850 - what drew you to visit?"), plus the stop's
+// own narrative if there is one, for a little more of the trip's own voice
+// to draw on.
+export function describeInfoCardContext({ card, stopHeading, stopNarrative }) {
+  const facts = (card.facts || []).filter((f) => f.label || f.value);
+  return [
+    `Place: "${card.placeName}"${card.subtitle ? ` - ${card.subtitle}` : ""}.`,
+    stopHeading ? `Part of the trip's stop: "${stopHeading}".` : null,
+    facts.length ? `Known facts: ${facts.map((f) => `${f.label}: ${f.value}`).join("; ")}.` : null,
+    `Current summary: ${card.summary ? `"${card.summary}"` : "(nothing written yet)"}`,
+    stopNarrative ? `What the traveler already wrote about this stop overall: "${stopNarrative}"` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
 
 export async function organizeNotesIntoStory({ storyTitle, stops, notesText, language }) {
   const stopList = stops

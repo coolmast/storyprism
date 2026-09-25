@@ -780,14 +780,10 @@ export function infoCardSpread(spread, ctx, { card, hero }) {
   const accent = ctx.accentColor || "#5c7a89";
   const ink = "#2b2b2b";
   const muted = "#6b6b6b";
+  // No websiteUrl/domain here on purpose - a link is useless in a printed
+  // book (nobody's typing in a URL from paper), unlike the web view and
+  // deck, which both still show it.
   const facts = (card.facts || []).filter((f) => f.label || f.value);
-  const domain = (() => {
-    try {
-      return card.websiteUrl ? new URL(card.websiteUrl).hostname.replace(/^www\./, "") : null;
-    } catch {
-      return null;
-    }
-  })();
   const height = (text, size, font, width, bold = false) => estimateLines(text, width, size, font, bold) * size * SAAL_LINE;
   const text = (frame, paragraphs) => ({ kind: "text", frame, paragraphs });
 
@@ -844,12 +840,6 @@ export function infoCardSpread(spread, ctx, { card, hero }) {
       cols[col] += hL + hV + gap * 0.9;
     }
     y = factTop + Math.max(cols[0], cols[1]);
-    if (domain) {
-      y += gap * 0.3;
-      add(sz.label * SAAL_LINE, text(null, [
-        { text: `↗ ${domain}`, role: "body", font: ctx.fonts.body, size: sz.label * 1.15, color: accent, align: "left" },
-      ]));
-    }
     return { els, height: y };
   };
 

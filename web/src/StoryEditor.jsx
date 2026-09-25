@@ -8,10 +8,14 @@ import {
   fetchLanguages,
   fetchPdfLayouts,
   checkStoryUpdates,
+  interviewTurn,
+  draftFromInterview,
+  tripInterviewTurn,
+  tripInterviewDraft,
 } from "./api.js";
 import IncludedPhotoGrid from "./IncludedPhotoGrid.jsx";
 import PdfLivePreview from "./PdfLivePreview.jsx";
-import InterviewPanel from "./InterviewPanel.jsx";
+import GhostwriterPanel from "./GhostwriterPanel.jsx";
 import RouteEmbeds from "./RouteEmbeds.jsx";
 import NotesImportPanel from "./NotesImportPanel.jsx";
 import InfoCards from "./InfoCards.jsx";
@@ -456,6 +460,13 @@ export default function StoryEditor({ story, onSaved }) {
         value={draft.intro}
         onChange={(e) => markDirty((d) => ({ ...d, intro: e.target.value }))}
       />
+      <GhostwriterPanel
+        variant="compact"
+        onTurn={(history) => tripInterviewTurn(draft.id, "intro", draft.intro, history)}
+        onDraft={(history) => tripInterviewDraft(draft.id, "intro", draft.intro, history)}
+        onUseDraft={(result) => markDirty((d) => ({ ...d, intro: result.text }))}
+        renderDraft={(result) => <p>{result.text}</p>}
+      />
 
       <NotesImportPanel
         storyId={draft.id}
@@ -562,15 +573,23 @@ export default function StoryEditor({ story, onSaved }) {
                 <div className="stop-section stop-enrich">
                   <span className="section-label">{t("enrichLabel")}</span>
 
-                  <InterviewPanel
-                    storyId={draft.id}
-                    stopId={stop.id}
+                  <GhostwriterPanel
+                    onTurn={(history) => interviewTurn(draft.id, stop.id, history)}
+                    onDraft={(history) => draftFromInterview(draft.id, stop.id, history)}
                     onUseDraft={(result) =>
                       updateStop(stop.id, {
                         narrative: result.narrative,
                         ...(result.pullQuote ? { pullQuote: result.pullQuote } : {}),
                       })
                     }
+                    renderDraft={(result) => (
+                      <>
+                        <p>{result.narrative}</p>
+                        {result.pullQuote && (
+                          <p className="interview-draft-quote">{t("pullQuoteLabel", result.pullQuote)}</p>
+                        )}
+                      </>
+                    )}
                   />
 
                   <div className="stop-research">
@@ -679,6 +698,13 @@ export default function StoryEditor({ story, onSaved }) {
         placeholder={t("outroPlaceholder")}
         value={draft.outro}
         onChange={(e) => markDirty((d) => ({ ...d, outro: e.target.value }))}
+      />
+      <GhostwriterPanel
+        variant="compact"
+        onTurn={(history) => tripInterviewTurn(draft.id, "outro", draft.outro, history)}
+        onDraft={(history) => tripInterviewDraft(draft.id, "outro", draft.outro, history)}
+        onUseDraft={(result) => markDirty((d) => ({ ...d, outro: result.text }))}
+        renderDraft={(result) => <p>{result.text}</p>}
       />
 
       <Modal

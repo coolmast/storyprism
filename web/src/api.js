@@ -82,6 +82,38 @@ export const draftFromInterview = (storyId, stopId, history) =>
     body: JSON.stringify({ history }),
   }).then(json);
 
+// Same ghostwriter, generalized to the story's intro/outro - target is
+// "intro" or "outro", text is the *current* (possibly unsaved) draft text.
+export const tripInterviewTurn = (storyId, target, text, history) =>
+  fetch(`/api/stories/${storyId}/interview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ target, text, history }),
+  }).then(json);
+
+export const tripInterviewDraft = (storyId, target, text, history) =>
+  fetch(`/api/stories/${storyId}/interview/draft`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ target, text, history }),
+  }).then(json);
+
+// Same ghostwriter again, to turn one info card's summary into a personal
+// account - card is the current (possibly unsaved) card data.
+export const infoCardInterviewTurn = (storyId, stopId, card, history) =>
+  fetch(`/api/stories/${storyId}/stops/${stopId}/info-cards/interview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ card, history }),
+  }).then(json);
+
+export const infoCardInterviewDraft = (storyId, stopId, card, history) =>
+  fetch(`/api/stories/${storyId}/stops/${stopId}/info-cards/interview/draft`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ card, history }),
+  }).then(json);
+
 export const importNotes = (storyId, { text, url }) =>
   fetch(`/api/stories/${storyId}/import-notes`, {
     method: "POST",

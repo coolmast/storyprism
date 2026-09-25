@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { generateInfoCard, fetchMatchingPhotos } from "./api.js";
+import { generateInfoCard, fetchMatchingPhotos, infoCardInterviewTurn, infoCardInterviewDraft } from "./api.js";
 import { useI18n } from "./i18n.jsx";
 import { uid } from "./uid.js";
+import GhostwriterPanel from "./GhostwriterPanel.jsx";
 
 // suggestedPlaces comes from the server (PhotoPrism PlaceLabels + auto
 // photo titles for this stop's included photos - see server/src/places.js)
@@ -141,6 +142,27 @@ export default function InfoCards({ storyId, stopId, suggestedPlaces, infoCards,
             placeholder={t("summaryPlaceholder")}
             value={card.summary || ""}
             onChange={(e) => updateCard(card.id, { summary: e.target.value })}
+          />
+          <GhostwriterPanel
+            variant="compact"
+            onTurn={(history) =>
+              infoCardInterviewTurn(
+                storyId,
+                stopId,
+                { placeName: card.placeName, subtitle: card.subtitle, summary: card.summary, facts: card.facts },
+                history
+              )
+            }
+            onDraft={(history) =>
+              infoCardInterviewDraft(
+                storyId,
+                stopId,
+                { placeName: card.placeName, subtitle: card.subtitle, summary: card.summary, facts: card.facts },
+                history
+              )
+            }
+            onUseDraft={(result) => updateCard(card.id, { summary: result.summary })}
+            renderDraft={(result) => <p>{result.summary}</p>}
           />
 
           <div className="info-card-website-row">

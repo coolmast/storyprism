@@ -846,6 +846,44 @@ from nginx itself, not from this app). Raise it to match, e.g.
       instead. Verified by artificially downsizing one photo's reported
       resolution in an otherwise-identical group and confirming the chapter
       spread's chosen backdrop changed to a different, full-res photo
+- [x] Ghostwriter (the AI interview-then-draft flow, previously only for a
+      stop's narrative) generalized to the story's intro/outro and to
+      personalizing an info card's summary. `InterviewPanel.jsx` became
+      `GhostwriterPanel.jsx`, taking `onTurn`/`onDraft`/`onUseDraft`/
+      `renderDraft` as props instead of being hardwired to one stop's
+      narrative+pullQuote, so the same interview-chat UI now also drives:
+      - **Intro/outro**: `POST /api/stories/:id/interview[/draft]`, `target:
+        "intro"|"outro"`. Takes the *current* (possibly unsaved) intro/outro
+        text from the browser rather than re-reading the saved story, since
+        the whole point is ghostwriting whatever's on screen right now.
+      - **Info card summary**: `POST /api/stories/:id/stops/:stopId/
+        info-cards/interview[/draft]`. Takes the current card data the same
+        way (a just-AI-generated card may not be saved yet at all) - the
+        stop is only looked up for a bit of extra context (its own
+        narrative), not to find the card itself. Turns a still-generic,
+        tour-guide-prose summary into a personal account of what that place
+        meant to the traveler or their journey, grounded in the facts
+        already gathered rather than inventing new ones.
+      Both share the per-stop version's writing-quality guidance
+      (`GHOSTWRITER_VOICE_RULES` in `openaiProvider.js`, now also reused by
+      the per-stop draft itself instead of a near-duplicate copy). Since
+      these two entry points sit in otherwise simple parts of the UI, their
+      toggle is a small text link (`ghostwriter-toggle-compact`) rather than
+      the prominent pill button the stop's "Interview me" already uses.
+- [x] Photobook: an info card's website link is only ever useful on the web
+      view/deck (something to click) - never printed. The domain-name line
+      in the printed fact-sheet page is gone (`infoCardSpread` in
+      `spreadLayouts.js`); the web view and deck are unaffected.
+- [x] Sidebar collapsible on desktop: a small chevron toggle at the bottom
+      of `.app-sidebar`, remembered across reloads the same way the theme
+      toggle is (`localStorage`, `App.jsx`). Collapsed, it's an icon-only
+      rail (60px) so nav stays reachable while giving `.app-main` the rest
+      of the width for editing. Along the way, fixed the sidebar to
+      actually stay pinned to the viewport (`position: sticky`) as its own
+      "fixed sidebar" comment already claimed but the CSS never enforced -
+      previously a tall `.app-main` (a long album year-list) stretched the
+      sidebar to match via flex's default stretch, which would've put this
+      new toggle far below the fold.
 
 ## Notes
 

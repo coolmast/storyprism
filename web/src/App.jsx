@@ -47,9 +47,30 @@ function BackIcon() {
   );
 }
 
+function CollapseIcon({ collapsed }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d={collapsed ? "M8 4.5 13.5 10 8 15.5" : "M12 4.5 6.5 10l5.5 5.5"} />
+    </svg>
+  );
+}
+
+// Desktop-only (irrelevant on mobile, where the sidebar is a bottom tab bar
+// instead) - remembered across reloads the same way the theme toggle is.
+const SIDEBAR_STORAGE_KEY = "story-builder-sidebar-collapsed";
+
+function readInitialSidebarCollapsed() {
+  try {
+    return localStorage.getItem(SIDEBAR_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export default function App() {
   const { lang, setLang, t } = useI18n();
   const [tab, setTab] = useState("new"); // "new" | "stories" | "editor"
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readInitialSidebarCollapsed);
   const [source, setSource] = useState("album"); // "album" | "dateRange"
 
   const [albums, setAlbums] = useState([]);
@@ -71,6 +92,15 @@ export default function App() {
   useEffect(() => {
     fetchAlbums().then(setAlbums).catch((e) => setError(e.message));
   }, []);
+
+  useEffect(() => {
+    try {
+      if (sidebarCollapsed) localStorage.setItem(SIDEBAR_STORAGE_KEY, "1");
+      else localStorage.removeItem(SIDEBAR_STORAGE_KEY);
+    } catch {
+      // Choice just won't survive a reload - nothing else breaks.
+    }
+  }, [sidebarCollapsed]);
 
   // The app is a single-page app with no URL routing beyond this - "tab"
   // was pure in-memory React state, so the address bar always stayed at
@@ -209,7 +239,7 @@ export default function App() {
     tab === "editor" ? activeStory?.title || t("tabMyStories") : tab === "stories" ? t("tabMyStories") : t("tabNewStory");
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <aside className="app-sidebar">
         <div className="app-brand">
           <span className="app-brand-mark" aria-hidden="true">📖</span>
@@ -222,6 +252,7 @@ export default function App() {
           <button
             className={tab === "new" ? "active" : ""}
             aria-current={tab === "new" ? "page" : undefined}
+            title={sidebarCollapsed ? t("tabNewStory") : undefined}
             onClick={() => goTo("new")}
           >
             <NewStoryIcon />
@@ -230,12 +261,22 @@ export default function App() {
           <button
             className={libraryActive ? "active" : ""}
             aria-current={libraryActive ? "page" : undefined}
+            title={sidebarCollapsed ? t("tabMyStories") : undefined}
             onClick={() => goTo("stories")}
           >
             <LibraryIcon />
             <span>{t("tabMyStories")}</span>
           </button>
         </nav>
+        <button
+          type="button"
+          className="sidebar-collapse-btn"
+          onClick={() => setSidebarCollapsed((c) => !c)}
+          title={sidebarCollapsed ? t("expandSidebar") : t("collapseSidebar")}
+          aria-label={sidebarCollapsed ? t("expandSidebar") : t("collapseSidebar")}
+        >
+          <CollapseIcon collapsed={sidebarCollapsed} />
+        </button>
       </aside>
 
       <div className="app-main">

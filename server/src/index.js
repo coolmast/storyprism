@@ -435,6 +435,114 @@ app.post("/api/stories/:id/stops/:stopId/interview/draft", async (req, res) => {
   }
 });
 
+// Same ghostwriter as the per-stop one above, generalized to the story's
+// intro/outro (see openaiProvider.js's ghostwriterTurn/ghostwriterDraft).
+// `target` distinguishes intro from outro; `text` is the *current* draft
+// text from the browser, not a fresh DB read - unlike the stop version,
+// this can't just re-fetch it from the saved story, since the whole point
+// is to ghostwrite whatever the user is looking at right now, saved or not.
+app.post("/api/stories/:id/interview", async (req, res) => {
+  const story = getStory(req.params.id);
+  if (!story) return res.status(404).json({ error: "Not found" });
+  const { target, text, history } = req.body;
+  if (target !== "intro" && target !== "outro") return res.status(400).json({ error: "target must be intro or outro" });
+
+  try {
+    const context = getProvider().describeTripContext({
+      title: story.title,
+      stops: story.stops,
+      text,
+      textLabel: target === "intro" ? "introduction" : "closing text",
+    });
+    const reply = await getProvider().ghostwriterTurn({
+      kind: target,
+      context,
+      history: Array.isArray(history) ? history : [],
+      language: languageName(story.contentLanguage),
+    });
+    res.json({ reply });
+  } catch (err) {
+    console.error(err);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+app.post("/api/stories/:id/interview/draft", async (req, res) => {
+  const story = getStory(req.params.id);
+  if (!story) return res.status(404).json({ error: "Not found" });
+  const { target, text, history } = req.body;
+  if (target !== "intro" && target !== "outro") return res.status(400).json({ error: "target must be intro or outro" });
+
+  try {
+    const context = getProvider().describeTripContext({
+      title: story.title,
+      stops: story.stops,
+      text,
+      textLabel: target === "intro" ? "introduction" : "closing text",
+    });
+    const result = await getProvider().ghostwriterDraft({
+      kind: target,
+      context,
+      history: Array.isArray(history) ? history : [],
+      language: languageName(story.contentLanguage),
+    });
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// Same ghostwriter again, this time to turn one info card's still-generic
+// research summary into a personal account (see InfoCards.jsx's toggle).
+// `card` is the current (possibly not-yet-saved - the card may have just
+// been AI-generated and not saved yet) card data from the browser, same
+// reasoning as intro/outro above; the stop is only looked up for a bit of
+// extra context (its own narrative, if any), not for the card itself.
+app.post("/api/stories/:id/stops/:stopId/info-cards/interview", async (req, res) => {
+  const story = getStory(req.params.id);
+  const stop = story?.stops.find((s) => s.id === req.params.stopId);
+  if (!stop) return res.status(404).json({ error: "Not found" });
+  const { card, history } = req.body;
+  if (!card || !card.placeName) return res.status(400).json({ error: "card (with placeName) is required" });
+
+  try {
+    const context = getProvider().describeInfoCardContext({ card, stopHeading: stop.heading, stopNarrative: stop.narrative });
+    const reply = await getProvider().ghostwriterTurn({
+      kind: "infoCard",
+      context,
+      history: Array.isArray(history) ? history : [],
+      language: languageName(story.contentLanguage),
+    });
+    res.json({ reply });
+  } catch (err) {
+    console.error(err);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+app.post("/api/stories/:id/stops/:stopId/info-cards/interview/draft", async (req, res) => {
+  const story = getStory(req.params.id);
+  const stop = story?.stops.find((s) => s.id === req.params.stopId);
+  if (!stop) return res.status(404).json({ error: "Not found" });
+  const { card, history } = req.body;
+  if (!card || !card.placeName) return res.status(400).json({ error: "card (with placeName) is required" });
+
+  try {
+    const context = getProvider().describeInfoCardContext({ card, stopHeading: stop.heading, stopNarrative: stop.narrative });
+    const result = await getProvider().ghostwriterDraft({
+      kind: "infoCard",
+      context,
+      history: Array.isArray(history) ? history : [],
+      language: languageName(story.contentLanguage),
+    });
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(502).json({ error: err.message });
+  }
+});
+
 app.post("/api/stories/:id/import-notes", async (req, res) => {
   const story = getStory(req.params.id);
   if (!story) return res.status(404).json({ error: "Not found" });

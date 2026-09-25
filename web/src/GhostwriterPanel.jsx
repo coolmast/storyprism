@@ -1,13 +1,18 @@
 import { useState } from "react";
-import { interviewTurn, draftFromInterview } from "./api.js";
 import { useI18n } from "./i18n.jsx";
 
+// Generic ghostwriter interview + draft chat, reused for every part of the
+// story the AI can interview you about (a stop's narrative, the story's
+// intro/outro, one info card's summary - see StoryEditor.jsx/InfoCards.jsx)
+// - only what's asked (onTurn/onDraft) and what a draft looks like
+// (renderDraft) differ per target; the interview mechanics are the same.
+//
 // Conversation lives only in this component's state - it's a within-session
 // ghostwriter chat, not persisted to the story. Re-opening the panel after
 // collapsing it keeps going where it left off; reloading the page starts
 // fresh. That matches how the other AI actions here work (one-shot, not
 // stored) while still giving real back-and-forth iteration during a sitting.
-export default function InterviewPanel({ storyId, stopId, onUseDraft }) {
+export default function GhostwriterPanel({ onTurn, onDraft, onUseDraft, renderDraft, variant = "primary" }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]);
@@ -22,7 +27,7 @@ export default function InterviewPanel({ storyId, stopId, onUseDraft }) {
     setBusy(true);
     setError(null);
     try {
-      const { reply } = await interviewTurn(storyId, stopId, []);
+      const { reply } = await onTurn([]);
       setMessages([{ role: "assistant", content: reply }]);
     } catch (e) {
       setError(e.message);
@@ -40,7 +45,7 @@ export default function InterviewPanel({ storyId, stopId, onUseDraft }) {
     setBusy(true);
     setError(null);
     try {
-      const { reply } = await interviewTurn(storyId, stopId, next);
+      const { reply } = await onTurn(next);
       setMessages([...next, { role: "assistant", content: reply }]);
     } catch (e) {
       setError(e.message);
@@ -53,7 +58,7 @@ export default function InterviewPanel({ storyId, stopId, onUseDraft }) {
     setBusy(true);
     setError(null);
     try {
-      const result = await draftFromInterview(storyId, stopId, messages);
+      const result = await onDraft(messages);
       setDraft(result);
     } catch (e) {
       setError(e.message);
@@ -65,16 +70,13 @@ export default function InterviewPanel({ storyId, stopId, onUseDraft }) {
   function acceptDraft() {
     onUseDraft(draft);
     setDraft(null);
-    setMessages((m) => [
-      ...m,
-      { role: "assistant", content: t("usedRewriteMsg") },
-    ]);
+    setMessages((m) => [...m, { role: "assistant", content: t("usedRewriteMsg") }]);
   }
 
   if (!open) {
     return (
-      <button className="ai-btn" onClick={open_}>
-        {t("interviewMeBtn")}
+      <button className={variant === "compact" ? "ghostwriter-toggle-compact" : "ai-btn"} onClick={open_}>
+        {variant === "compact" ? t("ghostwriterToggleBtn") : t("interviewMeBtn")}
       </button>
     );
   }
@@ -102,10 +104,7 @@ export default function InterviewPanel({ storyId, stopId, onUseDraft }) {
       {draft && (
         <div className="interview-draft">
           <h4>{t("proposedRewrite")}</h4>
-          <p>{draft.narrative}</p>
-          {draft.pullQuote && (
-            <p className="interview-draft-quote">{t("pullQuoteLabel", draft.pullQuote)}</p>
-          )}
+          {renderDraft(draft)}
           <div className="interview-draft-actions">
             <button className="save-btn" onClick={acceptDraft}>
               {t("useThis")}

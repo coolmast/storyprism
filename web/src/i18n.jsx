@@ -68,6 +68,8 @@ const DICT = {
     photosCount: (n) => `${n} photos`,
 
     backToStories: "← My Stories",
+    collapseSidebar: "Collapse sidebar",
+    expandSidebar: "Expand sidebar",
     viewStory: "View story ↗",
     copyShareLink: "Copy share link",
     linkCopied: "Copied",
@@ -156,6 +158,7 @@ const DICT = {
     draftCaptionBtn: "✨ Draft caption",
 
     interviewMeBtn: "💬 Interview me about this stop",
+    ghostwriterToggleBtn: "💬 Ghostwriter",
     ghostwriterInterview: "💬 Ghostwriter interview",
     collapse: "Collapse",
     typeYourAnswer: "Type your answer…",
@@ -287,6 +290,8 @@ const DICT = {
     photosCount: (n) => `${n} Fotos`,
 
     backToStories: "← Meine Geschichten",
+    collapseSidebar: "Seitenleiste einklappen",
+    expandSidebar: "Seitenleiste ausklappen",
     viewStory: "Geschichte ansehen ↗",
     copyShareLink: "Freigabelink kopieren",
     linkCopied: "Kopiert",
@@ -375,6 +380,7 @@ const DICT = {
     draftCaptionBtn: "✨ Bildunterschrift entwerfen",
 
     interviewMeBtn: "💬 Interview mich zu diesem Stopp",
+    ghostwriterToggleBtn: "💬 Ghostwriter",
     ghostwriterInterview: "💬 Ghostwriter-Interview",
     collapse: "Einklappen",
     typeYourAnswer: "Deine Antwort…",
@@ -507,6 +513,8 @@ const DICT = {
     photosCount: (n) => `${n} billeder`,
 
     backToStories: "← Mine historier",
+    collapseSidebar: "Skjul sidepanel",
+    expandSidebar: "Vis sidepanel",
     viewStory: "Se historie ↗",
     copyShareLink: "Kopiér delingslink",
     linkCopied: "Kopieret",
@@ -595,6 +603,7 @@ const DICT = {
     draftCaptionBtn: "✨ Udkast til billedtekst",
 
     interviewMeBtn: "💬 Interview mig om dette stop",
+    ghostwriterToggleBtn: "💬 Spøgelsesskriver",
     ghostwriterInterview: "💬 Spøgelsesskriver-interview",
     collapse: "Fold sammen",
     typeYourAnswer: "Skriv dit svar…",
