@@ -139,3 +139,8 @@ ensureColumn("stories", "source_config", "TEXT NOT NULL DEFAULT ''");
 // holding that theme's edits, the same way a chronological story's stops
 // are matched by time range instead.
 ensureColumn("stops", "theme_id", "TEXT");
+// Per-photo: whether this photo's caption should be typeset into the
+// printed photobook (Saal/CEWE) next to it - defaults off for every photo,
+// toggled on individually (IncludedPhotoGrid.jsx). Unrelated to the web
+// view/deck, which already show every caption unconditionally.
+ensureColumn("stop_photos", "book_show_caption", "INTEGER NOT NULL DEFAULT 0");

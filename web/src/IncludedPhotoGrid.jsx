@@ -104,6 +104,16 @@ export default function IncludedPhotoGrid({
           >
             {busy === photo.id ? "…" : t("draftCaptionBtn")}
           </button>
+          {photo.caption?.trim() && (
+            <label className="photo-book-caption-toggle">
+              <input
+                type="checkbox"
+                checked={!!photo.bookShowCaption}
+                onChange={(e) => onUpdatePhoto(stopId, photo.id, { bookShowCaption: e.target.checked })}
+              />
+              {t("showCaptionInBook")}
+            </label>
+          )}
         </div>
       ))}
     </div>

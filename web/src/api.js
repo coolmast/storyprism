@@ -28,6 +28,23 @@ export const fetchPdfPreviewHtml = (id, story) =>
     return res.text();
   });
 
+// The editor's live-preview "PDF" tab download button: posts the (possibly
+// unsaved) draft, same as fetchPdfPreviewHtml, so what downloads matches
+// what the preview is showing. Returns a blob, not JSON - the caller turns
+// it into an actual file download (see PdfLivePreview.jsx).
+export const exportPdf = async (id, story) => {
+  const res = await fetch(`/api/stories/${id}/export/pdf`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ story }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Request failed (${res.status})`);
+  }
+  return res.blob();
+};
+
 export const fetchStories = () => fetch("/api/stories").then(json);
 export const fetchStory = (id) => fetch(`/api/stories/${id}`).then(json);
 

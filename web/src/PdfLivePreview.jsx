@@ -5,6 +5,7 @@ import {
   fetchBookProducts,
   startBookExport,
   fetchBookExport,
+  exportPdf,
 } from "./api.js";
 import { useI18n } from "./i18n.jsx";
 import { Toggle } from "./ui/index.js";
@@ -45,6 +46,8 @@ export default function PdfLivePreview({
   const [bookLayoutPacks, setBookLayoutPacks] = useState([]);
   const [bookFonts, setBookFonts] = useState({ fonts: [], ceweFonts: [], ceweFontFor: {}, defaultFonts: {} });
   const [job, setJob] = useState(null);
+  const [pdfDownloading, setPdfDownloading] = useState(false);
+  const [pdfError, setPdfError] = useState(null);
   const iframeRef = useRef(null);
   const scrollRef = useRef({ book: 0, pdf: 0 });
   const pollRef = useRef(null);
@@ -133,6 +136,28 @@ export default function PdfLivePreview({
       poll();
     } catch (e) {
       setJob({ status: "error", error: e.message });
+    }
+  }
+
+  // No job queue here (unlike the book export above) - the PDF export is a
+  // synchronous headless-Chromium render, fast enough to just await and
+  // hand the browser a real file download (a plain <a href> can't POST the
+  // draft, so this builds a temporary blob link instead).
+  async function handleDownloadPdf() {
+    setPdfDownloading(true);
+    setPdfError(null);
+    try {
+      const blob = await exportPdf(draft.id, draft);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(draft.title || "story").replace(/[^\w -]/g, "")}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setPdfError(e.message);
+    } finally {
+      setPdfDownloading(false);
     }
   }
 
@@ -267,6 +292,10 @@ export default function PdfLivePreview({
               </option>
             ))}
           </select>
+          <button className="pdf-live-export" onClick={handleDownloadPdf} disabled={pdfDownloading}>
+            {pdfDownloading ? t("pdfDownloading") : `⬇ ${t("downloadPdfBtn")}`}
+          </button>
+          {pdfError && <p className="error">{pdfError}</p>}
         </div>
       )}
 

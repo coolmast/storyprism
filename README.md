@@ -3,9 +3,10 @@
 Turns a PhotoPrism album into an editable travel story: itinerary extraction
 from photo GPS/time metadata, a map view, manual + AI-assisted captions,
 embedded Strava/Komoot/Garmin routes, AI-suggested enriched place info cards,
-an AI ghostwriter that interviews you and can reorganize your own existing
-travel writing into the story, and export to a shareable single-page web
-view, a reveal.js presentation, or a printable PDF (either format).
+an AI ghostwriter that interviews you (about a stop, the story's intro/outro,
+or an info card) and can reorganize your own existing travel writing into
+the story, and export to a shareable single-page web view, a printable PDF,
+or a real printed photobook (Saal Digital/CEWE FOTOWELT).
 
 ## Architecture
 
@@ -178,11 +179,6 @@ view, a reveal.js presentation, or a printable PDF (either format).
     finished, static page with no layout controls on it. The editor has
     its own "Copy share link" button so that link is one click away
     without needing to manually strip the query param off the preview URL.
-  - Renders the same content as a reveal.js presentation
-    (`server/src/deck.js`, served at `/story/:id/present`) — a title
-    slide, then per-stop nested slides (text+quote → featured photo
-    full-bleed → photo grids), then an outro. No map here; reveal's
-    fixed-size slides don't suit an interactive Leaflet map.
   - **The story PDF (`/api/stories/:id/export/pdf`) is a real print-design
     system, not a screenshot of the web view**, modeled on a hand-made
     square photobook. Photo placement is **aspect-ratio aware**
@@ -214,7 +210,13 @@ view, a reveal.js presentation, or a printable PDF (either format).
     preview** (`POST /api/stories/:id/pdf-preview` renders the *unsaved*
     draft; `web/src/PdfLivePreview.jsx` shows it in a side drawer / full
     screen on a phone, re-rendering ~0.5 s after any edit, with pack/paper
-    switches and per-stop layout pickers right inside the preview).
+    switches and per-stop layout pickers right inside the preview). Its own
+    "⬇ Download PDF" button (`POST /api/stories/:id/export/pdf`, same draft
+    body as the preview) downloads exactly what that preview is showing, the
+    same way the Photobook tab's own export button already worked - the
+    plain `GET` route (used by the Share & Export menu's link) still exists
+    too, for a quick download of the last *saved* version without opening
+    the live preview at all.
   - **Photobook → Saal Design Software** (`server/src/photobook/`): the
     story is planned as a lay-flat *spread* book (`bookPlanner.js`) — cover,
     optional intro, per stop a chapter opener (photo across the spread, story
@@ -246,9 +248,19 @@ view, a reveal.js presentation, or a printable PDF (either format).
     CEWE FOTOWELT `.mcfx`. Products (`products.js`): Saal 28×28 square, A4
     portrait, A4 landscape; CEWE Groß Hardcover (A4 portrait), Groß Panorama
     Hardcover (A4 landscape), XL Hardcover (29×29 square). See "Saal project
-    format" and "CEWE project format" below.
-  - The deck's own PDF (`/api/stories/:id/export/deck-pdf`, reveal.js's
-    built-in print-pdf mode) is unrelated and untouched by the above.
+    format" and "CEWE project format" below. A photo's caption is off by
+    default in the photobook - a per-photo toggle (`book_show_caption`,
+    `IncludedPhotoGrid.jsx`) turns it on, rendered as a small translucent
+    strip along the bottom of wherever that photo actually lands
+    (`captionOverlaysFor` in `spreadLayouts.js`, applied once centrally
+    rather than to every individual spread layout, so it works the same
+    whether the photo ends up in a regular grid, a chapter's floating card,
+    or a route map's own gallery). Sized off the book's own `typeScale`
+    (like every other text size in this pipeline), not the photo's frame,
+    so a caption reads at a consistent size across the book regardless of
+    which layout the photo happened to land in; skipped for a full-bleed
+    backdrop (that's not "captioning a specific photo") and for a frame too
+    small to hold it legibly.
   - A stop can carry route/activity embeds (Strava, Komoot, Garmin Connect)
     — `server/src/embeds.js` allowlists hosts and decides iframe vs. a
     link-out card, stored in the `stop_embeds` table.
@@ -289,8 +301,8 @@ view, a reveal.js presentation, or a printable PDF (either format).
     threaded through every provider call, plus the static chrome baked into
     the rendered output itself (dates, the shuffle button, the footer,
     PDF page-number label). It's stored per story and applied at render
-    time in `render.js`/`deck.js`/`pdf.js`, entirely separate from the
-    UI's own display language.
+    time in `render.js`/`pdf.js`, entirely separate from the UI's own
+    display language.
 - `web/` — React (Vite) frontend: album picker + map (M1), story list +
   editor (M2/M3) with a theme/content-language/PDF-layout picker (now
   behind a "Story settings" modal, not inline - see below), drag-to-reorder
@@ -884,6 +896,29 @@ from nginx itself, not from this app). Raise it to match, e.g.
       previously a tall `.app-main` (a long album year-list) stretched the
       sidebar to match via flex's default stretch, which would've put this
       new toggle far below the fold.
+- [x] Removed the reveal.js presentation export (`/story/:id/present`,
+      `server/src/deck.js`) and its own PDF (`/api/stories/:id/export/
+      deck-pdf`, reveal's built-in print-pdf mode driven headlessly) - the
+      templated PDF export and the Saal/CEWE photobook both cover printable
+      output better, and the deck was unmaintained since. Also removed the
+      now-unused `reveal.js` npm dependency and its `/vendor/reveal` static
+      route. In its place, the editor's live-preview "PDF" tab gets its own
+      "⬇ Download PDF" button (`POST /api/stories/:id/export/pdf`, same
+      draft-posting pattern as the Photobook tab's own export and the PDF
+      preview itself) - previously that tab could only be *previewed*, with
+      an actual download only reachable via the Share & Export menu's plain
+      link to the last *saved* version, unlike the Photobook tab which
+      already had its own in-panel download button
+- [x] Photobook: a photo's caption can be toggled on for print, per photo
+      (off by default) - a checkbox next to a photo's caption box
+      (`IncludedPhotoGrid.jsx`, only shown once that photo actually has a
+      caption typed in). Rendered as a small dark translucent strip along
+      the bottom of the photo (`captionOverlaysFor` in `spreadLayouts.js`),
+      applied once centrally to every photo `bookPlanner.js`/`chapterSpread`/
+      `routeMapSpread` places, so it works the same wherever that specific
+      photo actually lands. Verified through both real Saal and CEWE
+      exports, not just the preview - `book_show_caption` new column on
+      `stop_photos`
 
 ## Notes
 
@@ -1071,8 +1106,8 @@ from nginx itself, not from this app). Raise it to match, e.g.
     activity) into a URL of the app's own device
     (`.../activities/:id?embed_token=...`) that `stravaActivityInfo` reads
     back at render time. The widget script is included at most once per
-    page (`hasStravaWidget` in `render.js`/`deck.js`), however many Strava
-    embeds a story has. Unlike Komoot there's no static-image endpoint to
+    page (`hasStravaWidget` in `render.js`), however many Strava embeds a
+    story has. Unlike Komoot there's no static-image endpoint to
     fall back on for print, so the photobook gets its picture a different
     way - see `stravaWidget.js` below.
   - **Garmin Connect**: doesn't have as well-known an embed format as
@@ -1174,9 +1209,8 @@ from nginx itself, not from this app). Raise it to match, e.g.
   unchanged viewport coordinate after scrolling (the browser doesn't fire a
   new event just because the page moved under a stationary cursor).
 - Adding a theme (10 now, up from 4) is a single new entry in `THEMES` in
-  `themes.js` — render.js, deck.js, the editor's theme picker, and the
-  `/api/themes` endpoint all read from that one object, nothing else to
-  touch. Each theme picks its own map mood via a CSS filter applied to
+  `themes.js` — render.js, the editor's theme picker, and the `/api/themes`
+  endpoint all read from that one object, nothing else to touch. Each theme picks its own map mood via a CSS filter applied to
   Leaflet's tile pane (grayscale, sepia, inverted-for-dark, or none)
   rather than a different tile provider per theme — see the next note for
   why. Deliberately conservative about the filters on the 6 newest themes

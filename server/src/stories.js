@@ -493,6 +493,7 @@ export function getStory(id) {
           caption: p.caption,
           included: !!p.included,
           featured: !!p.featured,
+          bookShowCaption: !!p.book_show_caption,
         })),
         embeds: embedStmt.all(s.id).map((e) => ({
           id: e.id,
@@ -557,7 +558,7 @@ const upsertStopStmt = db.prepare(`
 // old query) would silently no-op for exactly that move, since the row's
 // *current* stop_id in the database is the old one.
 const updatePhotoStmt = db.prepare(
-  "UPDATE stop_photos SET stop_id = @stopId, caption = @caption, included = @included, featured = @featured, position = @position WHERE id = @id"
+  "UPDATE stop_photos SET stop_id = @stopId, caption = @caption, included = @included, featured = @featured, book_show_caption = @bookShowCaption, position = @position WHERE id = @id"
 );
 const clearFeaturedStmt = db.prepare(
   "UPDATE stop_photos SET featured = 0 WHERE stop_id = @stopId"
@@ -641,6 +642,7 @@ export function updateStory(id, data) {
           caption: photo.caption ?? "",
           included: photo.included === false ? 0 : 1,
           featured: photo.featured ? 1 : 0,
+          bookShowCaption: photo.bookShowCaption ? 1 : 0,
           position: index,
         });
       });

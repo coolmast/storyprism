@@ -847,17 +847,9 @@ export default function StoryEditor({ story, onSaved }) {
             <span className="export-menu-icon" aria-hidden="true">🔗</span>
             {t("copyShareLink")}
           </button>
-          <a className="export-menu-item" href={`/story/${draft.id}/present`} target="_blank" rel="noreferrer">
-            <span className="export-menu-icon" aria-hidden="true">🎬</span>
-            {t("present")}
-          </a>
           <a className="export-menu-item" href={`/api/stories/${draft.id}/export/pdf`}>
             <span className="export-menu-icon" aria-hidden="true">📄</span>
             {t("downloadPdf")}
-          </a>
-          <a className="export-menu-item" href={`/api/stories/${draft.id}/export/deck-pdf`}>
-            <span className="export-menu-icon" aria-hidden="true">🖼️</span>
-            {t("downloadSlides")}
           </a>
         </div>
       </Modal>

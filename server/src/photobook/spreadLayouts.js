@@ -674,6 +674,46 @@ function estimateLines(text, widthUnits, size, font, bold = false) {
     }, 0);
 }
 
+// A caption strip for one photo, if the user turned "show caption in book"
+// on for it (IncludedPhotoGrid.jsx) and it actually has one - a small dark
+// translucent panel along the bottom of the photo's own frame, caption text
+// in white, so it works over any photo without needing to know what's
+// underneath (same device chapterSpread's own text panel uses, just
+// dark-on-photo instead of light-on-photo since a caption strip has no page
+// background of its own to blend into). Skipped for a full-bleed backdrop
+// (captioning "the scenery behind everything" isn't captioning a specific
+// photo), for a frame too small to hold legible text without overflowing
+// (a mosaic tile, say), and for a caption so long it would swallow most of
+// the photo - left off rather than crowding it out.
+const MIN_CAPTION_FRAME = 900; // page units - Saal's/CEWE's are 0.1 mm, so ~9 cm
+
+export function captionOverlaysFor(el, ctx) {
+  const photo = el.photo;
+  if (el.kind !== "image" || el.background || !photo?.bookShowCaption || !photo?.caption?.trim()) return [];
+  const { frame } = el;
+  if (frame.w < MIN_CAPTION_FRAME || frame.h < MIN_CAPTION_FRAME) return [];
+  // Sized off ctx.typeScale like every other text size in this file (title
+  // 30, fact value 9.5, ...) - not off the frame's own dimensions, so a
+  // caption reads at a consistent size across the book regardless of
+  // whether the photo carrying it landed in a big single-photo spread or a
+  // small mosaic tile.
+  const size = 11 * (ctx.typeScale || 1) * (ctx.textScale?.body || 1);
+  const pad = size * 0.7;
+  const textW = frame.w - 2 * pad;
+  const lines = estimateLines(photo.caption, textW, size, ctx.fonts.body);
+  const panelH = lines * size * SAAL_LINE + 2 * pad;
+  if (panelH > frame.h * 0.6) return [];
+  const panelFrame = { x: frame.x, y: frame.y + frame.h - panelH, w: frame.w, h: panelH };
+  return [
+    { kind: "panel", frame: panelFrame, color: "#000000", opacity: 0.55 },
+    {
+      kind: "text",
+      frame: { x: panelFrame.x + pad, y: panelFrame.y + pad * 0.5, w: textW, h: panelH - pad },
+      paragraphs: [{ text: photo.caption, role: "body", font: ctx.fonts.body, size, color: "#ffffff", align: "left" }],
+    },
+  ];
+}
+
 // Fits title + body paragraphs into `frame`, shrinking the body size until
 // the estimated height fits (down to a floor).
 export function textBlock(frame, { title, subtitle, body = [], quote, color, accent, typeScale, fonts, textScale, titleSize = 30 }) {
@@ -763,7 +803,8 @@ export function chapterSpread(spread, ctx, { backdrop, title, narrative, pullQuo
   }
   elements.push({ kind: "panel", frame: pick.panel, color: "#ffffff", opacity: backdrop ? 0.82 : 0 });
   elements.push(pick.block);
-  return { elements, paper: "#ffffff" };
+  const captions = elements.flatMap((el) => captionOverlaysFor(el, ctx));
+  return { elements: [...elements, ...captions], paper: "#ffffff" };
 }
 
 // Info card: the place's photo as a full-bleed page, the facts on the other.
@@ -781,8 +822,8 @@ export function infoCardSpread(spread, ctx, { card, hero }) {
   const ink = "#2b2b2b";
   const muted = "#6b6b6b";
   // No websiteUrl/domain here on purpose - a link is useless in a printed
-  // book (nobody's typing in a URL from paper), unlike the web view and
-  // deck, which both still show it.
+  // book (nobody's typing in a URL from paper), unlike the web view, which
+  // still shows it.
   const facts = (card.facts || []).filter((f) => f.label || f.value);
   const height = (text, size, font, width, bold = false) => estimateLines(text, width, size, font, bold) * size * SAAL_LINE;
   const text = (frame, paragraphs) => ({ kind: "text", frame, paragraphs });
@@ -925,7 +966,8 @@ export function routeMapSpread(spread, ctx, { hero, title, mapPagePhotos = [], g
     const frames = collageOn(galleryPhotos, gal, { gap: 70, fill: 0.9, variant });
     elements.push(...galleryPhotos.map((p, i) => image(p, frames[i], { shadow: true })));
   }
-  return { elements, paper: "#ffffff" };
+  const captions = elements.flatMap((el) => captionOverlaysFor(el, ctx));
+  return { elements: [...elements, ...captions], paper: "#ffffff" };
 }
 
 // Wrap-around cover: backdrop over back + spine + front, a translucent band

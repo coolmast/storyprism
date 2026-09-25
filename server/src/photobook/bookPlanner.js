@@ -8,6 +8,7 @@ import {
   coverSpread,
   resolveFonts,
   backdropScore,
+  captionOverlaysFor,
 } from "./spreadLayouts.js";
 import { photoAspect, coverRetention } from "../pdfLayoutEngine.js";
 import { dateRange } from "../render.js";
@@ -205,8 +206,10 @@ export function planBook(story, { product: productId, strings } = {}) {
   const spreads = [];
   let burstSkips = 0;
   const build = (layoutId, photos, v, extra = {}) => {
-    const { elements, paper } = SPREAD_LAYOUTS[layoutId].build(photos, spreadSize, { ...baseCtx, variant: v, ...extra });
-    return { layoutId, elements, paper: paper || "#ffffff" };
+    const ctx = { ...baseCtx, variant: v, ...extra };
+    const { elements, paper } = SPREAD_LAYOUTS[layoutId].build(photos, spreadSize, ctx);
+    const captions = elements.flatMap((el) => captionOverlaysFor(el, ctx));
+    return { layoutId, elements: [...elements, ...captions], paper: paper || "#ffffff" };
   };
 
   const allIncluded = story.stops.flatMap((s) => s.photos.filter((p) => p.included));

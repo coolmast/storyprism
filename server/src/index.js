@@ -28,8 +28,7 @@ import { checkStoryUpdates, addThemeToStory } from "./storyUpdate.js";
 import { LANGUAGES, NATIVE_LANGUAGE_NAMES, languageName } from "./i18n.js";
 import { getProvider } from "./ai/index.js";
 import { renderStoryHtml } from "./render.js";
-import { renderStoryDeck } from "./deck.js";
-import { renderStoryPdf, renderDeckPdf } from "./pdf.js";
+import { renderStoryPdf } from "./pdf.js";
 import { buildPdfHtml } from "./pdfDocument.js";
 import { PDF_TEMPLATES } from "./pdfTemplates.js";
 import { PDF_LAYOUT_PACKS } from "./pdfLayoutPacks.js";
@@ -59,10 +58,6 @@ app.use(
 app.use(
   "/vendor/photoswipe",
   express.static(path.join(__dirname, "../../node_modules/photoswipe/dist"))
-);
-app.use(
-  "/vendor/reveal",
-  express.static(path.join(__dirname, "../../node_modules/reveal.js/dist"))
 );
 
 // Every photo URL this app ever sends to a browser points here, never at
@@ -618,12 +613,6 @@ app.get("/story/:id", (req, res) => {
   res.type("html").send(renderStoryHtml(story, { editMode: req.query.preview === "1" }));
 });
 
-app.get("/story/:id/present", (req, res) => {
-  const story = getStory(req.params.id);
-  if (!story) return res.status(404).send("Story not found");
-  res.type("html").send(renderStoryDeck(story));
-});
-
 // Serves the exact HTML that export/pdf below converts to a PDF - lets the
 // user (or the editor's "Preview PDF layout" link) eyeball the page
 // templates in an ordinary browser tab, including trying a different pack/
@@ -727,15 +716,21 @@ app.get("/api/stories/:id/export/pdf", async (req, res) => {
   }
 });
 
-app.get("/api/stories/:id/export/deck-pdf", async (req, res) => {
-  const story = getStory(req.params.id);
+// Same PDF export, but for the editor's live-preview panel: posts the
+// (possibly unsaved) draft, same as book-preview/book-export already do,
+// so what downloads is exactly what the "PDF" preview tab is showing - the
+// GET route above always reflects the last *saved* version instead, fine
+// for the plain share-menu link but not for a "download what I'm looking
+// at right now" button.
+app.post("/api/stories/:id/export/pdf", async (req, res) => {
+  const story = draftFromBody(req.body) || getStory(req.params.id);
   if (!story) return res.status(404).json({ error: "Not found" });
 
   try {
-    const pdf = await renderDeckPdf(`http://localhost:${port}/story/${story.id}/present`);
+    const pdf = await renderStoryPdf(story);
     res
       .type("application/pdf")
-      .set("Content-Disposition", `attachment; filename="${story.title.replace(/[^\w -]/g, "")} - slides.pdf"`)
+      .set("Content-Disposition", `attachment; filename="${story.title.replace(/[^\w -]/g, "")}.pdf"`)
       .send(pdf);
   } catch (err) {
     console.error(err);

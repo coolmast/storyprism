@@ -2090,6 +2090,14 @@ textarea {
   white-space: nowrap;
 }
 
+.photo-book-caption-toggle {
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--muted);
+}
+
 /* Live PDF preview: a drawer beside the editor on wide screens (the editor
    column shifts left to stay fully usable), full screen on a phone. */
 :root {

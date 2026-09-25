@@ -18,7 +18,7 @@ const OSM_STANDARD = {
 // Each theme is a self-contained visual identity: palette + font pairing +
 // a couple of mood knobs (heading case/tracking, hero darkness) + a map
 // basemap that fits the mood. Adding a theme means adding an entry here -
-// render.js/deck.js only ever read from this.
+// render.js only ever reads from this.
 export const THEMES = {
   coastal: {
     label: "Coastal",
