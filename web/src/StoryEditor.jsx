@@ -57,6 +57,7 @@ export default function StoryEditor({ story, onSaved }) {
   const [languages, setLanguages] = useState([]);
   const [pdfLayouts, setPdfLayouts] = useState({ templates: [], packs: [], paperSizes: [] });
   const [collapsedStops, setCollapsedStops] = useState(() => new Set());
+  const [backdropPickerFor, setBackdropPickerFor] = useState(null);
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -568,6 +569,53 @@ export default function StoryEditor({ story, onSaved }) {
                     value={stop.pullQuote || ""}
                     onChange={(e) => updateStop(stop.id, { pullQuote: e.target.value })}
                   />
+
+                  <button
+                    type="button"
+                    className={`hero-picker-toggle ${backdropPickerFor === stop.id ? "open" : ""}`}
+                    onClick={() => setBackdropPickerFor(backdropPickerFor === stop.id ? null : stop.id)}
+                  >
+                    {stop.bookChapterBackdropHash ? (
+                      <img
+                        className="hero-picker-toggle-thumb"
+                        src={stop.photos.find((p) => p.hash === stop.bookChapterBackdropHash)?.thumbUrl}
+                        alt=""
+                      />
+                    ) : (
+                      <span className="hero-picker-toggle-placeholder" aria-hidden="true">🖼</span>
+                    )}
+                    <span>{stop.bookChapterBackdropHash ? t("changeChapterBackdrop") : t("chapterBackdropAuto")}</span>
+                  </button>
+
+                  {backdropPickerFor === stop.id && (
+                    <div className="hero-picker">
+                      <div className="hero-picker-grid">
+                        {stop.bookChapterBackdropHash && (
+                          <button
+                            className="hero-picker-thumb clear"
+                            title={t("chapterBackdropAuto")}
+                            onClick={() => updateStop(stop.id, { bookChapterBackdropHash: null })}
+                          >
+                            ✕
+                          </button>
+                        )}
+                        {stop.photos
+                          .filter((p) => p.included && p.thumbUrl)
+                          .map((p) => (
+                            <button
+                              key={p.id}
+                              className={`hero-picker-thumb ${stop.bookChapterBackdropHash === p.hash ? "selected" : ""}`}
+                              onClick={() => {
+                                updateStop(stop.id, { bookChapterBackdropHash: p.hash });
+                                setBackdropPickerFor(null);
+                              }}
+                            >
+                              <img src={p.thumbUrl} alt="" />
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="stop-section stop-enrich">

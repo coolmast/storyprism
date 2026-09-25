@@ -79,24 +79,43 @@ export function buildBookPreviewHtml(story) {
     else groups.push({ key, items: [{ s, i }] });
   });
 
-  // Current photo count of every photo spread per stop, in order - the
-  // -/+ buttons send an edited copy of this back as the stop's pacing.
-  const countsByStop = new Map();
+  // Current { count, layoutId } of every photo spread per stop, in order -
+  // the -/+ buttons and the per-spread layout picker both send an edited
+  // copy of this back as the stop's pacing (stories.js's
+  // parseSpreadCounts/serializeSpreadCounts accept either shape, so a plain
+  // count-only pin from before this shipped still round-trips unchanged).
+  const entriesByStop = new Map();
   plan.spreads.forEach((s) => {
     if (s.kind !== "photos") return;
-    const list = countsByStop.get(s.stopId) || [];
-    list[s.photoIndex] = s.photoCount;
-    countsByStop.set(s.stopId, list);
+    const list = entriesByStop.get(s.stopId) || [];
+    list[s.photoIndex] = { count: s.photoCount, layoutId: s.layoutId };
+    entriesByStop.set(s.stopId, list);
   });
 
   const pacingControls = (s) => {
-    const counts = countsByStop.get(s.stopId) || [];
-    const isLast = s.photoIndex === counts.length - 1;
-    return `<span class="bp-pace" data-stop-id="${escapeHtml(s.stopId)}" data-index="${s.photoIndex}" data-counts="${escapeHtml(JSON.stringify(counts))}">
+    const entries = entriesByStop.get(s.stopId) || [];
+    const isLast = s.photoIndex === entries.length - 1;
+    return `<span class="bp-pace" data-stop-id="${escapeHtml(s.stopId)}" data-index="${s.photoIndex}" data-entries="${escapeHtml(JSON.stringify(entries))}">
         <button type="button" data-delta="-1" title="Fewer photos on this spread (they move to the next one)"${s.photoCount <= 1 ? " disabled" : ""}>−</button>
         <b>${s.photoCount} 📷${s.pinned ? " 📌" : ""}</b>
         <button type="button" data-delta="1" title="More photos on this spread (taken from the following ones)"${isLast || s.photoCount >= MAX_PHOTOS_PER_SPREAD ? " disabled" : ""}>+</button>
       </span>`;
+  };
+
+  // Per-spread layout choice - automatic by default (like the per-stop
+  // picker below), free choice on any single spread otherwise. Shows
+  // "Automatic" selected even when the spread's *actual* layout happens to
+  // match a named option, unless that layout was specifically pinned here
+  // (s.layoutPinned) - so the dropdown reflects what the user chose, not
+  // just what the algorithm happened to land on.
+  const spreadLayoutSelect = (s) => {
+    const entries = entriesByStop.get(s.stopId) || [];
+    return `<select class="bp-spread-override" data-stop-id="${escapeHtml(s.stopId)}" data-index="${s.photoIndex}" data-entries="${escapeHtml(JSON.stringify(entries))}">
+        <option value="">Automatic</option>
+        ${layoutOptions
+          .map(([id, l]) => `<option value="${id}"${s.layoutPinned && s.layoutId === id ? " selected" : ""}>${escapeHtml(l.label)}</option>`)
+          .join("")}
+      </select>`;
   };
 
   const toggleBtn = (toggle, hidden, text) =>
@@ -116,7 +135,7 @@ export function buildBookPreviewHtml(story) {
         : KIND_LABEL[s.kind] || s.kind;
     return `<figure class="bp-spread">
       <div class="bp-canvas">${inlineSvg(s, plan.spreadSize, `spread-${i}`)}<span class="bp-fold"></span></div>
-      <figcaption><span>${first + i * 2}–${first + i * 2 + 1} · ${label}</span>${s.kind === "photos" ? pacingControls(s) : ""}${
+      <figcaption><span>${first + i * 2}–${first + i * 2 + 1} · ${label}</span>${s.kind === "photos" ? pacingControls(s) + spreadLayoutSelect(s) : ""}${
         s.toggle ? toggleBtn(s.toggle, true, "✕ Remove from book") : ""
       }</figcaption>
     </figure>`;
@@ -172,6 +191,7 @@ ${fontHead(plan.fonts)}
   .bp-group { margin-bottom: 18px; }
   .bp-group-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 0 2px 8px; font-weight: 600; font-size: 14px; }
   .bp-override { font: inherit; font-size: 13px; font-weight: 400; padding: 4px 6px; border-radius: 6px; border: 1px solid #666; background: #444; color: #eee; max-width: 55%; }
+  .bp-spread-override { font: inherit; font-size: 12px; padding: 3px 5px; border-radius: 6px; border: 1px solid #666; background: #444; color: #eee; max-width: 40%; }
   .bp-spread { margin: 0 0 12px; }
   .bp-canvas { position: relative; box-shadow: 0 2px 10px rgba(0,0,0,0.5); background: #fff; }
   .bp-fold { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; border-left: 1px dashed rgba(0,0,0,0.25); pointer-events: none; }
@@ -210,9 +230,10 @@ ${fontHead(plan.fonts)}
     if (btn && !btn.disabled) {
       var pace = btn.parentNode;
       var index = Number(pace.dataset.index);
-      var counts = JSON.parse(pace.dataset.counts).slice(0, index + 1);
-      counts[index] = Math.max(1, counts[index] + Number(btn.dataset.delta));
-      parent.postMessage({ type: "book-spread-counts", stopId: pace.dataset.stopId, counts: counts }, "*");
+      var entries = JSON.parse(pace.dataset.entries).slice(0, index + 1);
+      var cur = entries[index] || {};
+      entries[index] = { count: Math.max(1, (cur.count || 1) + Number(btn.dataset.delta)), layoutId: cur.layoutId || null };
+      parent.postMessage({ type: "book-spread-counts", stopId: pace.dataset.stopId, counts: entries }, "*");
       return;
     }
     var tog = e.target.closest && e.target.closest(".bp-toggle");
@@ -225,8 +246,24 @@ ${fontHead(plan.fonts)}
   });
   document.addEventListener("change", function (e) {
     var sel = e.target.closest && e.target.closest(".bp-override");
-    if (!sel) return;
-    parent.postMessage({ type: "book-layout-override", stopId: sel.dataset.stopId, layoutId: sel.value || null }, "*");
+    if (sel) {
+      parent.postMessage({ type: "book-layout-override", stopId: sel.dataset.stopId, layoutId: sel.value || null }, "*");
+      return;
+    }
+    var spreadSel = e.target.closest && e.target.closest(".bp-spread-override");
+    if (spreadSel) {
+      var index2 = Number(spreadSel.dataset.index);
+      var entries2 = JSON.parse(spreadSel.dataset.entries).slice(0, index2 + 1);
+      var cur2 = entries2[index2] || {};
+      var layoutId = spreadSel.value || null;
+      // Only this dropdown's own layoutId changes here - an existing count
+      // pin on this same spread (from the -/+ buttons) is left exactly as
+      // it was, and picking "Automatic" leaves the count pin in place too
+      // rather than resetting the whole spread.
+      entries2[index2] = layoutId ? { count: cur2.count, layoutId: layoutId } : { count: cur2.count };
+      if (!entries2[index2].count && !entries2[index2].layoutId) entries2.pop();
+      parent.postMessage({ type: "book-spread-counts", stopId: spreadSel.dataset.stopId, counts: entries2 }, "*");
+    }
   });
 </script>
 </body></html>`;

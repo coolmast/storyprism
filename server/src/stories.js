@@ -27,13 +27,32 @@ import { SPREAD_LAYOUT_IDS, BOOK_FONTS, CEWE_FONTS } from "./photobook/spreadLay
 // would) defeats the entire point of letting them fix or add a link. Add
 // the protocol if it's missing rather than reject, but still refuse
 // anything that isn't at least domain-shaped.
-// Per-stop photobook pacing: how many photos each of the stop's photo
-// spreads holds, in order (the rest of the stop is laid out automatically).
-// Stored as a JSON array; anything malformed is treated as "automatic".
+// Per-stop photobook pacing: one entry per photo spread, in order (the rest
+// of the stop is laid out automatically). An entry is either a plain
+// integer (legacy: pins that spread's photo count only, automatic layout)
+// or { count?, layoutId? } (either or both pinned - see chunkIntoSpreads in
+// bookPlanner.js). Stored as a JSON array; anything malformed is dropped
+// rather than rejecting the whole array, so one bad entry can't wipe out
+// the rest of a stop's pacing.
+function validSpreadCountEntry(entry) {
+  if (Number.isInteger(entry) && entry >= 1 && entry <= 10) return entry;
+  if (entry && typeof entry === "object") {
+    const count = Number.isInteger(entry.count) && entry.count >= 1 && entry.count <= 10 ? entry.count : undefined;
+    const layoutId = SPREAD_LAYOUT_IDS.includes(entry.layoutId) ? entry.layoutId : undefined;
+    if (count === undefined && layoutId === undefined) return null;
+    return count !== undefined && layoutId !== undefined ? { count, layoutId } : count !== undefined ? { count } : { layoutId };
+  }
+  return null;
+}
+
 function parseSpreadCounts(json) {
   try {
     const v = JSON.parse(json || "[]");
-    return Array.isArray(v) ? v.filter((n) => Number.isInteger(n) && n >= 1 && n <= 10) : [];
+    if (!Array.isArray(v)) return [];
+    // Keep positions: a later pinned entry needs its earlier siblings' slots
+    // to line up with the actual spread index, even if some of those are
+    // themselves fully automatic (null).
+    return v.map((entry) => validSpreadCountEntry(entry));
   } catch {
     return [];
   }
@@ -41,7 +60,8 @@ function parseSpreadCounts(json) {
 
 function serializeSpreadCounts(counts) {
   if (!Array.isArray(counts)) return null;
-  const clean = counts.filter((n) => Number.isInteger(n) && n >= 1 && n <= 10).slice(0, 60);
+  const clean = counts.slice(0, 60).map((entry) => validSpreadCountEntry(entry));
+  while (clean.length && clean.at(-1) == null) clean.pop();
   return clean.length ? JSON.stringify(clean) : null;
 }
 
@@ -478,6 +498,7 @@ export function getStory(id) {
         bookLayoutOverride: s.book_layout_override || null,
         bookSpreadCounts: parseSpreadCounts(s.book_spread_counts),
         bookHideText: !!s.book_hide_text,
+        bookChapterBackdropHash: s.book_chapter_backdrop_hash || null,
         suggestedPlaces: suggestPlacesForStop(
           includedRows.map((p) => ({ title: p.title, placeLabel: p.place_label }))
         ),
@@ -509,6 +530,11 @@ export function getStory(id) {
           summary: c.summary,
           facts: JSON.parse(c.facts || "[]"),
           placement: c.placement || "top",
+          // Fraction of the way through the stop's own photo spreads (0-1);
+          // null on a card from before free placement shipped, which
+          // bookPlanner.js falls back to deriving from `placement` above
+          // instead of silently relocating it.
+          photoPosition: c.photo_position ?? null,
           // Both the raw hash and its derived thumb URL: updateStory's save
           // path reads heroPhotoHash back from whatever the client sends, so
           // omitting it here would silently wipe every existing hero photo
@@ -533,8 +559,8 @@ const updateStoryStmt = db.prepare(
 // Position is included so inserting a stop in the middle (or reordering)
 // is reflected, same as photos already work.
 const upsertStopStmt = db.prepare(`
-  INSERT INTO stops (id, story_id, position, lat, lng, place_label, started_at, ended_at, heading, narrative, research, pull_quote, pdf_template_override, book_layout_override, book_spread_counts, book_hide_text)
-  VALUES (@id, @storyId, @position, @lat, @lng, @placeLabel, @startedAt, @endedAt, @heading, @narrative, @research, @pullQuote, @pdfTemplateOverride, @bookLayoutOverride, @bookSpreadCounts, @bookHideText)
+  INSERT INTO stops (id, story_id, position, lat, lng, place_label, started_at, ended_at, heading, narrative, research, pull_quote, pdf_template_override, book_layout_override, book_spread_counts, book_hide_text, book_chapter_backdrop_hash)
+  VALUES (@id, @storyId, @position, @lat, @lng, @placeLabel, @startedAt, @endedAt, @heading, @narrative, @research, @pullQuote, @pdfTemplateOverride, @bookLayoutOverride, @bookSpreadCounts, @bookHideText, @bookChapterBackdropHash)
   ON CONFLICT(id) DO UPDATE SET
     position = excluded.position,
     lat = excluded.lat,
@@ -549,7 +575,8 @@ const upsertStopStmt = db.prepare(`
     pdf_template_override = excluded.pdf_template_override,
     book_layout_override = excluded.book_layout_override,
     book_spread_counts = excluded.book_spread_counts,
-    book_hide_text = excluded.book_hide_text
+    book_hide_text = excluded.book_hide_text,
+    book_chapter_backdrop_hash = excluded.book_chapter_backdrop_hash
 `);
 // Matched by id alone (a photo's id is globally unique, not just within its
 // stop) and stop_id is now part of the SET clause, not the WHERE - splitting
@@ -570,8 +597,8 @@ const insertEmbedStmt = db.prepare(`
 `);
 const deleteInfoCardsStmt = db.prepare("DELETE FROM stop_info_cards WHERE stop_id = @stopId");
 const insertInfoCardStmt = db.prepare(`
-  INSERT INTO stop_info_cards (id, stop_id, place_name, subtitle, summary, facts, position, placement, hero_photo_hash, website_url, book_hidden)
-  VALUES (@id, @stopId, @placeName, @subtitle, @summary, @facts, @position, @placement, @heroPhotoHash, @websiteUrl, @bookHidden)
+  INSERT INTO stop_info_cards (id, stop_id, place_name, subtitle, summary, facts, position, placement, photo_position, hero_photo_hash, website_url, book_hidden)
+  VALUES (@id, @stopId, @placeName, @subtitle, @summary, @facts, @position, @placement, @photoPosition, @heroPhotoHash, @websiteUrl, @bookHidden)
 `);
 const touchStoryStmt = db.prepare("UPDATE stories SET updated_at = @now WHERE id = @id");
 
@@ -625,6 +652,7 @@ export function updateStory(id, data) {
         bookLayoutOverride: SPREAD_LAYOUT_IDS.includes(stop.bookLayoutOverride) ? stop.bookLayoutOverride : null,
         bookSpreadCounts: serializeSpreadCounts(stop.bookSpreadCounts),
         bookHideText: stop.bookHideText ? 1 : 0,
+        bookChapterBackdropHash: stop.bookChapterBackdropHash || null,
         heading: stop.heading ?? "",
         narrative: stop.narrative ?? "",
         research: stop.research ?? "",
@@ -683,6 +711,10 @@ export function updateStory(id, data) {
           facts: JSON.stringify(card.facts || []),
           position: index,
           placement: ["top", "middle", "end"].includes(card.placement) ? card.placement : "top",
+          photoPosition:
+            typeof card.photoPosition === "number" && Number.isFinite(card.photoPosition)
+              ? Math.max(0, Math.min(1, card.photoPosition))
+              : null,
           heroPhotoHash: card.heroPhotoHash || null,
           // Re-validated here too, not just at generation time - never trust
           // a client-supplied string as a safe link target without a check.

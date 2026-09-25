@@ -144,3 +144,15 @@ ensureColumn("stops", "theme_id", "TEXT");
 // toggled on individually (IncludedPhotoGrid.jsx). Unrelated to the web
 // view/deck, which already show every caption unconditionally.
 ensureColumn("stop_photos", "book_show_caption", "INTEGER NOT NULL DEFAULT 0");
+// Where an info card's own spread lands among its stop's *photo* spreads in
+// the photobook, as a fraction (0 = right after the chapter opener, 1 = at
+// the very end) - free placement instead of the old fixed top/middle/end
+// three-way choice. NULL means "never set" - an old card falls back to a
+// placement-derived equivalent (bookPlanner.js) rather than silently
+// jumping to a new spot.
+ensureColumn("stop_info_cards", "photo_position", "REAL");
+// A specific photo to use as the chapter opener's full-bleed backdrop for
+// this stop, instead of the automatically best-scoring one - the same idea
+// as an info card's own hero photo, just for the stop's chapter spread.
+// NULL means "automatic" (the existing backdropScore-based pick).
+ensureColumn("stops", "book_chapter_backdrop_hash", "TEXT");

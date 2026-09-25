@@ -236,7 +236,19 @@ or a real printed photobook (Saal Digital/CEWE FOTOWELT).
     templates needed no writer changes at all, since `saalSvg.js`/
     `ceweExport.js` only ever read a spread's plain element list, never which
     template produced it). A per-stop layout pin (`bookLayoutOverride`) still
-    overrides the pack for that one stop. `saalSvg.js` renders every spread either as Saal's
+    overrides the pack for that one stop; independently, any individual photo
+    spread can also pin its own layout and/or photo count
+    (`stop.bookSpreadCounts[i]`, an array positionally aligned to that stop's
+    photo spreads — a legacy plain integer still just pins a count, a
+    `{count?, layoutId?}` object can pin either or both) right from the live
+    preview's own per-spread controls (pacing +/− plus a layout `<select>`
+    next to it, defaulting to "Automatic"), so a book can mix "auto for most
+    of the trip, but this one spread should always be the panorama" without
+    a story-wide pack change. A chapter opener's full-bleed backdrop photo is
+    normally the automatically best-scoring one (`backdropScore`), but a stop
+    can pin a specific photo instead (`stop.bookChapterBackdropHash`, picked
+    from a small photo grid in the editor, same interaction as an info card's
+    hero-photo picker below). `saalSvg.js` renders every spread either as Saal's
     own SVG dialect or as a browser preview from the same element list, so
     the editor's live "Photobook" preview (`bookPreview.js`) is exactly what
     gets exported. Export jobs (`bookExport.js`) plan the book once and hand
@@ -277,8 +289,14 @@ or a real printed photobook (Saal Digital/CEWE FOTOWELT).
     (`generateInfoCard`) that freely picks whatever facts actually fit the
     place (a national park gets area/flora, a museum gets founded
     year/collection) rather than a fixed schema per place type. Each card
-    also has a `placement` (`top`/`middle`/`end` — where it lands relative
-    to the stop's photos) and an optional `heroPhotoHash`, picked from the
+    also has a free placement (`photoPosition`, 0–1 — how far through the
+    stop's own photo spreads it lands, shown in `InfoCards.jsx` as a slider
+    with Start/Middle/End presets rather than a fixed three-way choice, so a
+    card in a long section can sit at, say, roughly the first third instead
+    of only ever right after the heading, mid-way, or at the very end; the
+    planner rounds it to the nearest photo-spread boundary since a card's own
+    spread is a discrete page, not a fraction of one) and an optional
+    `heroPhotoHash`, picked from the
     stop's photos that matched the same place name/label used to generate
     the card (`getMatchingPhotosForPlace` in `stories.js`, reusing the
     exact place-matching logic from suggestion detection). It also tries
@@ -919,6 +937,38 @@ from nginx itself, not from this app). Raise it to match, e.g.
       photo actually lands. Verified through both real Saal and CEWE
       exports, not just the preview - `book_show_caption` new column on
       `stop_photos`
+- [x] Photobook: three placement/layout freedoms that were previously fixed
+      or only settable at the whole-stop level.
+      - **Free info-card placement**: replaced the `top`/`middle`/`end`
+        three-way choice with a continuous slider (`photoPosition`, 0–1,
+        new `stop_info_cards.photo_position` column) expressing how far
+        through the stop's own photo spreads the card's spread lands, so a
+        card in a long section can sit at roughly the first third instead
+        of only ever those three fixed spots. A card saved before this
+        shipped (`photoPosition` unset) falls back to a placement-derived
+        equivalent fraction at plan time, so nothing already in a book
+        silently jumps position.
+      - **Manual chapter-backdrop photo**: a stop's chapter-opener spread
+        can pin a specific photo as its full-bleed background
+        (`stop.bookChapterBackdropHash`, new `stops.book_chapter_backdrop_
+        hash` column) instead of always taking the automatically
+        best-scoring one - a small photo-grid picker in the editor, the
+        same interaction as an info card's own hero-photo picker.
+      - **Per-spread layout override**: `stop.bookLayoutOverride` pinned one
+        layout for an entire stop; a photo spread can now also pin its own
+        layout and/or photo count individually
+        (`stop.bookSpreadCounts[i]`, extended from a plain integer to an
+        optional `{count?, layoutId?}` object, positionally aligned to that
+        stop's photo spreads so an old story's plain-integer pins keep
+        working unchanged) right from the live preview's own per-spread
+        controls - a layout `<select>` next to the existing pacing
+        controls, defaulting to "Automatic". Editing one control preserves
+        whatever the other already pinned at that spread.
+      Verified through both the preview and real Saal/CEWE exports together
+      (a manually-backdropped, layout-pinned, fractionally-placed card all
+      in the same disposable test story), plus a legacy-shaped story
+      (plain-integer spread pins, placement-only info card) still planning
+      the same as before
 
 ## Notes
 

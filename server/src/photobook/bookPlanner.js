@@ -54,11 +54,14 @@ function bestLayoutFor(group, weights, spread, recent) {
   return (pick(Object.entries(weights), false) || pick(all, false) || pick(all, true))?.id || "page-mosaics";
 }
 
-// Splits a stop's photos into spreads. `pinned` (the user's per-spread photo
-// counts for this stop, in order) fixes how many photos the first spreads
-// hold; everything after them is paced automatically: layout *and* count per
-// spread are chosen by how well the photos' shapes suit each layout, with
-// variety penalties so the book doesn't repeat itself.
+// Splits a stop's photos into spreads. `pinned` (the user's per-spread
+// choices for this stop, in order - a plain number for a legacy count-only
+// pin, or { count?, layoutId? }) fixes what the first spreads hold; the
+// rest is automatic: layout *and* count per spread are chosen by how well
+// the photos' shapes suit each layout, with variety penalties so the book
+// doesn't repeat itself. A pinned layout with no pinned count still picks
+// its own best photo count automatically, same scoring as the fully
+// automatic branch just restricted to that one layout.
 function chunkIntoSpreads(photos, weights, spread, nextVariant, pinned = []) {
   const entries = Object.entries(weights).filter(([id]) => SPREAD_LAYOUTS[id]);
   const spreads = [];
@@ -66,11 +69,28 @@ function chunkIntoSpreads(photos, weights, spread, nextVariant, pinned = []) {
   let i = 0;
   while (i < photos.length) {
     const remaining = photos.length - i;
-    const pinnedCount = pinned[spreads.length];
+    const pin = pinned[spreads.length];
+    const pinnedCount = typeof pin === "number" ? pin : pin?.count;
+    const pinnedLayoutId = typeof pin === "object" && pin && SPREAD_LAYOUTS[pin.layoutId] ? pin.layoutId : null;
     let best = null;
-    if (pinnedCount) {
+    if (pinnedLayoutId) {
+      const l = SPREAD_LAYOUTS[pinnedLayoutId];
+      if (pinnedCount) {
+        const k = Math.min(pinnedCount, remaining, l.photos.max, MAX_PHOTOS_PER_SPREAD);
+        best = { id: pinnedLayoutId, k, pinned: true, layoutPinned: true };
+      } else {
+        let bestK = null;
+        for (let k = l.photos.min; k <= Math.min(l.photos.max, remaining); k++) {
+          const group = photos.slice(i, i + k);
+          const fit = l.fit(group, spread);
+          const score = fit - Math.abs(k - l.photos.ideal) * 0.05;
+          if (!bestK || score > bestK.score) bestK = { k, score };
+        }
+        best = { id: pinnedLayoutId, k: bestK?.k ?? l.photos.min, pinned: true, layoutPinned: true };
+      }
+    } else if (pinnedCount) {
       const k = Math.min(pinnedCount, remaining, MAX_PHOTOS_PER_SPREAD);
-      best = { id: bestLayoutFor(photos.slice(i, i + k), weights, spread, recent), k, pinned: true };
+      best = { id: bestLayoutFor(photos.slice(i, i + k), weights, spread, recent), k, pinned: true, layoutPinned: false };
     } else {
       for (const [id, weight] of entries) {
         const l = SPREAD_LAYOUTS[id];
@@ -88,7 +108,13 @@ function chunkIntoSpreads(photos, weights, spread, nextVariant, pinned = []) {
       }
       if (!best) best = { id: "panorama", k: 1 };
     }
-    spreads.push({ layoutId: best.id, photos: photos.slice(i, i + best.k), variant: nextVariant(), pinned: !!best.pinned });
+    spreads.push({
+      layoutId: best.id,
+      photos: photos.slice(i, i + best.k),
+      variant: nextVariant(),
+      pinned: !!best.pinned,
+      layoutPinned: !!best.layoutPinned,
+    });
     i += best.k;
     recent.push(best.id);
     if (recent.length > 3) recent.shift();
@@ -246,11 +272,19 @@ export function planBook(story, { product: productId, strings } = {}) {
 
     let pool = included;
     if (hasText) {
-      // The chapter's backdrop: best scenery for a full spread (a face-free
-      // featured photo wins through backdropScore's featured bonus).
+      // The chapter's backdrop: the user's own pick (bookChapterBackdropHash
+      // - same idea as an info card's own hero photo, see InfoCards.jsx) if
+      // they set one, else the best-scoring scenery for a full spread (a
+      // face-free featured photo wins through backdropScore's featured
+      // bonus).
       const spreadAspect = spreadSize.w / spreadSize.h;
+      const manualBackdrop = stop.bookChapterBackdropHash
+        ? included.find((p) => p.hash === stop.bookChapterBackdropHash)
+        : null;
       const backdrop =
-        [...included].sort((a, b) => backdropScore(b, spreadAspect) - backdropScore(a, spreadAspect))[0] || null;
+        manualBackdrop ||
+        [...included].sort((a, b) => backdropScore(b, spreadAspect) - backdropScore(a, spreadAspect))[0] ||
+        null;
       pool = included.filter((p) => p !== backdrop);
       stopSpreads.push({
         kind: "chapter",
@@ -310,6 +344,7 @@ export function planBook(story, { product: productId, strings } = {}) {
         photoIndex: idx,
         photoCount: s.photos.length,
         pinned: s.pinned,
+        layoutPinned: s.layoutPinned,
         ...build(s.layoutId, s.photos, s.variant, { title: !hasText && idx === 0 ? stop.heading : null }),
       })
     );
@@ -331,23 +366,36 @@ export function planBook(story, { product: productId, strings } = {}) {
       ...infoCardSpread(spreadSize, baseCtx, { card, hero: heroForCard(card, stop) || feat || included[0] || null }),
       layoutId: "info-card",
     });
-    const top = cards.filter((c) => (c.placement || "top") === "top").map(infoSpread);
-    const middle = cards.filter((c) => c.placement === "middle").map(infoSpread);
-    const end = cards.filter((c) => c.placement === "end").map(infoSpread);
-    // Top cards (and the route map, a similar overview-up-front element)
-    // come after whichever spread carries the stop title.
+    // The route map (a similar overview-up-front element) comes right after
+    // whichever spread carries the stop title; info cards are free-placed
+    // among the stop's own photo spreads instead - see below.
     const lead = stopSpreads.length ? stopSpreads : photoSpreads.slice(0, 1);
     const photosAfterLead = stopSpreads.length ? photoSpreads : photoSpreads.slice(1);
-    const mid = Math.ceil(photosAfterLead.length / 2);
-    spreads.push(
-      ...lead,
-      ...routeSpreads,
-      ...top,
-      ...photosAfterLead.slice(0, mid),
-      ...middle,
-      ...photosAfterLead.slice(mid),
-      ...end
-    );
+    // A card's own spread lands after `photoPosition` (0-1) of the way
+    // through the stop's photo spreads - free placement instead of the old
+    // fixed top/middle/end three-way choice, so a card can be pushed to
+    // roughly "the first third" of a long section, say. A card saved before
+    // this shipped has no photoPosition at all; its old `placement` maps to
+    // the exact same spot free placement replaced it at (top -> 0,
+    // middle -> the old halfway split, end -> the very end), so nothing
+    // already in a book silently jumps to a new position.
+    const positioned = cards
+      .map((card) => {
+        const frac =
+          typeof card.photoPosition === "number"
+            ? card.photoPosition
+            : card.placement === "end"
+              ? 1
+              : card.placement === "middle"
+                ? 0.5
+                : 0;
+        const index = Math.max(0, Math.min(photosAfterLead.length, Math.round(frac * photosAfterLead.length)));
+        return { card, index };
+      })
+      .sort((a, b) => a.index - b.index);
+    const combined = [...photosAfterLead];
+    positioned.forEach(({ card, index }, i) => combined.splice(index + i, 0, infoSpread(card)));
+    spreads.push(...lead, ...routeSpreads, ...combined);
   });
 
   if (story.outro && story.bookHideOutro) hiddenItems.push({ label: "Outro", toggle: { target: "outro" } });

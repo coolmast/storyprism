@@ -4,6 +4,21 @@ import { useI18n } from "./i18n.jsx";
 import { uid } from "./uid.js";
 import GhostwriterPanel from "./GhostwriterPanel.jsx";
 
+// How far through the stop's own photo spreads a card's spread lands (0 =
+// right after the chapter opener, 1 = the very end) - free placement
+// instead of the old fixed top/middle/end three-way choice (still shown as
+// quick presets below the slider). A card saved before this shipped has no
+// photoPosition yet; its old placement maps to the exact spot free
+// placement replaced it at, matching bookPlanner.js's own fallback, so nothing
+// already in a book silently jumps to a new position the first time its
+// story is opened here.
+function placementPercent(card) {
+  if (typeof card.photoPosition === "number") return card.photoPosition;
+  if (card.placement === "end") return 1;
+  if (card.placement === "middle") return 0.5;
+  return 0;
+}
+
 // suggestedPlaces comes from the server (PhotoPrism PlaceLabels + auto
 // photo titles for this stop's included photos - see server/src/places.js)
 // - it's just candidate names, nothing is generated until the user clicks
@@ -31,7 +46,7 @@ export default function InfoCards({ storyId, stopId, suggestedPlaces, infoCards,
       const card = await generateInfoCard(storyId, stopId, placeName.trim());
       onChange([
         ...infoCards,
-        { id: uid(), placement: "top", heroPhotoHash: null, heroPhotoUrl: null, ...card },
+        { id: uid(), placement: "top", photoPosition: 0, heroPhotoHash: null, heroPhotoUrl: null, ...card },
       ]);
       setManualName("");
     } catch (e) {
@@ -207,17 +222,31 @@ export default function InfoCards({ storyId, stopId, suggestedPlaces, infoCards,
           </dl>
 
           <div className="info-card-controls">
-            <label className="info-card-placement">
+            <div className="info-card-placement">
               <span className="control-label">{t("placementLabel")}</span>
-              <select
-                value={card.placement || "top"}
-                onChange={(e) => updateCard(card.id, { placement: e.target.value })}
-              >
-                <option value="top">{t("placementTop")}</option>
-                <option value="middle">{t("placementMiddle")}</option>
-                <option value="end">{t("placementEnd")}</option>
-              </select>
-            </label>
+              <div className="info-card-placement-row">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={Math.round(placementPercent(card) * 100)}
+                  onChange={(e) => updateCard(card.id, { photoPosition: Number(e.target.value) / 100 })}
+                />
+                <span className="info-card-placement-value">{t("placementPercent", Math.round(placementPercent(card) * 100))}</span>
+              </div>
+              <div className="info-card-placement-presets">
+                <button type="button" className="link-btn small" onClick={() => updateCard(card.id, { photoPosition: 0 })}>
+                  {t("placementTop")}
+                </button>
+                <button type="button" className="link-btn small" onClick={() => updateCard(card.id, { photoPosition: 0.5 })}>
+                  {t("placementMiddle")}
+                </button>
+                <button type="button" className="link-btn small" onClick={() => updateCard(card.id, { photoPosition: 1 })}>
+                  {t("placementEnd")}
+                </button>
+              </div>
+            </div>
 
             <button
               type="button"
