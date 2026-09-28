@@ -1,9 +1,27 @@
 import { fetchThumbBuffer } from "../photoprism.js";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const CAPTION_MODEL = "gpt-4o-mini";
+// Web-search-backed facts (place research, info cards) stay on a fixed
+// model rather than the user's own text-model choice below - not every
+// model supports the Responses API's web_search tool, and getting facts
+// right matters more here than matching writing style/creativity to taste.
 const RESEARCH_MODEL = "gpt-4o-mini";
-const INTERVIEW_MODEL = "gpt-4o-mini";
+
+// The model behind every *prose* generation call (captions, interview
+// replies, ghostwriter drafts, notes-import rewriting) - configurable per
+// story (story.aiTextModel), "very basic" to "most advanced" so cost and
+// writing quality are the user's own call rather than a single hardcoded
+// default. All three support vision (captions send a photo) and none need
+// tool use, so any of them is safe to swap in for any of these calls.
+export const AI_TEXT_MODELS = {
+  "gpt-4o-mini": { label: "Basic (fastest, cheapest)" },
+  "gpt-4o": { label: "Balanced" },
+  "gpt-4.1": { label: "Most advanced" },
+};
+export const DEFAULT_AI_TEXT_MODEL = "gpt-4o";
+function resolveTextModel(id) {
+  return AI_TEXT_MODELS[id] ? id : DEFAULT_AI_TEXT_MODEL;
+}
 
 // Omit the instruction for English - the model defaults there anyway, and
 // it keeps prompts shorter for the common case.
@@ -19,7 +37,7 @@ async function fetchImageAsDataUrl(photoHash) {
   return `data:${contentType};base64,${buffer.toString("base64")}`;
 }
 
-export async function draftCaption({ photoHash, place, date, storyTitle, language }) {
+export async function draftCaption({ photoHash, place, date, storyTitle, language, model }) {
   const dataUrl = await fetchImageAsDataUrl(photoHash);
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -29,7 +47,7 @@ export async function draftCaption({ photoHash, place, date, storyTitle, languag
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: CAPTION_MODEL,
+      model: resolveTextModel(model),
       messages: [
         {
           role: "system",
@@ -194,6 +212,7 @@ export async function interviewTurn({
   research,
   history,
   language,
+  model,
 }) {
   const context = describeStopContext({ heading, dateRange, narrative, captions, research });
   const messages = [
@@ -216,7 +235,7 @@ export async function interviewTurn({
       Authorization: `Bearer ${OPENAI_API_KEY}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ model: INTERVIEW_MODEL, messages, max_tokens: 220 }),
+    body: JSON.stringify({ model: resolveTextModel(model), messages, max_tokens: 220 }),
   });
 
   if (!res.ok) {
@@ -232,7 +251,7 @@ const GHOSTWRITER_VOICE_RULES =
   'believe our eyes"). Prefer plain, concrete detail over generic sensory adjectives - name the actual ' +
   "thing, sound, or feeling rather than reaching for a simile. Short sentences are fine.";
 
-export async function draftFromInterview({ heading, narrative, captions, research, history, language }) {
+export async function draftFromInterview({ heading, narrative, captions, research, history, language, model }) {
   const context = describeStopContext({ heading, narrative, captions, research });
   const transcript = history
     .map((m) => `${m.role === "user" ? "Traveler" : "Ghostwriter"}: ${m.content}`)
@@ -263,7 +282,7 @@ export async function draftFromInterview({ heading, narrative, captions, researc
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: INTERVIEW_MODEL,
+      model: resolveTextModel(model),
       messages,
       response_format: { type: "json_object" },
       max_tokens: 500,
@@ -328,7 +347,7 @@ function transcriptOf(history) {
   return lines || "(no conversation yet - just polish what is already there)";
 }
 
-export async function ghostwriterTurn({ kind, context, history, language }) {
+export async function ghostwriterTurn({ kind, context, history, language, model }) {
   const prompt = GHOSTWRITER_PROMPTS[kind];
   if (!prompt) throw new Error(`Unknown ghostwriter kind: ${kind}`);
   const messages = [
@@ -342,14 +361,14 @@ export async function ghostwriterTurn({ kind, context, history, language }) {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: INTERVIEW_MODEL, messages, max_tokens: 220 }),
+    body: JSON.stringify({ model: resolveTextModel(model), messages, max_tokens: 220 }),
   });
   if (!res.ok) throw new Error(`OpenAI interview request failed: ${res.status} ${await res.text()}`);
   const data = await res.json();
   return data.choices[0].message.content.trim();
 }
 
-export async function ghostwriterDraft({ kind, context, history, language }) {
+export async function ghostwriterDraft({ kind, context, history, language, model }) {
   const prompt = GHOSTWRITER_PROMPTS[kind];
   if (!prompt) throw new Error(`Unknown ghostwriter kind: ${kind}`);
   const messages = [{ role: "user", content: prompt.draft(context, transcriptOf(history), language) }];
@@ -358,7 +377,7 @@ export async function ghostwriterDraft({ kind, context, history, language }) {
     method: "POST",
     headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: INTERVIEW_MODEL,
+      model: resolveTextModel(model),
       messages,
       response_format: { type: "json_object" },
       max_tokens: 500,
@@ -409,7 +428,7 @@ export function describeInfoCardContext({ card, stopHeading, stopNarrative }) {
     .join("\n");
 }
 
-export async function organizeNotesIntoStory({ storyTitle, stops, notesText, language }) {
+export async function organizeNotesIntoStory({ storyTitle, stops, notesText, language, model }) {
   const stopList = stops
     .map(
       (s, i) =>
@@ -456,7 +475,7 @@ export async function organizeNotesIntoStory({ storyTitle, stops, notesText, lan
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: INTERVIEW_MODEL,
+      model: resolveTextModel(model),
       messages,
       response_format: { type: "json_object" },
       max_tokens: Math.min(4000, 400 * stops.length + 600),

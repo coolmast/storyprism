@@ -20,6 +20,7 @@ import { BOOK_LAYOUT_PACKS, DEFAULT_BOOK_LAYOUT_PACK } from "./photobook/bookLay
 import { PDF_PAPER_SIZES, DEFAULT_PAPER_SIZE } from "./pdfPaperSizes.js";
 import { BOOK_PRODUCTS, DEFAULT_BOOK_PRODUCT } from "./photobook/products.js";
 import { SPREAD_LAYOUT_IDS, BOOK_FONTS, CEWE_FONTS } from "./photobook/spreadLayouts.js";
+import { AI_TEXT_MODELS } from "./ai/openaiProvider.js";
 
 // The AI always returns a full https:// URL when it includes one at all, but
 // a human editing/adding this field by hand will often just type
@@ -501,6 +502,10 @@ export function getStory(id) {
     bookCoverCards: parseCoverCards(story.book_cover_cards),
     introBackdropHash: story.intro_backdrop_hash || null,
     outroBackdropHash: story.outro_backdrop_hash || null,
+    // NULL means "server default" (openaiProvider.js's DEFAULT_AI_TEXT_MODEL)
+    // - not resolved to a concrete id here, so the editor's picker can show
+    // its own "Automatic (<current default>)" option truthfully.
+    aiTextModel: story.ai_text_model || null,
     createdAt: story.created_at,
     updatedAt: story.updated_at,
     stops: stops.map((s) => {
@@ -575,7 +580,7 @@ export function getStory(id) {
 }
 
 const updateStoryStmt = db.prepare(
-  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, content_language = @contentLanguage, pdf_layout_pack = @pdfLayoutPack, pdf_paper_size = @pdfPaperSize, book_product = @bookProduct, book_layout_pack = @bookLayoutPack, book_title_font = @bookTitleFont, book_body_font = @bookBodyFont, book_keep_bursts = @bookKeepBursts, book_hide_intro = @bookHideIntro, book_hide_outro = @bookHideOutro, book_title_scale = @bookTitleScale, book_body_scale = @bookBodyScale, book_cover_backdrop_hash = @bookCoverBackdropHash, book_cover_cards = @bookCoverCards, intro_backdrop_hash = @introBackdropHash, outro_backdrop_hash = @outroBackdropHash, updated_at = @now WHERE id = @id"
+  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, content_language = @contentLanguage, pdf_layout_pack = @pdfLayoutPack, pdf_paper_size = @pdfPaperSize, book_product = @bookProduct, book_layout_pack = @bookLayoutPack, book_title_font = @bookTitleFont, book_body_font = @bookBodyFont, book_keep_bursts = @bookKeepBursts, book_hide_intro = @bookHideIntro, book_hide_outro = @bookHideOutro, book_title_scale = @bookTitleScale, book_body_scale = @bookBodyScale, book_cover_backdrop_hash = @bookCoverBackdropHash, book_cover_cards = @bookCoverCards, intro_backdrop_hash = @introBackdropHash, outro_backdrop_hash = @outroBackdropHash, ai_text_model = @aiTextModel, updated_at = @now WHERE id = @id"
 );
 // Upsert, not a plain UPDATE: the editor can now create brand-new stops
 // client-side (splitting one stop into two, or adding a blank section) and
@@ -670,6 +675,15 @@ export function updateStory(id, data) {
         data.introBackdropHash !== undefined ? data.introBackdropHash || null : existing.introBackdropHash,
       outroBackdropHash:
         data.outroBackdropHash !== undefined ? data.outroBackdropHash || null : existing.outroBackdropHash,
+      // NULL ("automatic") is itself a valid choice here, not just a
+      // fallback - so an empty/unrecognized value clears to NULL rather
+      // than being forced onto some specific hardcoded model id.
+      aiTextModel:
+        data.aiTextModel !== undefined
+          ? data.aiTextModel && AI_TEXT_MODELS[data.aiTextModel]
+            ? data.aiTextModel
+            : null
+          : existing.aiTextModel,
       now,
     });
 

@@ -128,6 +128,14 @@ app.get("/api/languages", (req, res) => {
   res.json(LANGUAGES.map((code) => ({ code, label: NATIVE_LANGUAGE_NAMES[code] })));
 });
 
+app.get("/api/ai-text-models", (req, res) => {
+  const { AI_TEXT_MODELS, DEFAULT_AI_TEXT_MODEL } = getProvider();
+  res.json({
+    models: Object.entries(AI_TEXT_MODELS).map(([id, m]) => ({ id, label: m.label })),
+    defaultModel: DEFAULT_AI_TEXT_MODEL,
+  });
+});
+
 app.get("/api/pdf-layouts", (req, res) => {
   res.json({
     templates: Object.entries(PDF_TEMPLATES).map(([id, t]) => ({
@@ -360,6 +368,7 @@ app.post("/api/stories/:id/stops/:stopId/photos/:photoId/draft-caption", async (
       date: stop.startedAt,
       storyTitle: story.title,
       language: languageName(story.contentLanguage),
+      model: story.aiTextModel,
     });
     res.json({ caption });
   } catch (err) {
@@ -401,6 +410,7 @@ app.post("/api/stories/:id/stops/:stopId/interview", async (req, res) => {
       research: stop.research,
       history: Array.isArray(req.body.history) ? req.body.history : [],
       language: languageName(story.contentLanguage),
+      model: story.aiTextModel,
     });
     res.json({ reply });
   } catch (err) {
@@ -422,6 +432,7 @@ app.post("/api/stories/:id/stops/:stopId/interview/draft", async (req, res) => {
       research: stop.research,
       history: Array.isArray(req.body.history) ? req.body.history : [],
       language: languageName(story.contentLanguage),
+      model: story.aiTextModel,
     });
     res.json(result);
   } catch (err) {
@@ -454,6 +465,7 @@ app.post("/api/stories/:id/interview", async (req, res) => {
       context,
       history: Array.isArray(history) ? history : [],
       language: languageName(story.contentLanguage),
+      model: story.aiTextModel,
     });
     res.json({ reply });
   } catch (err) {
@@ -480,6 +492,7 @@ app.post("/api/stories/:id/interview/draft", async (req, res) => {
       context,
       history: Array.isArray(history) ? history : [],
       language: languageName(story.contentLanguage),
+      model: story.aiTextModel,
     });
     res.json(result);
   } catch (err) {
@@ -508,6 +521,7 @@ app.post("/api/stories/:id/stops/:stopId/info-cards/interview", async (req, res)
       context,
       history: Array.isArray(history) ? history : [],
       language: languageName(story.contentLanguage),
+      model: story.aiTextModel,
     });
     res.json({ reply });
   } catch (err) {
@@ -530,6 +544,7 @@ app.post("/api/stories/:id/stops/:stopId/info-cards/interview/draft", async (req
       context,
       history: Array.isArray(history) ? history : [],
       language: languageName(story.contentLanguage),
+      model: story.aiTextModel,
     });
     res.json(result);
   } catch (err) {
@@ -556,6 +571,7 @@ app.post("/api/stories/:id/import-notes", async (req, res) => {
       storyTitle: story.title,
       notesText,
       language: languageName(story.contentLanguage),
+      model: story.aiTextModel,
       stops: story.stops.map((s) => ({
         id: s.id,
         heading: s.heading || s.placeLabel || "Stop",

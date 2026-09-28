@@ -164,7 +164,19 @@ or a real printed photobook (Saal Digital/CEWE FOTOWELT).
     with one theme appended to the list, instead of duplicating it.
   - AI assist behind a provider interface (`server/src/ai/`); OpenAI is
     wired up (vision captioning, web-search-backed place research, and a
-    ghostwriter interview - see below).
+    ghostwriter interview - see below). Which model writes every *prose*
+    call (captions, interview replies, ghostwriter drafts, notes-import
+    rewriting) is a per-story setting (`story.aiTextModel`, "Story
+    settings" modal) - "Basic" (fastest/cheapest), "Balanced" (the
+    default), or "Most advanced", all vision-capable and none needing tool
+    use, so any is safe for any of these calls; `NULL` means "whatever the
+    server's own current default is" (`DEFAULT_AI_TEXT_MODEL` in
+    `openaiProvider.js`), so an existing story never gets stuck on an
+    older default after that changes. Web-search-backed place research
+    (facts, not prose style) stays on its own fixed model instead, since
+    not every model supports the Responses API's `web_search` tool and
+    getting facts right matters more there than matching writing style to
+    taste.
   - Visual identity is themeable (`server/src/themes.js`) — 4 presets
     (palette + font pairing + hero mood + a matching map basemap), selected
     per story and applied as CSS variables + a Google Fonts import at
@@ -1060,6 +1072,27 @@ from nginx itself, not from this app). Raise it to match, e.g.
       outro text). Verified the automatic pick no longer duplicates the
       last photo, and that a manual pin on each applies correctly, via a
       disposable test story.
+- [x] Configurable AI text-generation model: every prose-generating
+      OpenAI call previously used a single hardcoded `gpt-4o-mini`
+      (`CAPTION_MODEL`/`INTERVIEW_MODEL` in `openaiProvider.js`, both the
+      same value). Replaced with a small tier table
+      (`AI_TEXT_MODELS`/`DEFAULT_AI_TEXT_MODEL`, now defaulting to the
+      stronger `gpt-4o` rather than the `-mini` variant) and a per-story
+      setting (`story.aiTextModel`, new `ai_text_model` column, `NULL` =
+      "server default") threaded through `draftCaption`, `interviewTurn`,
+      `draftFromInterview`, `ghostwriterTurn`, `ghostwriterDraft` and
+      `organizeNotesIntoStory` - the same `model` param at each of their 8
+      call sites in `index.js`, right next to the existing `language`
+      param. A new `GET /api/ai-text-models` endpoint feeds a "Story
+      settings" modal picker (`aiTextModelLabel`, SegmentedControl,
+      showing "Automatic (<current default's label>)" as the first
+      option). Deliberately left the web-search-backed research/info-card
+      calls (`RESEARCH_MODEL`) on their own fixed model - not every model
+      supports the Responses API's `web_search` tool. Verified the
+      metadata endpoint, a valid pick persisting and reaching the
+      settings-modal picker (screenshot, no console errors), and an
+      invalid/unrecognized model id falling back to `NULL` rather than
+      being force-coerced onto some arbitrary id.
 
 ## Notes
 

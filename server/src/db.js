@@ -173,3 +173,8 @@ ensureColumn("stories", "book_cover_cards", "TEXT");
 // regular photo grid.
 ensureColumn("stories", "intro_backdrop_hash", "TEXT");
 ensureColumn("stories", "outro_backdrop_hash", "TEXT");
+// Which AI model generates this story's prose (captions, interview replies,
+// ghostwriter drafts, notes-import rewriting) - NULL means "use whatever
+// the server's own default is" (openaiProvider.js's DEFAULT_AI_TEXT_MODEL),
+// so a story never gets stuck on an older default after that changes.
+ensureColumn("stories", "ai_text_model", "TEXT");

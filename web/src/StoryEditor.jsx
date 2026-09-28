@@ -7,6 +7,7 @@ import {
   fetchThemes,
   fetchLanguages,
   fetchPdfLayouts,
+  fetchAiTextModels,
   checkStoryUpdates,
   interviewTurn,
   draftFromInterview,
@@ -56,6 +57,7 @@ export default function StoryEditor({ story, onSaved }) {
   const [themes, setThemes] = useState([]);
   const [languages, setLanguages] = useState([]);
   const [pdfLayouts, setPdfLayouts] = useState({ templates: [], packs: [], paperSizes: [] });
+  const [aiTextModels, setAiTextModels] = useState({ models: [], defaultModel: "" });
   const [collapsedStops, setCollapsedStops] = useState(() => new Set());
   const [backdropPickerFor, setBackdropPickerFor] = useState(null);
   const [showPdfPreview, setShowPdfPreview] = useState(false);
@@ -99,6 +101,7 @@ export default function StoryEditor({ story, onSaved }) {
     fetchThemes().then(setThemes).catch(() => {});
     fetchLanguages().then(setLanguages).catch(() => {});
     fetchPdfLayouts().then(setPdfLayouts).catch(() => {});
+    fetchAiTextModels().then(setAiTextModels).catch(() => {});
   }, []);
 
   function markDirty(updater) {
@@ -841,6 +844,25 @@ export default function StoryEditor({ story, onSaved }) {
             value={draft.contentLanguage}
             onChange={(v) => markDirty((d) => ({ ...d, contentLanguage: v }))}
             options={languages.map((l) => ({ value: l.code, label: l.label }))}
+          />
+        </div>
+
+        <div className="settings-section">
+          <span className="control-label">{t("aiTextModelLabel")}</span>
+          <SegmentedControl
+            ariaLabel={t("aiTextModelLabel")}
+            value={draft.aiTextModel || ""}
+            onChange={(v) => markDirty((d) => ({ ...d, aiTextModel: v || null }))}
+            options={[
+              {
+                value: "",
+                label: t(
+                  "aiTextModelAuto",
+                  aiTextModels.models.find((m) => m.id === aiTextModels.defaultModel)?.label || aiTextModels.defaultModel
+                ),
+              },
+              ...aiTextModels.models.map((m) => ({ value: m.id, label: m.label })),
+            ]}
           />
         </div>
 

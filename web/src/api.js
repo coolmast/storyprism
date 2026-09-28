@@ -18,6 +18,7 @@ export const fetchThemeCandidates = (from, to) =>
 export const fetchThemes = () => fetch("/api/themes").then(json);
 export const fetchLanguages = () => fetch("/api/languages").then(json);
 export const fetchPdfLayouts = () => fetch("/api/pdf-layouts").then(json);
+export const fetchAiTextModels = () => fetch("/api/ai-text-models").then(json);
 export const fetchPdfPreviewHtml = (id, story) =>
   fetch(`/api/stories/${id}/pdf-preview`, {
     method: "POST",
