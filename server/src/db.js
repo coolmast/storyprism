@@ -166,3 +166,10 @@ ensureColumn("stops", "book_chapter_backdrop_hash", "TEXT");
 // the other is manually chosen.
 ensureColumn("stories", "book_cover_backdrop_hash", "TEXT");
 ensureColumn("stories", "book_cover_cards", "TEXT");
+// Same idea for the intro/outro chapter-style spreads' own backdrop photo -
+// automatically picked by default (a spot near the front/back of the trip's
+// photos), overridable to a specific photo so the user isn't stuck with a
+// pick that happens to duplicate a photo shown right next to it in the
+// regular photo grid.
+ensureColumn("stories", "intro_backdrop_hash", "TEXT");
+ensureColumn("stories", "outro_backdrop_hash", "TEXT");

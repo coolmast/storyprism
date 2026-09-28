@@ -64,7 +64,7 @@ function RolePicker({ roleKey, value, groups, stops, autoLabel, changeLabel, ope
   );
 }
 
-export default function CoverPicker({ stops, backdropHash, cardHashes, onChange }) {
+export default function CoverPicker({ stops, backdropHash, cardHashes, introBackdropHash, outroBackdropHash, hasIntro, hasOutro, onChange }) {
   const { t } = useI18n();
   const [openRole, setOpenRole] = useState(null);
   const groups = groupedPhotos(stops);
@@ -114,6 +114,40 @@ export default function CoverPicker({ stops, backdropHash, cardHashes, onChange 
             }}
           />
         ))}
+        {hasIntro && (
+          <RolePicker
+            roleKey="intro"
+            value={introBackdropHash || null}
+            groups={groups}
+            stops={stops}
+            autoLabel={t("introBackdropAuto")}
+            changeLabel={t("changeIntroBackdrop")}
+            open={openRole === "intro"}
+            onToggle={() => toggle("intro")}
+            onSelect={(hash) => {
+              onChange({ introBackdropHash: hash });
+              setOpenRole(null);
+            }}
+            onClear={() => onChange({ introBackdropHash: null })}
+          />
+        )}
+        {hasOutro && (
+          <RolePicker
+            roleKey="outro"
+            value={outroBackdropHash || null}
+            groups={groups}
+            stops={stops}
+            autoLabel={t("outroBackdropAuto")}
+            changeLabel={t("changeOutroBackdrop")}
+            open={openRole === "outro"}
+            onToggle={() => toggle("outro")}
+            onSelect={(hash) => {
+              onChange({ outroBackdropHash: hash });
+              setOpenRole(null);
+            }}
+            onClear={() => onChange({ outroBackdropHash: null })}
+          />
+        )}
       </div>
     </div>
   );

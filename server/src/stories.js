@@ -499,6 +499,8 @@ export function getStory(id) {
     bookBodyScale: story.book_body_scale ?? 1,
     bookCoverBackdropHash: story.book_cover_backdrop_hash || null,
     bookCoverCards: parseCoverCards(story.book_cover_cards),
+    introBackdropHash: story.intro_backdrop_hash || null,
+    outroBackdropHash: story.outro_backdrop_hash || null,
     createdAt: story.created_at,
     updatedAt: story.updated_at,
     stops: stops.map((s) => {
@@ -573,7 +575,7 @@ export function getStory(id) {
 }
 
 const updateStoryStmt = db.prepare(
-  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, content_language = @contentLanguage, pdf_layout_pack = @pdfLayoutPack, pdf_paper_size = @pdfPaperSize, book_product = @bookProduct, book_layout_pack = @bookLayoutPack, book_title_font = @bookTitleFont, book_body_font = @bookBodyFont, book_keep_bursts = @bookKeepBursts, book_hide_intro = @bookHideIntro, book_hide_outro = @bookHideOutro, book_title_scale = @bookTitleScale, book_body_scale = @bookBodyScale, book_cover_backdrop_hash = @bookCoverBackdropHash, book_cover_cards = @bookCoverCards, updated_at = @now WHERE id = @id"
+  "UPDATE stories SET title = @title, intro = @intro, outro = @outro, theme = @theme, content_language = @contentLanguage, pdf_layout_pack = @pdfLayoutPack, pdf_paper_size = @pdfPaperSize, book_product = @bookProduct, book_layout_pack = @bookLayoutPack, book_title_font = @bookTitleFont, book_body_font = @bookBodyFont, book_keep_bursts = @bookKeepBursts, book_hide_intro = @bookHideIntro, book_hide_outro = @bookHideOutro, book_title_scale = @bookTitleScale, book_body_scale = @bookBodyScale, book_cover_backdrop_hash = @bookCoverBackdropHash, book_cover_cards = @bookCoverCards, intro_backdrop_hash = @introBackdropHash, outro_backdrop_hash = @outroBackdropHash, updated_at = @now WHERE id = @id"
 );
 // Upsert, not a plain UPDATE: the editor can now create brand-new stops
 // client-side (splitting one stop into two, or adding a blank section) and
@@ -664,6 +666,10 @@ export function updateStory(id, data) {
       bookCoverCards: serializeCoverCards(
         data.bookCoverCards !== undefined ? data.bookCoverCards : existing.bookCoverCards
       ),
+      introBackdropHash:
+        data.introBackdropHash !== undefined ? data.introBackdropHash || null : existing.introBackdropHash,
+      outroBackdropHash:
+        data.outroBackdropHash !== undefined ? data.outroBackdropHash || null : existing.outroBackdropHash,
       now,
     });
 

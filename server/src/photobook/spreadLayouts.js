@@ -727,9 +727,19 @@ export function textBlock(frame, { title, subtitle, body = [], quote, color, acc
     // Half-line gap between paragraphs: Saal adds no paragraph spacing, so
     // small spacer paragraphs are inserted below.
     body.forEach((b, i) => (h += lines(b, s) + (i < body.length - 1 ? s * SAAL_LINE * 0.5 : 0)));
-    if (quote) h += lines(quote, s * 1.35, fonts.title) + s * SAAL_LINE * 0.5;
-    // One spare line of slack against estimate error.
-    return h + s * SAAL_LINE;
+    if (quote) h += lines(quote, s * 1.7, fonts.title) + s * SAAL_LINE * 0.5;
+    // Slack against estimate error: our own word-wrap width estimate
+    // (estimateLines/textWidth) is a JS approximation of the target font's
+    // real glyph widths, while Saal's own desktop software re-wraps this
+    // same text independently at export time using its actual font engine
+    // (`lineBreak="toFit"` in the TLF XML, saalSvg.js) - a per-line
+    // underestimate that's invisible in the browser preview (which trusts
+    // our own wrapping) can still make the real export wrap to one extra
+    // line, overflowing the panel we sized to fit. A flat one-line buffer
+    // wasn't enough for longer text, where small per-line errors compound;
+    // scaling part of the buffer with content length (not just a fixed
+    // extra line) catches that case too.
+    return h * 1.08 + s * SAAL_LINE;
   };
   while (size > 6.5 * typeScale && measure(size) > frame.h) size -= 0.5 * typeScale;
   const paragraphs = [];
@@ -743,7 +753,7 @@ export function textBlock(frame, { title, subtitle, body = [], quote, color, acc
   });
   if (quote) {
     gap();
-    para({ text: quote, role: "quote", size: size * 1.35, color: accent || color, align: "left" });
+    para({ text: quote, role: "quote", size: size * 1.7, color: accent || color, align: "left" });
   }
   return { kind: "text", frame, paragraphs, estimatedHeight: measure(size) };
 }

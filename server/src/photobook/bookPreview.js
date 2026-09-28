@@ -88,17 +88,30 @@ export function buildBookPreviewHtml(story) {
   plan.spreads.forEach((s) => {
     if (s.kind !== "photos") return;
     const list = entriesByStop.get(s.stopId) || [];
-    list[s.photoIndex] = { count: s.photoCount, layoutId: s.layoutId };
+    // layoutId only when *this spread's* layout was actually pinned - not
+    // whatever the algorithm happened to auto-pick. Otherwise the pacing
+    // +/- buttons below (which carry an entry's layoutId forward unchanged)
+    // would silently turn a pure count bump into an accidental layout pin
+    // too, capping every future "+" click at that one layout's own photo
+    // max with no visible reason why - reproduced with "hero-page" (max 5):
+    // pacing up to 5 quietly latches that layout, and pushing to 6 then
+    // gets clamped straight back down to 5 in the planner.
+    list[s.photoIndex] = { count: s.photoCount, layoutId: s.layoutPinned ? s.layoutId : null };
     entriesByStop.set(s.stopId, list);
   });
 
   const pacingControls = (s) => {
     const entries = entriesByStop.get(s.stopId) || [];
     const isLast = s.photoIndex === entries.length - 1;
+    // A genuinely pinned layout caps how far "+" can go (that layout's own
+    // photos.max) - an honest disabled state instead of a silent no-op past
+    // that point once the count-vs-layoutId fix above stops most spreads
+    // from ever having a layoutId here at all.
+    const maxForSpread = s.layoutPinned && SPREAD_LAYOUTS[s.layoutId] ? SPREAD_LAYOUTS[s.layoutId].photos.max : MAX_PHOTOS_PER_SPREAD;
     return `<span class="bp-pace" data-stop-id="${escapeHtml(s.stopId)}" data-index="${s.photoIndex}" data-entries="${escapeHtml(JSON.stringify(entries))}">
         <button type="button" data-delta="-1" title="Fewer photos on this spread (they move to the next one)"${s.photoCount <= 1 ? " disabled" : ""}>−</button>
         <b>${s.photoCount} 📷${s.pinned ? " 📌" : ""}</b>
-        <button type="button" data-delta="1" title="More photos on this spread (taken from the following ones)"${isLast || s.photoCount >= MAX_PHOTOS_PER_SPREAD ? " disabled" : ""}>+</button>
+        <button type="button" data-delta="1" title="More photos on this spread (taken from the following ones)"${isLast || s.photoCount >= maxForSpread ? " disabled" : ""}>+</button>
       </span>`;
   };
 

@@ -243,9 +243,15 @@ export function planBook(story, { product: productId, strings } = {}) {
   const coverPool = featured.length ? featured : allIncluded;
 
   // Intro spread: story title + intro text over a photo from the trip.
+  // coverPool[1] (not [0]) for the automatic pick since [0] is the photo
+  // most likely to double as the cover's own background - a manual pick
+  // (introBackdropHash) always wins over either.
   if (story.intro && story.bookHideIntro) hiddenItems.push({ label: "Intro", toggle: { target: "intro" } });
   if (story.intro && !story.bookHideIntro) {
-    const backdrop = coverPool[1] || coverPool[0] || null;
+    const manualIntroBackdrop = story.introBackdropHash
+      ? allIncluded.find((p) => p.hash === story.introBackdropHash)
+      : null;
+    const backdrop = manualIntroBackdrop || coverPool[1] || coverPool[0] || null;
     spreads.push({
       kind: "intro",
       label: "Intro",
@@ -405,11 +411,21 @@ export function planBook(story, { product: productId, strings } = {}) {
 
   if (story.outro && story.bookHideOutro) hiddenItems.push({ label: "Outro", toggle: { target: "outro" } });
   if (story.outro && !story.bookHideOutro) {
+    // The automatic pick is the *second*-to-last photo, not the very last
+    // one - the last included photo of the last stop is always the last
+    // photo shown in that stop's own photo grid too (nothing removes it
+    // from that pool), so defaulting to it here would show the same photo
+    // twice back to back, right before the outro. A manual pick
+    // (outroBackdropHash) always wins over this heuristic.
+    const manualOutroBackdrop = story.outroBackdropHash
+      ? allIncluded.find((p) => p.hash === story.outroBackdropHash)
+      : null;
+    const backdrop = manualOutroBackdrop || allIncluded.at(-2) || allIncluded.at(-1) || null;
     spreads.push({
       kind: "outro",
       label: "Outro",
       toggle: { target: "outro" },
-      ...chapterSpread(spreadSize, baseCtx, { backdrop: allIncluded.at(-1) || null, narrative: story.outro }),
+      ...chapterSpread(spreadSize, baseCtx, { backdrop, narrative: story.outro }),
       layoutId: "chapter",
     });
   }

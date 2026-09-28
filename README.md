@@ -261,12 +261,20 @@ or a real printed photobook (Saal Digital/CEWE FOTOWELT).
     story can pin the background and/or either print card to a specific
     photo instead (`story.bookCoverBackdropHash` /
     `story.bookCoverCards`, a 2-slot array where a `null` entry still lets
-    that one card auto-pick). `CoverPicker.jsx` (used from the Photobook
-    preview panel's own settings, since a story-wide choice belongs there,
-    not under any one stop) groups the story's included photos by stop so
-    the picker stays usable on a long trip, with three independent
-    role-pickers (background, print 1, print 2) reusing the same
-    toggle+grid interaction as the chapter-backdrop/hero-photo pickers.
+    that one card auto-pick). The story's intro/outro chapter-style spreads
+    get the same treatment (`story.introBackdropHash` /
+    `story.outroBackdropHash`) — the outro's automatic pick is the
+    *second*-to-last included photo, not the very last one, since the last
+    photo of the last stop always appears in that stop's own photo grid too
+    and defaulting to it would show the same photo twice back to back right
+    before the outro. `CoverPicker.jsx` (used from the Photobook preview
+    panel's own settings, since a story-wide choice belongs there, not
+    under any one stop) groups the story's included photos by stop so the
+    picker stays usable on a long trip, with up to five independent
+    role-pickers (cover background, print 1, print 2, intro, outro —
+    the last two only shown when the story actually has intro/outro text)
+    reusing the same toggle+grid interaction as the chapter-backdrop/
+    hero-photo pickers.
     `saalSvg.js` renders every spread either as Saal's
     own SVG dialect or as a browser preview from the same element list, so
     the editor's live "Photobook" preview (`bookPreview.js`) is exactly what
@@ -1009,6 +1017,49 @@ from nginx itself, not from this app). Raise it to match, e.g.
       story's preview, an editor screenshot showing the grouped picker UI
       with no console errors, and the two real stories re-rendering
       unchanged with no cover fields set.
+- [x] Fixed: pacing a photo spread's count up via "+" could silently get
+      stuck below what the user asked for, with no visible reason why.
+      Root cause - `entriesByStop` (bookPreview.js) attached a spread's
+      *automatically chosen* layoutId to its frozen entry even when the
+      user never pinned a layout, and the pacing +/- buttons carry an
+      entry's layoutId forward unchanged when bumping its count. A few
+      pacing clicks could therefore accidentally latch onto whatever layout
+      the algorithm happened to be showing at that moment (e.g. "Hero page
+      + gallery", max 5 photos) - pushing the count past that layout's own
+      cap then got silently clamped straight back down every time. Fixed
+      to only carry a layoutId forward when the spread's layout was
+      actually pinned via the layout `<select>`, and the "+" button now
+      honestly disables at a *genuinely* pinned layout's own max instead of
+      silently no-op'ing past it. Reproduced exactly (5 photos stuck, 1
+      left in the next spread, from a real user report on "Hamburg 2025")
+      with a disposable test story before and after the fix - verified the
+      real story itself was never touched, per the user's explicit request.
+- [x] Pull quotes in the printed/exported book were noticeably smaller,
+      relative to body text, than on the web view (1.35x body size vs. the
+      web view's ~1.7x) - bumped `textBlock`'s quote-size multiplier
+      (`spreadLayouts.js`) to match. Also added a proportional (not just
+      flat one-line) safety margin to the same function's text-height
+      estimate, to reduce (though - without round-tripping through Saal's
+      own proprietary desktop renderer, not fully eliminate) the risk of a
+      real Saal export wrapping text to one more line than our own
+      estimate predicted and overlapping whatever sits below it, which is
+      one plausible explanation for a reported heading/body-text overlap
+      that only showed up in the real export, not the browser preview,
+      after swapping a stop's backdrop photo (the text itself was
+      unchanged, but a new backdrop's face positions can shift which
+      candidate panel position wins, changing how tight the fit already
+      was).
+- [x] Outro backdrop was always the very last included photo across the
+      whole trip - which is *always* also the last photo already shown in
+      that stop's own regular photo grid (nothing removes it from that
+      pool), so it appeared twice, right after itself. Default now uses
+      the second-to-last photo instead. Both the intro and outro backdrop
+      can also be pinned to a specific photo (`story.introBackdropHash` /
+      `story.outroBackdropHash`), added as two more roles in
+      `CoverPicker.jsx` (shown only when the story actually has intro/
+      outro text). Verified the automatic pick no longer duplicates the
+      last photo, and that a manual pin on each applies correctly, via a
+      disposable test story.
 
 ## Notes
 

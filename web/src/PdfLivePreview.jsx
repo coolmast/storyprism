@@ -264,6 +264,10 @@ export default function PdfLivePreview({
             stops={draft.stops}
             backdropHash={draft.bookCoverBackdropHash}
             cardHashes={draft.bookCoverCards}
+            introBackdropHash={draft.introBackdropHash}
+            outroBackdropHash={draft.outroBackdropHash}
+            hasIntro={!!draft.intro && !draft.bookHideIntro}
+            hasOutro={!!draft.outro && !draft.bookHideOutro}
             onChange={onChange}
           />
           <button
