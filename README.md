@@ -8,6 +8,12 @@ or an info card) and can reorganize your own existing travel writing into
 the story, and export to a shareable single-page web view, a printable PDF,
 or a real printed photobook (Saal Digital/CEWE FOTOWELT).
 
+> **Note:** every line of code in this repository was written by Claude
+> (Anthropic's AI); no human has reviewed the code itself. The author did
+> extensively test the finished app's actual behavior end-to-end (as a
+> user, not by reading the source) before relying on it or publishing it
+> here.
+
 ## Architecture
 
 - `server/` — Node/Express API.
