@@ -14,409 +14,478 @@ or a real printed photobook (Saal Digital/CEWE FOTOWELT).
 > user, not by reading the source) before relying on it or publishing it
 > here.
 
+## Table of contents
+
+- [Architecture](#architecture)
+  - [Server (`server/`)](#server-server)
+    - ["Yearbook" mode](#yearbook-mode-serversrcphotothemesjs)
+    - ["Check for new photos"](#check-for-new-photos-serversrcstoryupdatejs)
+    - [AI assist](#ai-assist)
+    - [The story PDF](#the-story-pdf-apistoriesidexportpdf)
+    - [Photobook export (Saal Design Software / CEWE FOTOWELT)](#photobook-export-saal-design-software-cewe-fotowelt)
+    - [Other server-side features](#other-server-side-features)
+  - [Frontend (`web/`)](#frontend-web)
+- [Saal project format](#saal-project-format)
+- [CEWE project format](#cewe-project-format)
+- [Running locally](#running-locally)
+  - [Prerequisites](#prerequisites)
+  - [Setup](#setup)
+  - [Basic usage](#basic-usage)
+  - [UI smoke test](#ui-smoke-test)
+  - [Exposing the dev server through a reverse proxy](#exposing-the-dev-server-through-a-reverse-proxy)
+- [Status](#status)
+- [Notes](#notes)
+- [Acknowledgments](#acknowledgments)
+- [License](#license)
+
 ## Architecture
 
-- `server/` — Node/Express API.
-  - Talks to PhotoPrism's REST API, read-only — `server/src/photoprism.js`.
-    Only `PHOTOPRISM_BASE_URL` is required (this project's own instance runs
-    with auth off); `PHOTOPRISM_USERNAME`/`PHOTOPRISM_APP_PASSWORD` (or a
-    pre-obtained `PHOTOPRISM_API_TOKEN`) let it talk to someone else's
-    PhotoPrism that requires login instead, so the same app can be pointed
-    at a different instance per deployment purely via `.env` — see
-    `server/.env.example`. A story's source photos can come from one or
-    several manually-curated albums and/or PhotoPrism auto-generated
-    "moment" albums (country+year groupings) at once - merged and
-    deduplicated by photo UID before itinerary-clustering, since the same
-    photo can easily appear in more than one selected album/moment - or
-    from an arbitrary date range across the whole library
-    (`getPhotosByDateRange`) for a trip that doesn't fit either - crossing
-    New Year's (splits across two yearly moments) or spanning several
-    countries.
-  - **"Yearbook" mode (`server/src/photoThemes.js`)**: a fourth way to start
-    a story, for when the natural grouping for a date range (e.g. a whole
-    year) isn't one chronological trip but a mix of recurring themes - "all
-    the zoo photos," "every visit to the grandparents regardless of
-    location," one whole vacation as its own section. Creating one
-    (`createStoryFromThemePlan`) only asks for the book's overall date range
-    (and a title) - it starts out completely **empty**, with that range
-    remembered as `source_config.from`/`.to`. Every section is cherry-picked
-    afterward, one at a time, in the editor's own "Add section" panel
-    (`ThemeSectionPanel.jsx`, inside Story settings) rather than picked
-    upfront on the creation page - seeing the book actually fill in section
-    by section (and being able to stop whenever it's enough) works better
-    than committing to a whole plan before seeing any of it. Each click on a
-    suggested chip, a hand-typed date sub-range, or a custom search calls
-    `POST /api/stories/:id/theme-sections`, which appends that one theme to
-    `source_config.themes` and reconciles the story against the new (one
-    theme longer) list right away - `addThemeToStory` in
-    `server/src/storyUpdate.js`, sharing the exact same `reconcileThemePlan`
-    machinery "check for new photos" uses (see below), just called with a
-    longer `themes` list instead of the stored one unchanged.
-    The panel suggests candidates from data PhotoPrism already computes for
-    free: content themes from its Labels ("Zoo", "Dining", "Camping", ...;
-    `all=true` is required to see location-derived ones like "Zoo" at all -
-    PhotoPrism's default listing hides negative-priority labels), person
-    themes from its named Subjects (face recognition - works regardless of
-    where/when a photo was taken), and trip themes from a home-distance-based
-    clustering (most common rough location = "home"; contiguous-in-time
-    photos far from it = a trip) that's independent of the regular per-stop
-    itinerary clustering. A trip cluster's title (`tripTitle`) prefers its
-    single most-photographed city, but falls back to the cluster's dominant
-    *country* (`Intl.DisplayNames`) once no city reaches a real majority - a
-    multi-town trip (a road trip, island-hopping) can have one country
-    clearly dominate even though no single city does, and titling by raw
-    per-city count alone crowns whichever place got the most photos, which is
-    easily a transit stop rather than the destination (a three-week Italy
-    trip through dozens of towns, that also passed through one Danish ferry
-    port, got titled after the ferry port - its own concentrated photo
-    burst outnumbered any single Italian town's, even though nearly the
-    whole trip was in Italy).
-    Alongside the suggested candidates, the panel offers two more ways to add
-    a section no suggestion covers: a hand-defined custom date sub-range
-    (e.g. "3 days around a birthday in March" - not detected, just a title +
-    from/to date typed in, handled identically to a detected trip theme end
-    to end, same `type: "trip"` shape and date-range photo lookup, the only
-    difference is where the from/to came from), and a free-text PhotoPrism
-    search (`type: "query"`, e.g. `person:Alex person:Sam`, or any other
-    tag/filter combination PhotoPrism's own search syntax accepts - see
-    `getPhotosByQuery` in `photoprism.js`) for a person combination or tag
-    that never made it into the suggestions. Candidate discovery only ever
-    asks PhotoPrism "does this candidate clear N photos" (`count=N` + the
-    `X-Count` response header, which reports how many rows a request
-    actually returned, not an independent total - so getting a true "at
-    least N" signal means requesting exactly N) rather than fetching full
-    photo data for every candidate; a candidate already added to the story
-    is filtered out of the panel's suggestions so it can't be added twice.
-    A theme's own section is capped at `MAX_THEME_STOP_PHOTOS` (120, evenly
-    sampled across the theme's date span) - a popular label or a long trip
-    can otherwise match hundreds of photos, and Saal export sends a book's
-    entire draft in one request, so an uncapped section risked tripping a
-    reverse proxy's request-size limit (see "Exposing the dev server
-    through a reverse proxy" below). The overflow isn't dropped, just not
-    under that one heading: a photo can also end up in more than one added
-    theme (duplicated on purpose - e.g. a beach photo during a vacation can
-    be both the trip and a "Beach" theme), and since a cherry-picked book has
-    no automatic catch-all otherwise, the panel's own "Add remaining photos"
-    button explicitly adds one - a `{type: "leftover"}` pseudo-theme that
-    tells `planThemeStops` to also compute the chronological tail (whatever
-    no *added* theme has claimed), grouped one section per calendar month
-    (`groupLeftoverByMonth` in `stories.js`) rather than the regular flow's
-    finer-grained `buildItinerary` clustering, which is tuned for telling
-    apart the legs of one trip, not for a whole year - applied across a full
-    year of an active family's everyday photos it turned every separate
-    outing in the same home city into its own stop (100+ for one real
-    range). Unlike the theme-stop cap, this leftover tail is never capped -
-    there's no further fallback tier for an overflowing month to land in, so
-    capping it would silently drop photos instead of just moving them.
-    `getPhotosByDateRange` (and every other photo listing call) pages
-    through PhotoPrism's results (`fetchAllPages`) rather than fetching a
-    single fixed-size page - PhotoPrism's `count` is a hard per-request
-    ceiling it silently truncates to with no error, which one real yearbook
-    query surfaced concretely: a busy year has more than 3,000 photos, so
-    "oldest 3,000" stopped in April even though a whole-year range had been
-    selected, and a trip actually in the truncated tail (each added theme's
-    own date span - a spring trip to Italy, in the same real example) never
-    appeared as a candidate at all. A story created under the old "pick
-    everything upfront" model still works unchanged (view/edit/export/"check
-    for new photos"), and also gains the new "Add section" panel as a bonus,
-    since it already has `source_type: "theme_plan"` and a non-empty
-    `source_config.themes`.
-  - **The browser never talks to PhotoPrism directly.** Every photo URL this
-    app hands out (`thumbUrl`/`fullUrl` on a story's photos, info-card hero
-    photos, ...) is a path on this server, `/api/photo/t/:hash/:size` or
-    `/api/photo/dl/:hash`, which fetches the bytes from PhotoPrism itself
-    (authenticated the same way as everything else) and streams them back -
-    `photoprism.js`'s `fetchThumbBuffer`/`fetchOriginalBuffer`, routed in
-    `index.js`. This is what makes exposing this app itself at a public
-    domain work while PhotoPrism stays LAN-only, as it should. Code that
-    needs actual photo bytes server-side (the Saal photobook export, AI
-    captioning, face/object detection) calls those fetch functions directly
-    rather than requesting its own proxy URL over HTTP.
-  - Clusters photos into itinerary "stops" by time/distance gaps —
-    `server/src/itinerary.js`.
-  - Stores stories (per-stop headings, narrative, pull quotes, per-photo
-    captions/order/include/feature flags) in SQLite — `server/src/db.js`,
-    `server/src/stories.js`.
-  - **"Check for new photos"** (`server/src/storyUpdate.js`): re-runs the
-    query that created a story - the album UID(s), date range, or theme plan
-    are persisted at creation as `source_type`/`source_config` specifically
-    for this - and merges in whatever now matches PhotoPrism but didn't
-    before, almost always photos imported after the story was started but
-    still within the same trip's window. Additive only (a photo that no
-    longer matches, e.g. removed from an album, is left exactly where it
-    is; a photo the user excluded via the include toggle is still "known,"
-    so it's never silently re-included), and a stop is only ever touched if
-    a new photo actually belongs in it - re-clustering the whole photo set
-    from scratch the way creation does would scramble the mapping to
-    already-written narrative/heading edits on every *other* stop. A
-    chronological story (albums/date range) matches a new photo to an
-    existing stop by its taken-at falling inside that stop's
-    `[startedAt, endedAt]`; anything left over is clustered on its own
-    (`buildItinerary`, the same function creation uses) and spliced in as
-    new stops at the right chronological position. A "Nach Themen" story
-    matches by `theme_id` instead - a column set on each stop at creation
-    time to the id of the theme (or `leftover-YYYY-MM` bucket) that
-    produced it - so re-running the exact same theme plan and matching by
-    that id gives an equivalent "append new photos to a matched stop,
-    insert a stop for a theme that just cleared the photo threshold"
-    result. A brand-new stop gets the same curated (not-everything-included)
-    pre-selection a freshly-created story's own stops get
-    (`curatedIncluded`); a few new photos landing in an *existing* stop are
-    simply included, a smaller and different event. Stories from before
-    this shipped have an empty `source_type` and just don't get the button.
-    The matching/reconciliation logic for a "Nach Themen" story
-    (`reconcileThemePlan`) is factored out specifically so the editor's "Add
-    section" panel (see "Yearbook" mode above) can call the exact same code
-    with one theme appended to the list, instead of duplicating it.
-  - AI assist behind a provider interface (`server/src/ai/`); OpenAI is
-    wired up (vision captioning, web-search-backed place research, and a
-    ghostwriter interview - see below). Which model writes every *prose*
-    call (captions, interview replies, ghostwriter drafts, notes-import
-    rewriting) is a per-story setting (`story.aiTextModel`, "Story
-    settings" modal) - "Basic" (fastest/cheapest), "Balanced" (the
-    default), or "Most advanced", all vision-capable and none needing tool
-    use, so any is safe for any of these calls; `NULL` means "whatever the
-    server's own current default is" (`DEFAULT_AI_TEXT_MODEL` in
-    `openaiProvider.js`), so an existing story never gets stuck on an
-    older default after that changes. Web-search-backed place research
-    (facts, not prose style) stays on its own fixed model instead, since
-    not every model supports the Responses API's `web_search` tool and
-    getting facts right matters more there than matching writing style to
-    taste.
-  - Visual identity is themeable (`server/src/themes.js`) — 4 presets
-    (palette + font pairing + hero mood + a matching map basemap), selected
-    per story and applied as CSS variables + a Google Fonts import at
-    render time. Both the web view and the deck read from this one place.
-  - Renders a story to a standalone HTML page (`server/src/render.js`,
-    served at `/story/:id`) — a CSS-columns masonry gallery (real aspect
-    ratios, not cropped squares) with a PhotoSwipe lightbox, an optional
-    full-width "featured" photo per stop, and an optional pull quote. The
-    per-mosaic shuffle-layout button only appears with `?preview=1` on the
-    URL (what the editor's own "View story" link uses) - the plain
-    `/story/:id` link, which is what you'd actually hand to family, is a
-    finished, static page with no layout controls on it. The editor has
-    its own "Copy share link" button so that link is one click away
-    without needing to manually strip the query param off the preview URL.
-  - **The story PDF (`/api/stories/:id/export/pdf`) is a real print-design
-    system, not a screenshot of the web view**, modeled on a hand-made
-    square photobook. Photo placement is **aspect-ratio aware**
-    (`server/src/pdfLayoutEngine.js`): a "guillotine" collage enumerates
-    every way to split a page's photos side by side / stacked (in story
-    order) and picks the arrangement whose combined aspect ratio best
-    matches the page, so each photo is shown at its own proportions instead
-    of being cropped into a fixed grid cell; a card layout places 1-3
-    shadowed "prints" at native aspect over a full-bleed background photo.
-    Page templates (`server/src/pdfTemplates.js`) build on that: background
-    + photo cards, mosaic on a blurred backdrop, scattered prints on paper,
-    clean gallery grid, dense edge-to-edge mosaic, 2/3 photos + caption,
-    adaptive single photo (full-bleed if the shape fits the page, otherwise
-    whole photo on a blurred copy of itself), cover collage, opening page
-    with a translucent text band, text/chapter page and info-card page.
-    Each template has a `fit(photos, pageShape)` score; the planner
-    (`server/src/pdfPlanner.js`) chooses template *and* photo count page by
-    page from those scores, weighted by the chosen layout pack
-    (`server/src/pdfLayoutPacks.js`: Photobook, Classic, Gallery/airy,
-    Mosaic/dense — each with its own cover, stop opening, template mix and
-    title font; Photobook uses a handwritten font), with variety penalties
-    so the same look doesn't repeat. A per-stop manual override pins one
-    template. Paper sizes (`server/src/pdfPaperSizes.js`: A4 portrait/
-    landscape, US Letter, 21 cm square, 30 cm square) set a real `@page`
-    size and the page box; type is in `rem` scaled to the page.
-    `server/src/pdfDocument.js` builds the document for the PDF export
-    (`server/src/pdf.js`, headless Chrome, `preferCSSPageSize: true`), the
-    standalone `GET /story/:id/pdf-preview` and the editor's **live PDF
-    preview** (`POST /api/stories/:id/pdf-preview` renders the *unsaved*
-    draft; `web/src/PdfLivePreview.jsx` shows it in a side drawer / full
-    screen on a phone, re-rendering ~0.5 s after any edit, with pack/paper
-    switches and per-stop layout pickers right inside the preview). Its own
-    "⬇ Download PDF" button (`POST /api/stories/:id/export/pdf`, same draft
-    body as the preview) downloads exactly what that preview is showing, the
-    same way the Photobook tab's own export button already worked - the
-    plain `GET` route (used by the Share & Export menu's link) still exists
-    too, for a quick download of the last *saved* version without opening
-    the live preview at all.
-  - **Photobook → Saal Design Software** (`server/src/photobook/`): the
-    story is planned as a lay-flat *spread* book (`bookPlanner.js`) — cover,
-    optional intro, per stop a chapter opener (photo across the spread, story
-    on a translucent panel) or a title on the first photo spread, photo
-    spreads, info-card spreads, outro, blank padding to the product minimum.
-    Spread layouts (`spreadLayouts.js`: background + photo cards, two page
-    backgrounds + cards, mosaic on both pages, hero page + gallery, scattered
-    prints, full-spread panorama) are chosen per spread *and* per photo count
-    by scoring the actual photo shapes, reusing the aspect-true geometry of
-    `pdfLayoutEngine.js` — which spread layout wins for a given photo count
-    is a weighted competition, and the weights are the book's **layout pack**
-    (`bookLayoutPacks.js`; same 4 named packs and ids as the PDF export's own
-    `pdfLayoutPacks.js`, but as a weight table over *this* pipeline's spread
-    templates rather than a port of the PDF pack's page templates — the two
-    pipelines plan different canvases, a lay-flat/glued spread with a fold
-    vs. a single printed page, and reusing the existing content-aware
-    templates needed no writer changes at all, since `saalSvg.js`/
-    `ceweExport.js` only ever read a spread's plain element list, never which
-    template produced it). A per-stop layout pin (`bookLayoutOverride`) still
-    overrides the pack for that one stop; independently, any individual photo
-    spread can also pin its own layout and/or photo count
-    (`stop.bookSpreadCounts[i]`, an array positionally aligned to that stop's
-    photo spreads — a legacy plain integer still just pins a count, a
-    `{count?, layoutId?}` object can pin either or both) right from the live
-    preview's own per-spread controls (pacing +/− plus a layout `<select>`
-    next to it, defaulting to "Automatic"), so a book can mix "auto for most
-    of the trip, but this one spread should always be the panorama" without
-    a story-wide pack change. A chapter opener's full-bleed backdrop photo is
-    normally the automatically best-scoring one (`backdropScore`), but a stop
-    can pin a specific photo instead (`stop.bookChapterBackdropHash`, picked
-    from a small photo grid in the editor, same interaction as an info card's
-    hero-photo picker below). A manual pick also earns that stop a full
-    chapter-opener spread even with no narrative/pull quote text at all —
-    picking a specific backdrop is itself a strong enough signal the user
-    wants the "photo behind a heading" treatment, not the plain
-    title-over-first-photo-grid fallback a textless stop otherwise gets.
-    The cover is a separate concern: one continuous wraparound canvas
-    (back cover · spine · front cover) built from photos across *every*
-    stop, not just one — normally the best-scoring `featured` photo (or, if
-    no stop has one, the best-scoring photo overall) as the full-bleed
-    background plus two more as tilted "print" cards on the front, but the
-    story can pin the background and/or either print card to a specific
-    photo instead (`story.bookCoverBackdropHash` /
-    `story.bookCoverCards`, a 2-slot array where a `null` entry still lets
-    that one card auto-pick). The story's intro/outro chapter-style spreads
-    get the same treatment (`story.introBackdropHash` /
-    `story.outroBackdropHash`) — the outro's automatic pick is the
-    *second*-to-last included photo, not the very last one, since the last
-    photo of the last stop always appears in that stop's own photo grid too
-    and defaulting to it would show the same photo twice back to back right
-    before the outro. `CoverPicker.jsx` (used from the Photobook preview
-    panel's own settings, since a story-wide choice belongs there, not
-    under any one stop) groups the story's included photos by stop so the
-    picker stays usable on a long trip, with up to five independent
-    role-pickers (cover background, print 1, print 2, intro, outro —
-    the last two only shown when the story actually has intro/outro text)
-    reusing the same toggle+grid interaction as the chapter-backdrop/
-    hero-photo pickers.
-    `saalSvg.js` renders every spread either as Saal's
-    own SVG dialect or as a browser preview from the same element list, so
-    the editor's live "Photobook" preview (`bookPreview.js`) is exactly what
-    gets exported. Export jobs (`bookExport.js`) plan the book once and hand
-    it to the chosen product's vendor writer; `exportShared.js` fetches
-    originals from PhotoPrism, auto-orients and downscales them (backgrounds
-    ≤ 6000 px, prints ≤ 3400 px, HEIC falls back to the 2048 px JPEG).
-    `saalExport.js` writes `project.xml` + SVGs and streams a `.sswprm`
-    (`sswContainer.js`); `ceweExport.js` writes the same planned spreads as a
-    CEWE FOTOWELT `.mcfx`. Products (`products.js`): Saal 28×28 square, A4
-    portrait, A4 landscape; CEWE Groß Hardcover (A4 portrait), Groß Panorama
-    Hardcover (A4 landscape), XL Hardcover (29×29 square). See "Saal project
-    format" and "CEWE project format" below. A photo's caption is off by
-    default in the photobook - a per-photo toggle (`book_show_caption`,
-    `IncludedPhotoGrid.jsx`) turns it on, rendered as a small translucent
-    strip along the bottom of wherever that photo actually lands
-    (`captionOverlaysFor` in `spreadLayouts.js`, applied once centrally
-    rather than to every individual spread layout, so it works the same
-    whether the photo ends up in a regular grid, a chapter's floating card,
-    or a route map's own gallery). Sized off the book's own `typeScale`
-    (like every other text size in this pipeline), not the photo's frame,
-    so a caption reads at a consistent size across the book regardless of
-    which layout the photo happened to land in; skipped for a full-bleed
-    backdrop (that's not "captioning a specific photo") and for a frame too
-    small to hold it legibly.
-  - A stop can carry route/activity embeds (Strava, Komoot, Garmin Connect)
-    — `server/src/embeds.js` allowlists hosts and decides iframe vs. a
-    link-out card, stored in the `stop_embeds` table.
-  - Long-form travel notes (pasted, or a blog URL fetched and extracted via
-    `server/src/article.js`'s Readability-based parser) can be handed to
-    the AI, which reads all the story's stops and segments/rewrites the
-    notes across the right ones (`organizeNotesIntoStory` in
-    `server/src/ai/openaiProvider.js`).
-  - Each stop can carry optional, AI-suggested "info cards" (place name,
-    subtitle, a short summary, and a handful of facts) — candidates come
-    from PhotoPrism's own `PlaceLabel`s and auto-generated photo titles
-    (`server/src/places.js`, zero extra API calls), or the user can name
-    any place manually. Generating one is a web-search-backed AI call
-    (`generateInfoCard`) that freely picks whatever facts actually fit the
-    place (a national park gets area/flora, a museum gets founded
-    year/collection) rather than a fixed schema per place type. Each card
-    also has a free placement (`photoPosition`, 0–1 — how far through the
-    stop's own photo spreads it lands, shown in `InfoCards.jsx` as a slider
-    with Start/Middle/End presets rather than a fixed three-way choice, so a
-    card in a long section can sit at, say, roughly the first third instead
-    of only ever right after the heading, mid-way, or at the very end; the
-    planner rounds it to the nearest photo-spread boundary since a card's own
-    spread is a discrete page, not a fraction of one) and an optional
-    `heroPhotoHash`, picked from the
-    stop's photos that matched the same place name/label used to generate
-    the card (`getMatchingPhotosForPlace` in `stories.js`, reusing the
-    exact place-matching logic from suggestion detection). It also tries
-    to find the place's own official website (via the same web search),
-    shown as a small icon-only external link next to the place name —
-    validated as URL-shaped both when the AI returns it and again on
-    save, since it's the one AI-generated field that becomes a clickable
-    link. Every field on a generated card — place name, subtitle,
-    summary, each fact's label/value, the website URL — is editable
-    afterward in `InfoCards.jsx`, not just placement/hero-photo/removal:
-    an AI card with one wrong detail should be a quick fix, not a reason
-    to regenerate or delete the whole thing. A website URL typed without
-    `https://` gets it added automatically on save rather than being
-    silently dropped by the same validation that protects against a bad
-    link.
-  - Internationalization is two independent settings
-    (`server/src/i18n.js`): the story's `contentLanguage` (English/German/
-    Danish so far) drives everything AI-generated — captions, research,
-    interview replies, info cards, notes-import — via a `language` param
-    threaded through every provider call, plus the static chrome baked into
-    the rendered output itself (dates, the shuffle button, the footer,
-    PDF page-number label). It's stored per story and applied at render
-    time in `render.js`/`pdf.js`, entirely separate from the UI's own
-    display language.
-- `web/` — React (Vite) frontend: album picker + map (M1), story list +
-  editor (M2/M3) with a theme/content-language/PDF-layout picker (now
-  behind a "Story settings" modal, not inline - see below), drag-to-reorder
-  photo grid *and* drag-to-reorder sections themselves (same sortablejs
-  pattern, a dedicated `.stop-drag-handle` per section so dragging doesn't
-  fight the section's own inputs/buttons), featured-photo/pull-quote
-  controls, a per-stop AI interview panel (`InterviewPanel.jsx`), a
-  per-stop route-embed manager (`RouteEmbeds.jsx`), a per-stop info-card
-  manager (`InfoCards.jsx`,
-  including the placement selector and hero-photo picker), and a
-  story-level notes-import panel (`NotesImportPanel.jsx`), links out to
-  view/present/PDF export (M4).
-  - UI language is a separate concern from the story's content language:
-    `web/src/i18n.jsx` is a small dictionary + React context
-    (`LanguageProvider`/`useI18n`) covering every UI string, persisted to
-    `localStorage` and defaulting from `navigator.language` when it
-    matches a supported code. The content-language picker lives in the
-    editor's "Story settings" modal and is per-story, so (per the original
-    ask) the UI can be in English while a story's AI text and exported
-    output come out in German.
-  - Design tokens + dark mode (`web/src/theme.css`): every color/radius/
-    shadow this app's own UI uses (not the exported story/deck/PDF output,
-    which has its own separate `server/src/themes.js` system) is a CSS
-    custom property. Dark mode follows `prefers-color-scheme` by default,
-    with a manual System/Light/Dark override (`ThemeToggle.jsx`, a
-    `data-theme` attribute on `<html>`, `localStorage`, applied
-    synchronously in `index.html` before the stylesheet loads so there's
-    no flash of the wrong theme).
-  - App shell (`App.jsx`/`App.css`): a fixed sidebar (branding + nav) and
-    sticky topbar on desktop, collapsing below 860px into a bottom tab bar
-    with the topbar gaining a back button on routes with a parent (the
-    editor, back to the library) - one breakpoint for the whole shell.
-  - Shared component kit (`web/src/ui/`): Card, StatusPill, Chip,
-    SegmentedControl, Toggle, ProgressBar, Modal (native `<dialog>`,
-    bottom sheet on mobile / centered on desktop), Toast (+
-    `ToastProvider`/`useToast`, `aria-live`), Skeleton, EmptyState,
-    ErrorState - used to move rarely-changed settings (theme, content
-    language, PDF layout pack/paper size) and export actions (view,
-    share link, present, download PDF/slides) out of the editor's
-    always-visible toolbar into "Story settings" and "Share & Export"
-    modals, and to replace native `confirm()` dialogs (deleting a story,
-    removing a section) and ad hoc inline feedback (a toolbar button
-    relabeling itself for 2 seconds after copying a link) with Modal/Toast.
-  - The New Story album picker groups albums by year (newest first,
-    collapsed except the most recent year) rather than one flat
-    alphabetical list of every album/PhotoPrism "moment" at once -
-    `AlbumList.jsx`. PhotoPrism only fills in `Year` for its own
-    auto-generated "moment" albums, so manually-curated albums fall back
-    to a year-shaped substring in the title (matches this library's
-    "`<Place> <Year>`" naming almost everywhere); anything with neither
-    lands in a trailing "No date" group instead of being dropped.
+### Server (`server/`)
+
+Node/Express API.
+
+- Talks to PhotoPrism's REST API, read-only — `server/src/photoprism.js`.
+  Only `PHOTOPRISM_BASE_URL` is required (this project's own instance runs
+  with auth off); `PHOTOPRISM_USERNAME`/`PHOTOPRISM_APP_PASSWORD` (or a
+  pre-obtained `PHOTOPRISM_API_TOKEN`) let it talk to someone else's
+  PhotoPrism that requires login instead, so the same app can be pointed
+  at a different instance per deployment purely via `.env` — see
+  `server/.env.example`.
+
+  A story's source photos can come from one or several manually-curated
+  albums and/or PhotoPrism auto-generated "moment" albums (country+year
+  groupings) at once - merged and deduplicated by photo UID before
+  itinerary-clustering, since the same photo can easily appear in more
+  than one selected album/moment - or from an arbitrary date range across
+  the whole library (`getPhotosByDateRange`) for a trip that doesn't fit
+  either - crossing New Year's (splits across two yearly moments) or
+  spanning several countries.
+
+- **The browser never talks to PhotoPrism directly.** Every photo URL
+  this app hands out (`thumbUrl`/`fullUrl` on a story's photos, info-card
+  hero photos, ...) is a path on this server, `/api/photo/t/:hash/:size`
+  or `/api/photo/dl/:hash`, which fetches the bytes from PhotoPrism itself
+  (authenticated the same way as everything else) and streams them back -
+  `photoprism.js`'s `fetchThumbBuffer`/`fetchOriginalBuffer`, routed in
+  `index.js`. This is what makes exposing this app itself at a public
+  domain work while PhotoPrism stays LAN-only, as it should. Code that
+  needs actual photo bytes server-side (the Saal photobook export, AI
+  captioning, face/object detection) calls those fetch functions directly
+  rather than requesting its own proxy URL over HTTP.
+- Clusters photos into itinerary "stops" by time/distance gaps —
+  `server/src/itinerary.js`.
+- Stores stories (per-stop headings, narrative, pull quotes, per-photo
+  captions/order/include/feature flags) in SQLite — `server/src/db.js`,
+  `server/src/stories.js`.
+
+#### "Yearbook" mode (`server/src/photoThemes.js`)
+
+A fourth way to start a story, for when the natural grouping for a date
+range (e.g. a whole year) isn't one chronological trip but a mix of
+recurring themes - "all the zoo photos," "every visit to the grandparents
+regardless of location," one whole vacation as its own section.
+
+Creating one (`createStoryFromThemePlan`) only asks for the book's overall
+date range (and a title) - it starts out completely **empty**, with that
+range remembered as `source_config.from`/`.to`. Every section is
+cherry-picked afterward, one at a time, in the editor's own "Add section"
+panel (`ThemeSectionPanel.jsx`, inside Story settings) rather than picked
+upfront on the creation page - seeing the book actually fill in section by
+section (and being able to stop whenever it's enough) works better than
+committing to a whole plan before seeing any of it. Each click on a
+suggested chip, a hand-typed date sub-range, or a custom search calls
+`POST /api/stories/:id/theme-sections`, which appends that one theme to
+`source_config.themes` and reconciles the story against the new (one
+theme longer) list right away - `addThemeToStory` in
+`server/src/storyUpdate.js`, sharing the exact same `reconcileThemePlan`
+machinery "check for new photos" uses (see below), just called with a
+longer `themes` list instead of the stored one unchanged.
+
+The panel suggests candidates from data PhotoPrism already computes for
+free: content themes from its Labels ("Zoo", "Dining", "Camping", ...;
+`all=true` is required to see location-derived ones like "Zoo" at all -
+PhotoPrism's default listing hides negative-priority labels), person
+themes from its named Subjects (face recognition - works regardless of
+where/when a photo was taken), and trip themes from a home-distance-based
+clustering (most common rough location = "home"; contiguous-in-time
+photos far from it = a trip) that's independent of the regular per-stop
+itinerary clustering. A trip cluster's title (`tripTitle`) prefers its
+single most-photographed city, but falls back to the cluster's dominant
+*country* (`Intl.DisplayNames`) once no city reaches a real majority - a
+multi-town trip (a road trip, island-hopping) can have one country
+clearly dominate even though no single city does, and titling by raw
+per-city count alone crowns whichever place got the most photos, which is
+easily a transit stop rather than the destination (a three-week Italy
+trip through dozens of towns, that also passed through one Danish ferry
+port, got titled after the ferry port - its own concentrated photo burst
+outnumbered any single Italian town's, even though nearly the whole trip
+was in Italy).
+
+Alongside the suggested candidates, the panel offers two more ways to add
+a section no suggestion covers: a hand-defined custom date sub-range (e.g.
+"3 days around a birthday in March" - not detected, just a title +
+from/to date typed in, handled identically to a detected trip theme end
+to end, same `type: "trip"` shape and date-range photo lookup, the only
+difference is where the from/to came from), and a free-text PhotoPrism
+search (`type: "query"`, e.g. `person:Alex person:Sam`, or any other
+tag/filter combination PhotoPrism's own search syntax accepts - see
+`getPhotosByQuery` in `photoprism.js`) for a person combination or tag
+that never made it into the suggestions. Candidate discovery only ever
+asks PhotoPrism "does this candidate clear N photos" (`count=N` + the
+`X-Count` response header, which reports how many rows a request
+actually returned, not an independent total - so getting a true "at least
+N" signal means requesting exactly N) rather than fetching full photo
+data for every candidate; a candidate already added to the story is
+filtered out of the panel's suggestions so it can't be added twice.
+
+A theme's own section is capped at `MAX_THEME_STOP_PHOTOS` (120, evenly
+sampled across the theme's date span) - a popular label or a long trip can
+otherwise match hundreds of photos, and Saal export sends a book's entire
+draft in one request, so an uncapped section risked tripping a reverse
+proxy's request-size limit (see "Exposing the dev server through a
+reverse proxy" below). The overflow isn't dropped, just not under that one
+heading: a photo can also end up in more than one added theme (duplicated
+on purpose - e.g. a beach photo during a vacation can be both the trip and
+a "Beach" theme), and since a cherry-picked book has no automatic
+catch-all otherwise, the panel's own "Add remaining photos" button
+explicitly adds one - a `{type: "leftover"}` pseudo-theme that tells
+`planThemeStops` to also compute the chronological tail (whatever no
+*added* theme has claimed), grouped one section per calendar month
+(`groupLeftoverByMonth` in `stories.js`) rather than the regular flow's
+finer-grained `buildItinerary` clustering, which is tuned for telling
+apart the legs of one trip, not for a whole year - applied across a full
+year of an active family's everyday photos it turned every separate
+outing in the same home city into its own stop (100+ for one real range).
+Unlike the theme-stop cap, this leftover tail is never capped - there's no
+further fallback tier for an overflowing month to land in, so capping it
+would silently drop photos instead of just moving them.
+
+`getPhotosByDateRange` (and every other photo listing call) pages through
+PhotoPrism's results (`fetchAllPages`) rather than fetching a single
+fixed-size page - PhotoPrism's `count` is a hard per-request ceiling it
+silently truncates to with no error, which one real yearbook query
+surfaced concretely: a busy year has more than 3,000 photos, so "oldest
+3,000" stopped in April even though a whole-year range had been selected,
+and a trip actually in the truncated tail (each added theme's own date
+span - a spring trip to Italy, in the same real example) never appeared
+as a candidate at all.
+
+A story created under the old "pick everything upfront" model still works
+unchanged (view/edit/export/"check for new photos"), and also gains the
+new "Add section" panel as a bonus, since it already has
+`source_type: "theme_plan"` and a non-empty `source_config.themes`.
+
+#### "Check for new photos" (`server/src/storyUpdate.js`)
+
+Re-runs the query that created a story - the album UID(s), date range, or
+theme plan are persisted at creation as `source_type`/`source_config`
+specifically for this - and merges in whatever now matches PhotoPrism but
+didn't before, almost always photos imported after the story was started
+but still within the same trip's window.
+
+Additive only (a photo that no longer matches, e.g. removed from an
+album, is left exactly where it is; a photo the user excluded via the
+include toggle is still "known," so it's never silently re-included), and
+a stop is only ever touched if a new photo actually belongs in it -
+re-clustering the whole photo set from scratch the way creation does
+would scramble the mapping to already-written narrative/heading edits on
+every *other* stop.
+
+A chronological story (albums/date range) matches a new photo to an
+existing stop by its taken-at falling inside that stop's
+`[startedAt, endedAt]`; anything left over is clustered on its own
+(`buildItinerary`, the same function creation uses) and spliced in as new
+stops at the right chronological position. A "Nach Themen" story matches
+by `theme_id` instead - a column set on each stop at creation time to the
+id of the theme (or `leftover-YYYY-MM` bucket) that produced it - so
+re-running the exact same theme plan and matching by that id gives an
+equivalent "append new photos to a matched stop, insert a stop for a
+theme that just cleared the photo threshold" result. A brand-new stop
+gets the same curated (not-everything-included) pre-selection a
+freshly-created story's own stops get (`curatedIncluded`); a few new
+photos landing in an *existing* stop are simply included, a smaller and
+different event. Stories from before this shipped have an empty
+`source_type` and just don't get the button.
+
+The matching/reconciliation logic for a "Nach Themen" story
+(`reconcileThemePlan`) is factored out specifically so the editor's "Add
+section" panel (see "Yearbook" mode above) can call the exact same code
+with one theme appended to the list, instead of duplicating it.
+
+#### AI assist
+
+Behind a provider interface (`server/src/ai/`); OpenAI is wired up
+(vision captioning, web-search-backed place research, and a ghostwriter
+interview - see below).
+
+Which model writes every *prose* call (captions, interview replies,
+ghostwriter drafts, notes-import rewriting) is a per-story setting
+(`story.aiTextModel`, "Story settings" modal) - "Basic" (fastest/
+cheapest), "Balanced" (the default), or "Most advanced", all
+vision-capable and none needing tool use, so any is safe for any of these
+calls; `NULL` means "whatever the server's own current default is"
+(`DEFAULT_AI_TEXT_MODEL` in `openaiProvider.js`), so an existing story
+never gets stuck on an older default after that changes. Web-search-backed
+place research (facts, not prose style) stays on its own fixed model
+instead, since not every model supports the Responses API's `web_search`
+tool and getting facts right matters more there than matching writing
+style to taste.
+
+- Visual identity is themeable (`server/src/themes.js`) — 4 presets
+  (palette + font pairing + hero mood + a matching map basemap), selected
+  per story and applied as CSS variables + a Google Fonts import at
+  render time. Both the web view and the deck read from this one place.
+- Renders a story to a standalone HTML page (`server/src/render.js`,
+  served at `/story/:id`) — a CSS-columns masonry gallery (real aspect
+  ratios, not cropped squares) with a PhotoSwipe lightbox, an optional
+  full-width "featured" photo per stop, and an optional pull quote. The
+  per-mosaic shuffle-layout button only appears with `?preview=1` on the
+  URL (what the editor's own "View story" link uses) - the plain
+  `/story/:id` link, which is what you'd actually hand to family, is a
+  finished, static page with no layout controls on it. The editor has its
+  own "Copy share link" button so that link is one click away without
+  needing to manually strip the query param off the preview URL.
+
+#### The story PDF (`/api/stories/:id/export/pdf`)
+
+A real print-design system, not a screenshot of the web view, modeled on
+a hand-made square photobook.
+
+Photo placement is **aspect-ratio aware** (`server/src/pdfLayoutEngine.js`):
+a "guillotine" collage enumerates every way to split a page's photos side
+by side / stacked (in story order) and picks the arrangement whose
+combined aspect ratio best matches the page, so each photo is shown at
+its own proportions instead of being cropped into a fixed grid cell; a
+card layout places 1-3 shadowed "prints" at native aspect over a
+full-bleed background photo.
+
+Page templates (`server/src/pdfTemplates.js`) build on that: background +
+photo cards, mosaic on a blurred backdrop, scattered prints on paper,
+clean gallery grid, dense edge-to-edge mosaic, 2/3 photos + caption,
+adaptive single photo (full-bleed if the shape fits the page, otherwise
+whole photo on a blurred copy of itself), cover collage, opening page
+with a translucent text band, text/chapter page and info-card page. Each
+template has a `fit(photos, pageShape)` score; the planner
+(`server/src/pdfPlanner.js`) chooses template *and* photo count page by
+page from those scores, weighted by the chosen layout pack
+(`server/src/pdfLayoutPacks.js`: Photobook, Classic, Gallery/airy,
+Mosaic/dense — each with its own cover, stop opening, template mix and
+title font; Photobook uses a handwritten font), with variety penalties so
+the same look doesn't repeat. A per-stop manual override pins one
+template.
+
+Paper sizes (`server/src/pdfPaperSizes.js`: A4 portrait/landscape, US
+Letter, 21 cm square, 30 cm square) set a real `@page` size and the page
+box; type is in `rem` scaled to the page. `server/src/pdfDocument.js`
+builds the document for the PDF export (`server/src/pdf.js`, headless
+Chrome, `preferCSSPageSize: true`), the standalone `GET
+/story/:id/pdf-preview` and the editor's **live PDF preview** (`POST
+/api/stories/:id/pdf-preview` renders the *unsaved* draft;
+`web/src/PdfLivePreview.jsx` shows it in a side drawer / full screen on a
+phone, re-rendering ~0.5 s after any edit, with pack/paper switches and
+per-stop layout pickers right inside the preview). Its own "⬇ Download
+PDF" button (`POST /api/stories/:id/export/pdf`, same draft body as the
+preview) downloads exactly what that preview is showing, the same way the
+Photobook tab's own export button already worked - the plain `GET` route
+(used by the Share & Export menu's link) still exists too, for a quick
+download of the last *saved* version without opening the live preview at
+all.
+
+#### Photobook export (Saal Design Software / CEWE FOTOWELT)
+
+`server/src/photobook/`: the story is planned as a lay-flat *spread* book
+(`bookPlanner.js`) — cover, optional intro, per stop a chapter opener
+(photo across the spread, story on a translucent panel) or a title on the
+first photo spread, photo spreads, info-card spreads, outro, blank
+padding to the product minimum.
+
+Spread layouts (`spreadLayouts.js`: background + photo cards, two page
+backgrounds + cards, mosaic on both pages, hero page + gallery, scattered
+prints, full-spread panorama) are chosen per spread *and* per photo count
+by scoring the actual photo shapes, reusing the aspect-true geometry of
+`pdfLayoutEngine.js` — which spread layout wins for a given photo count is
+a weighted competition, and the weights are the book's **layout pack**
+(`bookLayoutPacks.js`; same 4 named packs and ids as the PDF export's own
+`pdfLayoutPacks.js`, but as a weight table over *this* pipeline's spread
+templates rather than a port of the PDF pack's page templates — the two
+pipelines plan different canvases, a lay-flat/glued spread with a fold
+vs. a single printed page, and reusing the existing content-aware
+templates needed no writer changes at all, since `saalSvg.js`/
+`ceweExport.js` only ever read a spread's plain element list, never which
+template produced it). A per-stop layout pin (`bookLayoutOverride`) still
+overrides the pack for that one stop; independently, any individual photo
+spread can also pin its own layout and/or photo count
+(`stop.bookSpreadCounts[i]`, an array positionally aligned to that stop's
+photo spreads — a legacy plain integer still just pins a count, a
+`{count?, layoutId?}` object can pin either or both) right from the live
+preview's own per-spread controls (pacing +/− plus a layout `<select>`
+next to it, defaulting to "Automatic"), so a book can mix "auto for most
+of the trip, but this one spread should always be the panorama" without a
+story-wide pack change.
+
+A chapter opener's full-bleed backdrop photo is normally the
+automatically best-scoring one (`backdropScore`), but a stop can pin a
+specific photo instead (`stop.bookChapterBackdropHash`, picked from a
+small photo grid in the editor, same interaction as an info card's
+hero-photo picker below). A manual pick also earns that stop a full
+chapter-opener spread even with no narrative/pull quote text at all —
+picking a specific backdrop is itself a strong enough signal the user
+wants the "photo behind a heading" treatment, not the plain
+title-over-first-photo-grid fallback a textless stop otherwise gets.
+
+The cover is a separate concern: one continuous wraparound canvas (back
+cover · spine · front cover) built from photos across *every* stop, not
+just one — normally the best-scoring `featured` photo (or, if no stop has
+one, the best-scoring photo overall) as the full-bleed background plus two
+more as tilted "print" cards on the front, but the story can pin the
+background and/or either print card to a specific photo instead
+(`story.bookCoverBackdropHash` / `story.bookCoverCards`, a 2-slot array
+where a `null` entry still lets that one card auto-pick). The story's
+intro/outro chapter-style spreads get the same treatment
+(`story.introBackdropHash` / `story.outroBackdropHash`) — the outro's
+automatic pick is the *second*-to-last included photo, not the very last
+one, since the last photo of the last stop always appears in that stop's
+own photo grid too and defaulting to it would show the same photo twice
+back to back right before the outro. `CoverPicker.jsx` (used from the
+Photobook preview panel's own settings, since a story-wide choice belongs
+there, not under any one stop) groups the story's included photos by stop
+so the picker stays usable on a long trip, with up to five independent
+role-pickers (cover background, print 1, print 2, intro, outro — the
+last two only shown when the story actually has intro/outro text) reusing
+the same toggle+grid interaction as the chapter-backdrop/hero-photo
+pickers.
+
+`saalSvg.js` renders every spread either as Saal's own SVG dialect or as a
+browser preview from the same element list, so the editor's live
+"Photobook" preview (`bookPreview.js`) is exactly what gets exported.
+Export jobs (`bookExport.js`) plan the book once and hand it to the
+chosen product's vendor writer; `exportShared.js` fetches originals from
+PhotoPrism, auto-orients and downscales them (backgrounds ≤ 6000 px,
+prints ≤ 3400 px, HEIC falls back to the 2048 px JPEG). `saalExport.js`
+writes `project.xml` + SVGs and streams a `.sswprm` (`sswContainer.js`);
+`ceweExport.js` writes the same planned spreads as a CEWE FOTOWELT
+`.mcfx`. Products (`products.js`): Saal 28×28 square, A4 portrait, A4
+landscape; CEWE Groß Hardcover (A4 portrait), Groß Panorama Hardcover (A4
+landscape), XL Hardcover (29×29 square). See "Saal project format" and
+"CEWE project format" below.
+
+A photo's caption is off by default in the photobook - a per-photo toggle
+(`book_show_caption`, `IncludedPhotoGrid.jsx`) turns it on, rendered as a
+small translucent strip along the bottom of wherever that photo actually
+lands (`captionOverlaysFor` in `spreadLayouts.js`, applied once centrally
+rather than to every individual spread layout, so it works the same
+whether the photo ends up in a regular grid, a chapter's floating card, or
+a route map's own gallery). Sized off the book's own `typeScale` (like
+every other text size in this pipeline), not the photo's frame, so a
+caption reads at a consistent size across the book regardless of which
+layout the photo happened to land in; skipped for a full-bleed backdrop
+(that's not "captioning a specific photo") and for a frame too small to
+hold it legibly.
+
+#### Other server-side features
+
+- A stop can carry route/activity embeds (Strava, Komoot, Garmin Connect)
+  — `server/src/embeds.js` allowlists hosts and decides iframe vs. a
+  link-out card, stored in the `stop_embeds` table.
+- Long-form travel notes (pasted, or a blog URL fetched and extracted via
+  `server/src/article.js`'s Readability-based parser) can be handed to
+  the AI, which reads all the story's stops and segments/rewrites the
+  notes across the right ones (`organizeNotesIntoStory` in
+  `server/src/ai/openaiProvider.js`).
+- Each stop can carry optional, AI-suggested "info cards" (place name,
+  subtitle, a short summary, and a handful of facts) — candidates come
+  from PhotoPrism's own `PlaceLabel`s and auto-generated photo titles
+  (`server/src/places.js`, zero extra API calls), or the user can name
+  any place manually. Generating one is a web-search-backed AI call
+  (`generateInfoCard`) that freely picks whatever facts actually fit the
+  place (a national park gets area/flora, a museum gets founded
+  year/collection) rather than a fixed schema per place type.
+
+  Each card also has a free placement (`photoPosition`, 0–1 — how far
+  through the stop's own photo spreads it lands, shown in
+  `InfoCards.jsx` as a slider with Start/Middle/End presets rather than a
+  fixed three-way choice, so a card in a long section can sit at, say,
+  roughly the first third instead of only ever right after the heading,
+  mid-way, or at the very end; the planner rounds it to the nearest
+  photo-spread boundary since a card's own spread is a discrete page, not
+  a fraction of one) and an optional `heroPhotoHash`, picked from the
+  stop's photos that matched the same place name/label used to generate
+  the card (`getMatchingPhotosForPlace` in `stories.js`, reusing the
+  exact place-matching logic from suggestion detection). It also tries to
+  find the place's own official website (via the same web search), shown
+  as a small icon-only external link next to the place name — validated
+  as URL-shaped both when the AI returns it and again on save, since it's
+  the one AI-generated field that becomes a clickable link.
+
+  Every field on a generated card — place name, subtitle, summary, each
+  fact's label/value, the website URL — is editable afterward in
+  `InfoCards.jsx`, not just placement/hero-photo/removal: an AI card with
+  one wrong detail should be a quick fix, not a reason to regenerate or
+  delete the whole thing. A website URL typed without `https://` gets it
+  added automatically on save rather than being silently dropped by the
+  same validation that protects against a bad link.
+- Internationalization is two independent settings (`server/src/i18n.js`):
+  the story's `contentLanguage` (English/German/Danish so far) drives
+  everything AI-generated — captions, research, interview replies, info
+  cards, notes-import — via a `language` param threaded through every
+  provider call, plus the static chrome baked into the rendered output
+  itself (dates, the shuffle button, the footer, PDF page-number label).
+  It's stored per story and applied at render time in `render.js`/
+  `pdf.js`, entirely separate from the UI's own display language.
+
+### Frontend (`web/`)
+
+React (Vite) frontend: album picker + map (M1), story list + editor
+(M2/M3) with a theme/content-language/PDF-layout picker (now behind a
+"Story settings" modal, not inline - see below), drag-to-reorder photo
+grid *and* drag-to-reorder sections themselves (same sortablejs pattern,
+a dedicated `.stop-drag-handle` per section so dragging doesn't fight the
+section's own inputs/buttons), featured-photo/pull-quote controls, a
+per-stop AI interview panel (`InterviewPanel.jsx`), a per-stop
+route-embed manager (`RouteEmbeds.jsx`), a per-stop info-card manager
+(`InfoCards.jsx`, including the placement selector and hero-photo
+picker), and a story-level notes-import panel (`NotesImportPanel.jsx`),
+links out to view/present/PDF export (M4).
+
+- UI language is a separate concern from the story's content language:
+  `web/src/i18n.jsx` is a small dictionary + React context
+  (`LanguageProvider`/`useI18n`) covering every UI string, persisted to
+  `localStorage` and defaulting from `navigator.language` when it matches
+  a supported code. The content-language picker lives in the editor's
+  "Story settings" modal and is per-story, so (per the original ask) the
+  UI can be in English while a story's AI text and exported output come
+  out in German.
+- Design tokens + dark mode (`web/src/theme.css`): every color/radius/
+  shadow this app's own UI uses (not the exported story/deck/PDF output,
+  which has its own separate `server/src/themes.js` system) is a CSS
+  custom property. Dark mode follows `prefers-color-scheme` by default,
+  with a manual System/Light/Dark override (`ThemeToggle.jsx`, a
+  `data-theme` attribute on `<html>`, `localStorage`, applied
+  synchronously in `index.html` before the stylesheet loads so there's no
+  flash of the wrong theme).
+- App shell (`App.jsx`/`App.css`): a fixed sidebar (branding + nav) and
+  sticky topbar on desktop, collapsing below 860px into a bottom tab bar
+  with the topbar gaining a back button on routes with a parent (the
+  editor, back to the library) - one breakpoint for the whole shell.
+- Shared component kit (`web/src/ui/`): Card, StatusPill, Chip,
+  SegmentedControl, Toggle, ProgressBar, Modal (native `<dialog>`, bottom
+  sheet on mobile / centered on desktop), Toast (+ `ToastProvider`/
+  `useToast`, `aria-live`), Skeleton, EmptyState, ErrorState - used to
+  move rarely-changed settings (theme, content language, PDF layout
+  pack/paper size) and export actions (view, share link, present,
+  download PDF/slides) out of the editor's always-visible toolbar into
+  "Story settings" and "Share & Export" modals, and to replace native
+  `confirm()` dialogs (deleting a story, removing a section) and ad hoc
+  inline feedback (a toolbar button relabeling itself for 2 seconds after
+  copying a link) with Modal/Toast.
+- The New Story album picker groups albums by year (newest first,
+  collapsed except the most recent year) rather than one flat
+  alphabetical list of every album/PhotoPrism "moment" at once -
+  `AlbumList.jsx`. PhotoPrism only fills in `Year` for its own
+  auto-generated "moment" albums, so manually-curated albums fall back to
+  a year-shaped substring in the title (matches this library's
+  "`<Place> <Year>`" naming almost everywhere); anything with neither
+  lands in a trailing "No date" group instead of being dropped.
 
 ## Saal project format
 
@@ -526,7 +595,9 @@ probes that the real software opened without complaint.
   `tools/cewe_font_metrics.mjs` (widths + natural line spacing; only the
   numbers are committed). For a CEWE product the font pickers offer these,
   and a Saal font chosen earlier maps to its closest CEWE counterpart (and
-  back). CEWE's line height is a percentage of the font's natural line
+  back).
+
+  CEWE's line height is a percentage of the font's natural line
   spacing, so each paragraph gets `1.2 em / lineSpacing` to land on the
   planner's 1.2 em pitch (e.g. Cochin 105 %, Futura 90 %).
 - **Effects**: drop shadow is `<decoration><shadow …/></decoration>` (CEWE's
@@ -543,7 +614,9 @@ probes that the real software opened without complaint.
   `bundlesize` must be a whole number (rounded): a fractional one (e.g.
   5599.98 at 58–73 pages, two spine blocks) makes CEWE discard the whole
   cover on open and later crash in its order check
-  (`CWRegionMath::detectInnerPageRect`, null page rect). The cover
+  (`CWRegionMath::detectInnerPageRect`, null page rect).
+
+  The cover
   sheet is back + spine + front, with the spine centered. Unlike Saal the
   books are glued, not lay-flat: page 1 is a single right page and the last
   page a single left page (both left blank), the spreads are 2–3 … (N−2)–(N−1).
@@ -728,7 +801,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
       Backgrounds prefer face-free scenery (labels), card arrangements /
       chapter panels / titles are chosen to cover the least face area, crops
       center on faces, and burst shots (≤ 3 s apart) are reduced to the
-      best one (toggle "keep burst shots"). Test story: backgrounds with
+      best one (toggle "keep burst shots").
+
+      Test story: backgrounds with
       faces 21 → 5, covered faces 5 → 0, 11 burst shots dropped
 - [x] Importance maps instead of face boxes (`server/src/photoAnalysis.js`):
       faces (+ the body below them), NanoDet-Plus object detection (people
@@ -739,7 +814,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
       covered importance plus a margin term (so cards don't crowd people),
       faces weigh 4x, layouts whose best arrangement still covers something
       score lower, and face-free photos are cropped around their main
-      subject. Test story vs. no content awareness: faces covered 5 -> 0,
+      subject.
+
+      Test story vs. no content awareness: faces covered 5 -> 0,
       people covered 14 -> 0, covered importance 17.6 % -> 2.2 %
 - [x] Info cards as a fact sheet: name, italic subtitle, accent rule,
       summary, facts in two balanced columns (uppercase label over bold
@@ -832,8 +909,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
 - [x] "Yearbook" mode: a new "Nach Themen" source alongside album/date-range
       for a story organized by recurring theme instead of chronology - pick
       a date range, get suggested content/person/trip candidates from
-      PhotoPrism's own Labels/Subjects plus a home-distance trip detector,
-      pick any mix, and get one section per chosen theme (photos duplicated
+      PhotoPrism's own Labels/Subjects plus a home-distance trip detector.
+
+      Pick any mix, and get one section per chosen theme (photos duplicated
       across an overlap on purpose) followed by a normal chronological tail
       for everything else, plus any number of hand-defined custom date
       sub-ranges (a title + from/to date, e.g. "3 days around a birthday")
@@ -845,21 +923,24 @@ from nginx itself, not from this app). Raise it to match, e.g.
       one - a `.stop-drag-handle` per section, same sortablejs pattern as
       the photo grid
 - [x] Fixed three "Yearbook" mode bugs a real full-year story hit at once:
-      photo listing silently truncated to a single fixed-size page (a busy
-      year has more than PhotoPrism's per-request cap, so a whole-year range
-      only ever covered its earliest ~3,000 photos - through April, not
-      September, and a real spring trip candidate in the truncated tail
-      never showed up); trip-cluster titles picked by raw per-city photo
-      count, mistitling a multi-town trip after a transit stop that
-      happened to have a concentrated photo burst; and Saal export sending
-      an uncapped theme section (hundreds of photos matching one popular
-      label) tripped a reverse proxy's request-size limit. Fixed via proper
-      pagination (`fetchAllPages`), a country-level title fallback
-      (`tripTitle`), and a per-theme-section photo cap with overflow
-      falling through to a monthly-grouped leftover tail - see the
-      Architecture section above and "Exposing the dev server through a
-      reverse proxy" for the remaining reverse-proxy-side config a very
-      large yearbook may still need
+      - photo listing silently truncated to a single fixed-size page (a
+        busy year has more than PhotoPrism's per-request cap, so a
+        whole-year range only ever covered its earliest ~3,000 photos -
+        through April, not September, and a real spring trip candidate in
+        the truncated tail never showed up);
+      - trip-cluster titles picked by raw per-city photo count, mistitling
+        a multi-town trip after a transit stop that happened to have a
+        concentrated photo burst;
+      - and Saal export sending an uncapped theme section (hundreds of
+        photos matching one popular label) tripped a reverse proxy's
+        request-size limit.
+
+      Fixed via proper pagination (`fetchAllPages`), a country-level
+      title fallback (`tripTitle`), and a per-theme-section photo cap
+      with overflow falling through to a monthly-grouped leftover tail -
+      see the Architecture section above and "Exposing the dev server
+      through a reverse proxy" for the remaining reverse-proxy-side
+      config a very large yearbook may still need
 - [x] CEWE FOTOWELT export (`.mcfx`) for the three formats matching the
       Saal ones, picked from the same product list (grouped by vendor) and
       planned by the same layout engine. Verified in CEWE Fotowelt 8.1.3 with
@@ -876,6 +957,7 @@ from nginx itself, not from this app). Raise it to match, e.g.
 - [x] "Check for new photos" (`storyUpdate.js`) - re-runs a story's original
       album/date-range/theme-plan query and merges in anything imported to
       PhotoPrism since, without touching any stop nothing new landed in.
+
       Verified against disposable copies of real data (never the real
       stories): photos deleted from an existing stop reappear there, an
       entire deleted stop is correctly re-clustered and re-inserted at its
@@ -894,6 +976,7 @@ from nginx itself, not from this app). Raise it to match, e.g.
 - [x] Reworked "Nach Themen" creation from "pick every theme upfront, create
       a fully-populated book in one step" to "set the book's overall date
       range, start empty, cherry-pick sections one at a time in the editor."
+
       The New Story page (`ThemeStoryPicker.jsx`) is now just a title +
       from/to date picker; everything that used to live there (suggested
       theme chips, the custom date sub-range form, the live preview) moved
@@ -903,14 +986,18 @@ from nginx itself, not from this app). Raise it to match, e.g.
       accepts, e.g. `person:Alex person:Sam`, for a person combination or
       tag no suggestion covers) and an explicit "Add remaining photos (by
       month)" button, replacing the old always-on chronological catch-all
-      now that a cherry-picked book has no automatic one. Every "add"
+      now that a cherry-picked book has no automatic one.
+
+      Every "add"
       appends one theme to `source_config.themes` and reconciles
       immediately via the same `reconcileThemePlan` "check for new photos"
       already used (`addThemeToStory`, `storyUpdate.js`) - no separate
       preview/create step, and a story from before this shipped gains the
       new panel as a bonus once it's opened. `POST /api/theme-plan-preview`
       (the old creation-time live preview) was removed as dead code along
-      with it. Verified end to end via disposable test stories (both a
+      with it.
+
+      Verified end to end via disposable test stories (both a
       fresh empty book and an old-style pre-populated one) and the UI smoke
       test, which now drives this flow through the browser instead of the
       old one-step creation
@@ -940,13 +1027,17 @@ from nginx itself, not from this app). Raise it to match, e.g.
       stop each get their own spread and their own share of that stop's
       photos, drawn from the same pool in turn. Those photos come out of
       the stop's normal photo pool first, so they don't also repeat in a
-      later grid spread. Works for both providers with an image to show:
+      later grid spread.
+
+      Works for both providers with an image to show:
       Komoot's static map (its `image=1` endpoint - see `embeds.js`) and,
       since Strava has no such endpoint, a real headless-Chromium
       screenshot of its own widget (`server/src/stravaWidget.js`, same
       Playwright toolchain `pdf.js` already uses for PDF export - served at
       `GET /api/embeds/strava-map`, cached in memory since the same
-      activity gets requested often but rarely changes). Verified against
+      activity gets requested often but rarely changes).
+
+      Verified against
       both the Saal and CEWE export pipelines with a Komoot *and* a Strava
       embed on the same stop (a disposable story's real export, not just
       the preview) - `exportShared.js` fetches a non-PhotoPrism image
@@ -960,7 +1051,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
       `backdropScore`/`pickBackdrop`/the `panorama` layout's own background
       pick) rather than disqualified outright - it's still perfectly fine
       in a small multi-photo grid frame, which is where this pushes it
-      instead. Verified by artificially downsizing one photo's reported
+      instead.
+
+      Verified by artificially downsizing one photo's reported
       resolution in an otherwise-identical group and confirming the chapter
       spread's chosen backdrop changed to a different, full-res photo
 - [x] Ghostwriter (the AI interview-then-draft flow, previously only for a
@@ -995,7 +1088,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
       of `.app-sidebar`, remembered across reloads the same way the theme
       toggle is (`localStorage`, `App.jsx`). Collapsed, it's an icon-only
       rail (60px) so nav stays reachable while giving `.app-main` the rest
-      of the width for editing. Along the way, fixed the sidebar to
+      of the width for editing.
+
+      Along the way, fixed the sidebar to
       actually stay pinned to the viewport (`position: sticky`) as its own
       "fixed sidebar" comment already claimed but the CSS never enforced -
       previously a tall `.app-main` (a long album year-list) stretched the
@@ -1007,7 +1102,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
       templated PDF export and the Saal/CEWE photobook both cover printable
       output better, and the deck was unmaintained since. Also removed the
       now-unused `reveal.js` npm dependency and its `/vendor/reveal` static
-      route. In its place, the editor's live-preview "PDF" tab gets its own
+      route.
+
+      In its place, the editor's live-preview "PDF" tab gets its own
       "⬇ Download PDF" button (`POST /api/stories/:id/export/pdf`, same
       draft-posting pattern as the Photobook tab's own export and the PDF
       preview itself) - previously that tab could only be *previewed*, with
@@ -1021,7 +1118,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
       the bottom of the photo (`captionOverlaysFor` in `spreadLayouts.js`),
       applied once centrally to every photo `bookPlanner.js`/`chapterSpread`/
       `routeMapSpread` places, so it works the same wherever that specific
-      photo actually lands. Verified through both real Saal and CEWE
+      photo actually lands.
+
+      Verified through both real Saal and CEWE
       exports, not just the preview - `book_show_caption` new column on
       `stop_photos`
 - [x] Photobook: three placement/layout freedoms that were previously fixed
@@ -1072,7 +1171,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
       a `null` slot still auto-picks just that one card) - via a new
       `CoverPicker.jsx` in the Photobook preview panel's settings, grouping
       the story's photos by stop since the cover draws from the whole trip,
-      not one stop. Verified all 4 combinations (fully automatic, backdrop
+      not one stop.
+
+      Verified all 4 combinations (fully automatic, backdrop
       pinned, one card pinned, both cards pinned) via a disposable test
       story's preview, an editor screenshot showing the grouped picker UI
       with no console errors, and the two real stories re-rendering
@@ -1086,18 +1187,24 @@ from nginx itself, not from this app). Raise it to match, e.g.
       pacing clicks could therefore accidentally latch onto whatever layout
       the algorithm happened to be showing at that moment (e.g. "Hero page
       + gallery", max 5 photos) - pushing the count past that layout's own
-      cap then got silently clamped straight back down every time. Fixed
+      cap then got silently clamped straight back down every time.
+
+      Fixed
       to only carry a layoutId forward when the spread's layout was
       actually pinned via the layout `<select>`, and the "+" button now
       honestly disables at a *genuinely* pinned layout's own max instead of
-      silently no-op'ing past it. Reproduced exactly (5 photos stuck, 1
+      silently no-op'ing past it.
+
+      Reproduced exactly (5 photos stuck, 1
       left in the next spread, from a real user report on "Hamburg 2025")
       with a disposable test story before and after the fix - verified the
       real story itself was never touched, per the user's explicit request.
 - [x] Pull quotes in the printed/exported book were noticeably smaller,
       relative to body text, than on the web view (1.35x body size vs. the
       web view's ~1.7x) - bumped `textBlock`'s quote-size multiplier
-      (`spreadLayouts.js`) to match. Also added a proportional (not just
+      (`spreadLayouts.js`) to match.
+
+      Also added a proportional (not just
       flat one-line) safety margin to the same function's text-height
       estimate, to reduce (though - without round-tripping through Saal's
       own proprietary desktop renderer, not fully eliminate) the risk of a
@@ -1113,7 +1220,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
       whole trip - which is *always* also the last photo already shown in
       that stop's own regular photo grid (nothing removes it from that
       pool), so it appeared twice, right after itself. Default now uses
-      the second-to-last photo instead. Both the intro and outro backdrop
+      the second-to-last photo instead.
+
+      Both the intro and outro backdrop
       can also be pinned to a specific photo (`story.introBackdropHash` /
       `story.outroBackdropHash`), added as two more roles in
       `CoverPicker.jsx` (shown only when the story actually has intro/
@@ -1123,7 +1232,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
 - [x] Configurable AI text-generation model: every prose-generating
       OpenAI call previously used a single hardcoded `gpt-4o-mini`
       (`CAPTION_MODEL`/`INTERVIEW_MODEL` in `openaiProvider.js`, both the
-      same value). Replaced with a small tier table
+      same value).
+
+      Replaced with a small tier table
       (`AI_TEXT_MODELS`/`DEFAULT_AI_TEXT_MODEL`, now defaulting to the
       stronger `gpt-4o` rather than the `-mini` variant) and a per-story
       setting (`story.aiTextModel`, new `ai_text_model` column, `NULL` =
@@ -1136,7 +1247,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
       showing "Automatic (<current default's label>)" as the first
       option). Deliberately left the web-search-backed research/info-card
       calls (`RESEARCH_MODEL`) on their own fixed model - not every model
-      supports the Responses API's `web_search` tool. Verified the
+      supports the Responses API's `web_search` tool.
+
+      Verified the
       metadata endpoint, a valid pick persisting and reaching the
       settings-modal picker (screenshot, no console errors), and an
       invalid/unrecognized model id falling back to `NULL` rather than
@@ -1159,7 +1272,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
   set - caught immediately by actually looking at rendered screenshots
   rather than trusting the code once it ran without errors. Captions are
   optional per photo, so "these particular 2 or 3 photos have none" is the
-  common case, not an edge case. Fixed by having the template itself
+  common case, not an edge case.
+
+  Fixed by having the template itself
   detect empty content and collapse its text zone to zero height via a
   `pdf-notext` modifier class, letting the photos expand to fill the page
   instead - the honest fallback is "this becomes a full-bleed photo
@@ -1167,7 +1282,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
 - **The per-stop manual-override `<select>` only offers templates with
   `photoSlots.min > 0`** — excluding `hero-pullquote`/`text-chapter`
   (opening-page-only, capacity 0) and `info-card-page` (renders an info
-  card's fields, not raw photos). Turned out this didn't even need a
+  card's fields, not raw photos).
+
+  Turned out this didn't even need a
   server-side guard: `chunkPhotosWithPack`'s own candidate filter already
   requires `min > 0`, so a stray/manually-crafted override value outside
   that set just falls through to its existing `single-full-bleed` fallback
@@ -1194,10 +1311,13 @@ from nginx itself, not from this app). Raise it to match, e.g.
   doesn't exist in the database yet - fine as long as the editor could only
   ever edit stops that already existed, which stopped being true once it
   could create new ones (splitting a stop, adding a blank section).
+
   Replaced with `INSERT ... ON CONFLICT(id) DO UPDATE`, and added pruning
   (delete any stop for the story not present in the incoming array, guarded
   on a non-empty array so a bad payload can't wipe every stop) to support
-  removing a section too. The same problem existed one level down:
+  removing a section too.
+
+  The same problem existed one level down:
   `updatePhotoStmt` matched `WHERE id = @id AND stop_id = @stopId`, so
   moving a photo to a different stop (exactly what a split does) would
   silently fail to move it, since the row's *current* stop_id never
@@ -1223,7 +1343,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
   "load a story that already has a hero photo, edit something unrelated,
   save" in one sitting) and became likely to actually bite once cards
   became more editable - more fields to tweak means more saves against
-  data loaded earlier. Fixed by returning `heroPhotoHash` alongside
+  data loaded earlier.
+
+  Fixed by returning `heroPhotoHash` alongside
   `heroPhotoUrl`. Reproduced by accident while testing (a real card's
   hero photo vanished after an unrelated save), confirmed the mechanism
   by reading the code, then re-verified with a deliberate repro: edit an
@@ -1235,7 +1357,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
   real story existed, but stopped being fine once real stories did.
   Adding `stop_info_cards.website_url` while the user already had real
   trip data in the table would have silently broken every info-card
-  insert ("no such column") without an actual migration step. Added a
+  insert ("no such column") without an actual migration step.
+
+  Added a
   small `ensureColumn(table, column, definition)` helper in `db.js`
   (checks `PRAGMA table_info`, `ALTER TABLE ... ADD COLUMN` if missing)
   — idempotent, safe to call unconditionally on every startup, and this
@@ -1248,7 +1372,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
   if you let it — testing `generateInfoCard` surfaced a summary ending
   in `... 100,000 visitors. ([site.com](https://site.com/...))`, which
   would render as literal, unrendered markdown in the HTML output since
-  `escapeHtml` doesn't interpret it. Fixed at the prompt level (told
+  `escapeHtml` doesn't interpret it.
+
+  Fixed at the prompt level (told
   explicitly that the summary is prose-only and the separate
   `websiteUrl` field is the only place a link belongs) and again
   defensively server-side (`stripCitations` strips the pattern from
@@ -1282,7 +1408,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
   response) sometimes surfaces a genuinely specific named landmark PhotoPrism
   recognized - confirmed against the real Kullaberg album, where several
   photos are titled "Ladonien" (an actual art installation/micronation on
-  the peninsula), distinct from the broader place labels. `places.js`
+  the peninsula), distinct from the broader place labels.
+
+  `places.js`
   merges both sources, dedupes "Höganäs" vs. "Höganäs, Sweden" by taking
   each label's first comma-segment, filters a denylist of ~40 common
   PhotoPrism content labels (Portrait, Outdoor, Landscape, ...), and drops
@@ -1290,10 +1418,11 @@ from nginx itself, not from this app). Raise it to match, e.g.
   filter out person names (PhotoPrism sometimes titles a photo after a
   recognized face) - building a reliable person-vs-place classifier wasn't
   worth it for a suggestion the user just ignores if it's clearly a name.
+
   Checked whether the photo folder Path added anything too (the user's own
-  suggestion) - for this library it's just `HandyPeter/2022/06`
-  (uploader/date), no place signal, so it wasn't used; worth revisiting for
-  a library organized into named folders per place.
+  suggestion) - for this library it's just an uploader/date-shaped path
+  (e.g. `Phone/2022/06`), no place signal, so it wasn't used; worth
+  revisiting for a library organized into named folders per place.
 - **Info card facts are deliberately schema-free**: the AI is told to
   figure out what kind of place it is and pick 3-5 facts that actually fit
   (verified in testing: a nature reserve got Established/Area/Highest
@@ -1343,7 +1472,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
   narrative from encyclopedia facts. That's expected LLM ghostwriting
   behavior, not a bug, but it means the feature is only as good as what
   you feed it: paste your own actual notes/blog post, not a reference
-  page. One consolidated AI call sees all stops + the full notes text at
+  page.
+
+  One consolidated AI call sees all stops + the full notes text at
   once (not one call per stop) so it can match content to the *right*
   stop by place name and chronology and split a rambling multi-day post
   correctly — confirmed with a 3-paragraph test note spanning 3 stops,
@@ -1352,7 +1483,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
   story** — it lives only in `InterviewPanel.jsx`'s component state, same
   as the other one-shot AI actions (draft-caption, research). Collapsing
   and reopening the panel within the same session continues where it left
-  off; reloading the page starts fresh. This was a deliberate scope call
+  off; reloading the page starts fresh.
+
+  This was a deliberate scope call
   to avoid a chat-history schema/migration for a first version — if you
   want the conversation to survive reloads or show up for a second editor
   (your wife), that needs a `stop_interviews` table and load/save wiring,
@@ -1374,9 +1507,11 @@ from nginx itself, not from this app). Raise it to match, e.g.
   realistically-sized story was silently failing with a 413 — the request
   never reached the route handler. Earlier verification during development
   used small hand-crafted API payloads that stayed under the limit, which
-  is why this wasn't caught immediately. Fixed by raising the limit to 20mb
-  in `index.js`; re-verified with a UI-driven save (theme + heading + pull
-  quote + featured caption) confirmed via a fresh API fetch afterward. If
+  is why this wasn't caught immediately.
+
+  Fixed by raising the limit to 20mb in `index.js`; re-verified with a
+  UI-driven save (theme + heading + pull quote + featured caption)
+  confirmed via a fresh API fetch afterward. If
   you ever see edits not sticking, this class of bug (silent server-side
   rejection before your route code runs) is the first thing to suspect —
   check the server log, not just the browser.
@@ -1417,25 +1552,31 @@ from nginx itself, not from this app). Raise it to match, e.g.
   resulting state update) crashes trying to remove a child that's no
   longer where it left it ("Failed to execute 'removeChild'") - only
   reproducible via an actual drag in a real browser, not caught by the
-  build or a same-list drag. Fixed the standard way for sortablejs across
-  more than one React-owned list: put the node back where React last
-  rendered it (`evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex])`)
+  build or a same-list drag.
+
+  Fixed the standard way for sortablejs across more than one React-owned
+  list: put the node back where React last rendered it
+  (`evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex])`)
   *before* handing the real move to React via state, so React's own
   reconcile - not sortablejs's raw DOM surgery - is what actually moves it.
   Clears the moved photo's `featured` flag (it was that flag *for the old
   stop*, unrelated to whichever stop it's joining, and leaving it set could
-  silently unseat the new stop's own hero photo). Smoke-tested with a
-  scroll-during-drag helper, since the target stop can be thousands of
-  pixels below the source in a real yearbook - a plain single mouse-move
+  silently unseat the new stop's own hero photo).
+
+  Smoke-tested with a scroll-during-drag helper, since the target stop
+  can be thousands of pixels below the source in a real yearbook - a
+  plain single mouse-move
   doesn't reach it, and neither does repeating a `mouse.move` at an
   unchanged viewport coordinate after scrolling (the browser doesn't fire a
   new event just because the page moved under a stationary cursor).
 - Adding a theme (10 now, up from 4) is a single new entry in `THEMES` in
   `themes.js` — render.js, the editor's theme picker, and the `/api/themes`
-  endpoint all read from that one object, nothing else to touch. Each theme picks its own map mood via a CSS filter applied to
-  Leaflet's tile pane (grayscale, sepia, inverted-for-dark, or none)
-  rather than a different tile provider per theme — see the next note for
-  why. Deliberately conservative about the filters on the 6 newest themes
+  endpoint all read from that one object, nothing else to touch.
+
+  Each theme picks its own map mood via a CSS filter applied to Leaflet's
+  tile pane (grayscale, sepia, inverted-for-dark, or none) rather than a
+  different tile provider per theme — see the next note for why.
+  Deliberately conservative about the filters on the 6 newest themes
   (each reuses one of the same handful of filter patterns already proven
   to look right, rather than inventing a new hue-rotate value per theme)
   since a filter's actual effect on real OSM tiles isn't obvious from the
@@ -1447,13 +1588,14 @@ from nginx itself, not from this app). Raise it to match, e.g.
   ever visible as an info-card place name, since the stop itself is headed
   "Lerkil") got matched to a different stop entirely. The AI only ever saw
   each stop's heading/narrative/captions, none of which necessarily
-  contain the specific named place a note's paragraph is about. Fixed by
-  also passing each stop's already-known place names (suggested places +
-  info card place names — both ultimately from PhotoPrism's own photo
-  place labels) and telling the model to prefer that list over the heading
-  for this kind of matching. An improvement to the odds, not a guarantee —
-  matching free text to the right stop is still a judgment call the model
-  makes, just with better signal now.
+  contain the specific named place a note's paragraph is about.
+
+  Fixed by also passing each stop's already-known place names (suggested
+  places + info card place names — both ultimately from PhotoPrism's own
+  photo place labels) and telling the model to prefer that list over the
+  heading for this kind of matching. An improvement to the odds, not a
+  guarantee — matching free text to the right stop is still a judgment
+  call the model makes, just with better signal now.
 - **A second, unrelated bug in the same feature: two suggestions for the
   same stop would "use" together.** `NotesImportPanel.jsx` tracked which
   suggestion had been applied, and its list `key`, both by `stopId` — fine
@@ -1471,6 +1613,7 @@ from nginx itself, not from this app). Raise it to match, e.g.
   from the network tab, just a map that looked broken/empty. Found via a
   real user report ("empty frame below the top image"); confirmed by
   actually looking at the rendered map rather than trusting a 200 status.
+
   Fixed by switching every theme to plain OpenStreetMap tiles (the one
   raster source still reliably free with no key) and faking each theme's
   basemap mood with a CSS `filter` on `map.getPane('tilePane')` instead -
@@ -1485,18 +1628,21 @@ from nginx itself, not from this app). Raise it to match, e.g.
   Leaflet, PhotoSwipe, and reveal.js's static assets 404'd whenever a
   story/deck was opened at the frontend dev server's own origin - exactly
   what "View story ↗"/"Present ↗" do, and exactly how the user's phone
-  reached it. `L` and `PhotoSwipeLightbox` ended up `undefined`,
-  throwing early and silently killing map init *and* the photo lightbox,
-  with nothing in the rendered HTML to show for it - a totally empty
-  box, not even Leaflet's zoom controls or attribution line. The first
-  fix attempt (the CARTO note above) genuinely fixed a real bug, but
-  missed this one entirely because verification loaded the story page
-  directly from the backend (`:3001`), which has no proxy step to skip -
-  bypassing the exact failure the user's screenshot showed. Lesson: when
-  a report comes from a specific URL/origin, reproduce from that same
-  origin, not whichever one happens to be more convenient to hit
-  directly. Fixed by adding `'/vendor': 'http://localhost:3001'` to the
-  proxy config; confirmed by reproducing the failure first (0 `/vendor`
+  reached it. `L` and `PhotoSwipeLightbox` ended up `undefined`, throwing
+  early and silently killing map init *and* the photo lightbox, with
+  nothing in the rendered HTML to show for it - a totally empty box, not
+  even Leaflet's zoom controls or attribution line.
+
+  The first fix attempt (the CARTO note above) genuinely fixed a real
+  bug, but missed this one entirely because verification loaded the story
+  page directly from the backend (`:3001`), which has no proxy step to
+  skip - bypassing the exact failure the user's screenshot showed.
+  Lesson: when a report comes from a specific URL/origin, reproduce from
+  that same origin, not whichever one happens to be more convenient to
+  hit directly.
+
+  Fixed by adding `'/vendor': 'http://localhost:3001'` to the proxy
+  config; confirmed by reproducing the failure first (0 `/vendor`
   requests succeeding, `ReferenceError: L is not defined`) and then
   re-running the identical check clean after the fix.
 - PDF photo boxes still use `object-fit: cover`, but only to absorb the
@@ -1568,16 +1714,19 @@ from nginx itself, not from this app). Raise it to match, e.g.
 - Known flakiness in this dev environment (not a code issue per se): the
   backend intermittently crashes with a native-module assertion in
   `better-sqlite3` on startup under this box's Node 24.20.0 build —
-  usually recovers after 1-2 restarts. Root-caused it *twice* this session
-  to a stray duplicate `server/node_modules/better-sqlite3` (apparently
-  recreated by some `npm install`/`npm rebuild` invocations even after
-  being deleted once) shadowing the correct hoisted copy with a corrupted
-  build; deleting `server/node_modules` entirely and restarting fixed it
-  both times, immediately. If this recurs: `find . -maxdepth 2 -iname
-  better-sqlite3 -type d` should show only the root copy — if it shows a
-  `server/node_modules` one too, delete `server/node_modules` (not just
-  the better-sqlite3 folder inside it) before assuming it's unrelated
-  flakiness.
+  usually recovers after 1-2 restarts.
+
+  Root-caused it *twice* this session to a stray duplicate
+  `server/node_modules/better-sqlite3` (apparently recreated by some `npm
+  install`/`npm rebuild` invocations even after being deleted once)
+  shadowing the correct hoisted copy with a corrupted build; deleting
+  `server/node_modules` entirely and restarting fixed it both times,
+  immediately.
+
+  If this recurs: `find . -maxdepth 2 -iname better-sqlite3 -type d`
+  should show only the root copy — if it shows a `server/node_modules`
+  one too, delete `server/node_modules` (not just the better-sqlite3
+  folder inside it) before assuming it's unrelated flakiness.
 - `renderStoryPdf` (`pdf.js`) generates the PDF from an HTML string via
   Playwright's `page.setContent()`, which only replaces the document's
   *markup* - left on the default `about:blank`, it has no real origin, so
