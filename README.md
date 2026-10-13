@@ -562,6 +562,14 @@ probes that the real software opened without complaint.
 - An **OpenAI API key** is optional - it only enables AI-assisted
   captions/research/the ghostwriter interview; the rest of the app works
   without one.
+- Extracting Saal's own fonts locally (`tools/extract_saal_fonts.py`,
+  see "Saal project format" below) is **optional and only cosmetic** -
+  the text-sizing metrics it would produce are already committed
+  (`bookFonts.json`/`ceweFonts.json`), so a real Saal/CEWE export is
+  correctly laid out either way. Without it, the in-app preview falls
+  back to a Google Fonts lookalike instead of Saal's exact typeface;
+  the real export always references fonts by name, resolved by Saal's/
+  CEWE's own installed software, so it's unaffected either way.
 
 ### Setup
 
@@ -1574,6 +1582,56 @@ from nginx itself, not from this app). Raise it to match, e.g.
   - the document keeps that origin, so the relative URLs resolve correctly.
   `renderDeckPdf` never had this problem: it already navigates to a real
   `/story/:id/present` URL rather than using `setContent()`.
+
+## Acknowledgments
+
+This app is a layer on top of [PhotoPrism](https://www.photoprism.app/) -
+it reads an existing PhotoPrism library (photos, GPS/time metadata, face
+markers, place/subject labels) via its REST API and has nothing to show
+without one.
+
+Built with (among others): [React](https://react.dev/),
+[Vite](https://vite.dev/), [Express](https://expressjs.com/),
+[better-sqlite3](https://github.com/WiseLibs/better-sqlite3),
+[sharp](https://sharp.pixelplumbing.com/),
+[onnxruntime-node](https://github.com/microsoft/onnxruntime),
+[Playwright](https://playwright.dev/) (headless Chrome rendering for PDF/
+photobook export and route-map screenshots),
+[PhotoSwipe](https://photoswipe.com/) (lightbox),
+[Leaflet](https://leafletjs.com/)/[react-leaflet](https://react-leaflet.js.org/)
+(map view - react-leaflet is under the
+[Hippocratic License 2.1](https://firstdonoharm.dev/version/2/1/license.html),
+an "ethical source" license with human-rights-based field-of-use terms,
+not a standard OSI open-source license - worth knowing if you reuse this
+code elsewhere), [SortableJS](https://sortablejs.github.io/Sortable/)
+(drag-and-drop reordering), [@mozilla/readability](https://github.com/mozilla/readability)
+(article text extraction for notes import), and [jsdom](https://github.com/jsdom/jsdom).
+
+Face/subject detection models: see `server/models/README.md` for their
+own sources and licenses (YuNet, NanoDet-Plus, both via the
+[OpenCV Model Zoo](https://github.com/opencv/opencv_zoo)).
+
+**On the Saal/CEWE font data**: `server/src/photobook/bookFonts.json`/
+`ceweFonts.json` (committed) hold only per-glyph *advance-width numbers* -
+how much horizontal space one character reserves - measured from Saal
+Design Software's own fonts and from the macOS system fonts CEWE FOTOWELT
+offers (`tools/extract_saal_fonts.py`/`tools/saal_font_metrics.mjs`/
+`tools/cewe_font_metrics.mjs`; see "Saal project format" above for the
+full extraction process). The font files themselves - the actual glyph
+artwork, which is the protectable creative expression - are **never**
+committed (`server/data/saal-fonts/` is git-ignored) and must be extracted
+locally from your own licensed installation if you want them for the
+live-preview panel's own rendering (the real Saal/CEWE export never needs
+them - see "Prerequisites" above). Shipping measured *metrics* for
+commercial/system fonts this way is established practice: Wine's
+[font-metrics COPYRIGHTS file](https://goma.googlesource.com/wine/+/master/dlls/wineps.drv/data/COPYRIGHTS)
+has documented exactly this for decades, and
+[`@capsizecss/metrics`](https://npmjs.com/package/@capsizecss/metrics)
+(MIT-licensed, the basis of Next.js's own font-fallback system) ships
+measured metrics for Apple-bundled fonts like Georgia and Helvetica Neue
+under a license with no special carve-out for the font data. That said,
+this project isn't a lawyer's opinion - if you're relying on this for
+your own fork, do your own check.
 
 ## License
 

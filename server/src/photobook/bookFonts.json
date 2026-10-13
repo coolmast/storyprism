@@ -1,5 +1,5 @@
 {
- "_source": "Fonts offered for Saal books. saal = font family name inside Saal's own font files; adv/boldAdv = advance width per character in 1/1000 em (regular/bold), read from the OpenType fonts Saal renders with (extracted by tools/extract_saal_fonts.py); avg = average over a German sample. google = also on Google Fonts (preview fallback when the Saal fonts are not extracted locally).",
+ "_source": "Fonts offered for Saal books. saal = font family name inside Saal's own font files; adv/boldAdv = advance width per character in 1/1000 em (regular/bold), read from the OpenType fonts Saal renders with (extracted by tools/extract_saal_fonts.py); avg = average over a German sample. google = also on Google Fonts (preview fallback when the Saal fonts are not extracted locally). Only measured numeric metrics are stored here, never the font files themselves - see README.md's Acknowledgments section for why that's believed low-risk.",
  "fonts": [
   {
    "name": "Architects Daughter",

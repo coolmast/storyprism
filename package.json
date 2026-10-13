@@ -1,6 +1,7 @@
 {
   "name": "story-builder",
   "private": true,
+  "license": "UNLICENSED",
   "workspaces": [
     "server",
     "web"
