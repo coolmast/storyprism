@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
 export const UI_LANGUAGES = ["en", "de", "da"];
-const STORAGE_KEY = "story-builder-ui-lang";
+const STORAGE_KEY = "storyprism-ui-lang";
 
 const LOCALE = { en: "en-GB", de: "de-DE", da: "da-DK" };
 
@@ -11,7 +11,7 @@ const LOCALE = { en: "en-GB", de: "de-DE", da: "da-DK" };
 // string used in both places (rare - most content strings are server-side).
 const DICT = {
   en: {
-    appTitle: "Story Builder",
+    appTitle: "Storyprism",
     appTagline: "Turn a PhotoPrism album into a travel story",
     tabNewStory: "New Story",
     tabMyStories: "My Stories",
@@ -249,7 +249,7 @@ const DICT = {
     thatStop: "that stop",
   },
   de: {
-    appTitle: "Story Builder",
+    appTitle: "Storyprism",
     appTagline: "Verwandle ein PhotoPrism-Album in eine Reisegeschichte",
     tabNewStory: "Neue Geschichte",
     tabMyStories: "Meine Geschichten",
@@ -489,7 +489,7 @@ const DICT = {
     thatStop: "diesen Stopp",
   },
   da: {
-    appTitle: "Story Builder",
+    appTitle: "Storyprism",
     appTagline: "Lav et PhotoPrism-album om til en rejsehistorie",
     tabNewStory: "Ny historie",
     tabMyStories: "Mine historier",

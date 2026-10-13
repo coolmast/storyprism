@@ -201,7 +201,7 @@ export async function runCeweExport(job, story, plan) {
     // Photos, named the way CEWE names its own copies: <8 chars>_1_<name>.
     const refs = new Map();
     await preparePhotos(plan, job, async (key, photo, img) => {
-      const id = createHash("md5").update(`storybuilder:${key}`).digest("hex").slice(0, 8);
+      const id = createHash("md5").update(`storyprism:${key}`).digest("hex").slice(0, 8);
       const name = `${id}_1_${photo.photoUid || key}.jpg`;
       refs.set(key, { name, width: img.width, height: img.height, original: `${photo.photoUid || key}.jpg` });
       insert.run(name, img.data, now);
@@ -272,7 +272,7 @@ export async function runCeweExport(job, story, plan) {
     const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
     const rels = [...refs.values()]
       .map(
-        (r) => `        <foto id="file:///StoryBuilder/${xmlAttr(r.original)}">
+        (r) => `        <foto id="file:///Storyprism/${xmlAttr(r.original)}">
             <foto id="safecontainer:/${xmlAttr(r.name)}" nature="RELATIONSHIP_ONE_TO_ONE_COPY"/>
         </foto>
 `

@@ -4,7 +4,7 @@
 Saal ships each font as an LZMA-compressed Flash SWF ("ZWS" header, *.sswa)
 holding DefineFont4 tags with embedded CFF OpenType data - one per style.
 This pulls them out as plain .otf files (regular/bold/italic/bolditalic) so
-Story Builder can size text with Saal's exact glyph widths and show the
+Storyprism can size text with Saal's exact glyph widths and show the
 identical fonts in its live preview.
 
 The fonts are licensed with Saal's software: extract them from your own

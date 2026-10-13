@@ -5,7 +5,7 @@ import { useI18n } from "./i18n.jsx";
 // Must match the key index.html's inline no-flash script reads/writes,
 // and the "system" | "light" | "dark" contract theme.css's
 // :root[data-theme="..."] selectors expect.
-const STORAGE_KEY = "story-builder-theme";
+const STORAGE_KEY = "storyprism-theme";
 
 function readInitialMode() {
   try {

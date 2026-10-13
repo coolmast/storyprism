@@ -57,7 +57,7 @@ function CollapseIcon({ collapsed }) {
 
 // Desktop-only (irrelevant on mobile, where the sidebar is a bottom tab bar
 // instead) - remembered across reloads the same way the theme toggle is.
-const SIDEBAR_STORAGE_KEY = "story-builder-sidebar-collapsed";
+const SIDEBAR_STORAGE_KEY = "storyprism-sidebar-collapsed";
 
 function readInitialSidebarCollapsed() {
   try {

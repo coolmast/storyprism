@@ -1,4 +1,4 @@
-# Story Builder
+# Storyprism
 
 Turns a PhotoPrism album into an editable travel story: itinerary extraction
 from photo GPS/time metadata, a map view, manual + AI-assisted captions,

@@ -24,7 +24,7 @@ export const NATIVE_LANGUAGE_NAMES = {
 const STRINGS = {
   en: {
     dateLocale: "en-GB",
-    builtWith: (albumTitle) => `${albumTitle} · built with Story Builder`,
+    builtWith: (albumTitle) => `${albumTitle} · built with Storyprism`,
     shuffleLayout: "🔀 Shuffle layout",
     morePhotos: (n) => `${n} more photos from this stop`,
     viewOn: (title, provider) => `🏔 View "${title}" on ${provider} ↗`,
@@ -33,7 +33,7 @@ const STRINGS = {
   },
   de: {
     dateLocale: "de-DE",
-    builtWith: (albumTitle) => `${albumTitle} · erstellt mit Story Builder`,
+    builtWith: (albumTitle) => `${albumTitle} · erstellt mit Storyprism`,
     shuffleLayout: "🔀 Layout neu mischen",
     morePhotos: (n) => `${n} weitere Fotos von diesem Stopp`,
     viewOn: (title, provider) => `🏔 "${title}" auf ${provider} ansehen ↗`,
@@ -42,7 +42,7 @@ const STRINGS = {
   },
   da: {
     dateLocale: "da-DK",
-    builtWith: (albumTitle) => `${albumTitle} · lavet med Story Builder`,
+    builtWith: (albumTitle) => `${albumTitle} · lavet med Storyprism`,
     shuffleLayout: "🔀 Bland layout",
     morePhotos: (n) => `${n} flere billeder fra dette stop`,
     viewOn: (title, provider) => `🏔 Se "${title}" på ${provider} ↗`,

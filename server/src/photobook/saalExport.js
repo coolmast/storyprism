@@ -27,7 +27,7 @@ function xml(s) {
 }
 
 function imageIdFor(photo) {
-  return createHash("md5").update(`storybuilder:${photo.hash || photo.id}`).digest("hex");
+  return createHash("md5").update(`storyprism:${photo.hash || photo.id}`).digest("hex");
 }
 
 function projectXml({ uid, coverUid, innerUid, title, product, numPages, childArticleID, images, now }) {

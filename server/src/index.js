@@ -761,4 +761,4 @@ app.post("/api/stories/:id/export/pdf", async (req, res) => {
 await initPhotoPrism();
 
 const port = process.env.PORT || 3001;
-app.listen(port, () => console.log(`story-builder server on :${port}`));
+app.listen(port, () => console.log(`storyprism server on :${port}`));

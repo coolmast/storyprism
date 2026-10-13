@@ -35,7 +35,7 @@ export default function PdfLivePreview({
   const { t } = useI18n();
   const [mode, setMode] = useState(() => {
     try {
-      return localStorage.getItem("story-builder-preview-mode") || "book";
+      return localStorage.getItem("storyprism-preview-mode") || "book";
     } catch {
       return "book";
     }
@@ -74,7 +74,7 @@ export default function PdfLivePreview({
     setMode(next);
     setHtml(null);
     try {
-      localStorage.setItem("story-builder-preview-mode", next);
+      localStorage.setItem("storyprism-preview-mode", next);
     } catch {
       /* per-viewer convenience only */
     }

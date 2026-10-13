@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Story Builder</title>
+    <title>Storyprism</title>
     <script>
       // Applies a manually-forced theme (if any) before the stylesheet
       // loads, so there's no flash of the wrong theme - this has to be an
@@ -12,7 +12,7 @@
       // mount (by then the browser has already painted once).
       (function () {
         try {
-          var saved = localStorage.getItem("story-builder-theme");
+          var saved = localStorage.getItem("storyprism-theme");
           if (saved === "dark" || saved === "light") {
             document.documentElement.setAttribute("data-theme", saved);
           }

@@ -5,7 +5,7 @@ import { Readability } from "@mozilla/readability";
 // comments boilerplate via the same engine Firefox's reader mode uses.
 export async function fetchArticleText(url) {
   const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0 (compatible; StoryBuilder/1.0)" },
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; Storyprism/1.0)" },
   });
   if (!res.ok) throw new Error(`Could not fetch that page: ${res.status}`);
   const html = await res.text();
