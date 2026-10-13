@@ -71,7 +71,7 @@ or a real printed photobook (Saal Digital/CEWE FOTOWELT).
     from/to date typed in, handled identically to a detected trip theme end
     to end, same `type: "trip"` shape and date-range photo lookup, the only
     difference is where the from/to came from), and a free-text PhotoPrism
-    search (`type: "query"`, e.g. `person:Anne person:Peter`, or any other
+    search (`type: "query"`, e.g. `person:Alex person:Sam`, or any other
     tag/filter combination PhotoPrism's own search syntax accepts - see
     `getPhotosByQuery` in `photoprism.js`) for a person combination or tag
     that never made it into the suggestions. Candidate discovery only ever
@@ -544,16 +544,50 @@ probes that the real software opened without complaint.
 
 ## Running locally
 
+### Prerequisites
+
+- **Node.js 20+** (developed/tested on 24.x; see "Known flakiness" in
+  Notes below for a native-module quirk seen on one specific 24.x build).
+- **A running [PhotoPrism](https://www.photoprism.app/) instance** with
+  your photos already imported - this app is a layer on top of PhotoPrism,
+  not a photo manager of its own, so it has nothing to show without one.
+  Auth can be off (PhotoPrism's default) or on (see `PHOTOPRISM_USERNAME`/
+  `PHOTOPRISM_APP_PASSWORD`/`PHOTOPRISM_API_TOKEN` in `server/.env.example`).
+- **Google Chrome** installed on the machine that runs the server (not
+  just Chromium) - `playwright-core` drives it headlessly for the PDF
+  export, the Saal/CEWE photobook export, and Strava route-map
+  screenshots (`server/src/pdf.js`, `server/src/stravaWidget.js`, the
+  book export pipeline). Everything else (browsing, editing, the web
+  story view) works without it.
+- An **OpenAI API key** is optional - it only enables AI-assisted
+  captions/research/the ghostwriter interview; the rest of the app works
+  without one.
+
+### Setup
+
 ```
 npm install
-cp server/.env.example server/.env   # set PHOTOPRISM_BASE_URL, OPENAI_API_KEY
+cp server/.env.example server/.env   # set PHOTOPRISM_BASE_URL at minimum
 npm run dev --workspace server        # http://localhost:3001
 npm run dev --workspace web           # http://localhost:5173 (proxies /api, /story)
 ```
 
 Both servers bind to all interfaces, so on the LAN they're also reachable at
-this machine's IP (e.g. `http://192.168.42.213:5174` for the frontend) —
+this machine's IP (e.g. `http://192.168.1.50:5174` for the frontend) —
 useful for a second person to use the editor from their own device.
+
+### Basic usage
+
+Open `http://localhost:5173` and pick one or more albums (or a "moment")
+from your PhotoPrism library - a story is drafted immediately from their
+photos' GPS/time metadata (grouped into stops by place and gap in time).
+From there: reorder/caption/feature photos, write or AI-draft each stop's
+narrative, pick a theme, optionally add route embeds or AI-researched
+place info cards, then export via the toolbar - a shareable web link
+(`/story/:id`), a PDF, or a Saal/CEWE photobook project file. "Nach
+Themen"/"Yearbook" mode (a date range grouped by recurring subject instead
+of one trip) and importing your own existing travel notes are reachable
+from the same new-story screen.
 
 ### UI smoke test
 
@@ -575,9 +609,9 @@ something else is already running).
 far - there's no separate `vite build` + static-serve step yet) runs Vite's
 dev server, which rejects any request whose `Host` header it doesn't
 recognize as localhost/a LAN address - a security feature, not a bug, that
-otherwise blocks it being reached at all under a real domain
-(`story.sensing-the-world.de` in this project's own deployment, behind mTLS
-+ Authentik forward-auth). Allow it explicitly:
+otherwise blocks it being reached at all under a real domain (e.g. a
+deployment reached through a reverse proxy with its own TLS/auth in
+front). Allow it explicitly:
 
 ```
 cp web/.env.example web/.env
@@ -734,10 +768,10 @@ from nginx itself, not from this app). Raise it to match, e.g.
       difference most, but wasn't tested this pass
 - [x] Sharing a story off the PhotoPrism LAN: the view/PDF/deck/photobook
       used to embed PhotoPrism image URLs directly, so a client outside
-      PhotoPrism's own network (this app's own domain,
-      story.sensing-the-world.de, reached from outside via mTLS + Authentik
-      forward-auth) couldn't load a single photo even though the app itself
-      was reachable. Every photo URL sent to a browser is now a path on
+      PhotoPrism's own network (this app's own domain, reached from
+      outside through a reverse proxy with its own TLS/auth in front)
+      couldn't load a single photo even though the app itself was
+      reachable. Every photo URL sent to a browser is now a path on
       this server instead (`/api/photo/t/:hash/:size`,
       `/api/photo/dl/:hash`), which fetches from PhotoPrism server-side and
       streams the bytes back - see `photoprism.js`/`index.js`. PhotoPrism
@@ -852,7 +886,7 @@ from nginx itself, not from this app). Raise it to match, e.g.
       into a new "Add section" panel in the editor's Story settings
       (`ThemeSectionPanel.jsx`), which also gained a free-text PhotoPrism
       search box (`type: "query"` - any search PhotoPrism's own syntax
-      accepts, e.g. `person:Anne person:Peter`, for a person combination or
+      accepts, e.g. `person:Alex person:Sam`, for a person combination or
       tag no suggestion covers) and an explicit "Add remaining photos (by
       month)" button, replacing the old always-on chronological catch-all
       now that a cherry-picked book has no automatic one. Every "add"
@@ -1540,3 +1574,9 @@ from nginx itself, not from this app). Raise it to match, e.g.
   - the document keeps that origin, so the relative URLs resolve correctly.
   `renderDeckPdf` never had this problem: it already navigates to a real
   `/story/:id/present` URL rather than using `setContent()`.
+
+## License
+
+No license is granted. This source is shared publicly for reference -
+all rights are reserved, and reuse, modification, or redistribution isn't
+permitted without the author's explicit permission.

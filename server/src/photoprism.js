@@ -272,7 +272,7 @@ export async function getPhotosBySubject(uid, from, to) {
   return photos.map(mapPhoto);
 }
 
-// A hand-typed PhotoPrism search ("person:Anne person:Peter", "label:beach",
+// A hand-typed PhotoPrism search ("person:Alex person:Sam", "label:beach",
 // whatever PhotoPrism's own query syntax accepts) for a theme section no
 // suggested candidate covers. `q=` combines cleanly with the usual
 // after/before range filter; an unrecognized filter comes back as a plain

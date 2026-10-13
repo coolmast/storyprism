@@ -63,9 +63,9 @@ app.use(
 // Every photo URL this app ever sends to a browser points here, never at
 // PhotoPrism directly (see the comment at the top of photoprism.js) - the
 // client only needs to reach this server, which is the thing that's
-// actually exposed publicly (story.sensing-the-world.de); PhotoPrism itself
-// can stay LAN-only. Long, immutable cache lifetime: a given hash+size (or
-// hash, for the original) never changes content.
+// actually exposed publicly; PhotoPrism itself can stay LAN-only. Long,
+// immutable cache lifetime: a given hash+size (or hash, for the original)
+// never changes content.
 function sendPhotoError(res, err) {
   // "Invalid photo hash/size" is our own input validation (a malformed
   // request); anything else is PhotoPrism/network failing.

@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .env
+.env.local
+.env.*.local
 *.sqlite
 *.sqlite3
 *.sqlite-wal
@@ -11,3 +13,9 @@ server/data/
 saal-test/
 cewe-test/
 *.mcfx
+
+# OS/editor noise
+.DS_Store
+*.log
+.vscode/
+.idea/
